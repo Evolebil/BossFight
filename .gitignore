@@ -1,0 +1,22 @@
+# Папка сборки
+build/
+cmake-build-*/
+
+# Исполняемые файлы
+BossFight
+*.exe
+
+# Объектные файлы
+*.o
+*.obj
+
+# IDE
+.vscode/
+.idea/
+*.user
+*.autosave
+
+# Временные файлы
+*~
+*.swp
+*.tmp
