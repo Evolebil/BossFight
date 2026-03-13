@@ -38,6 +38,7 @@ enum class SceneType {
     SETTINGS,
     CREDITS,
     GAME,
+    RESTART_GAME,   // перезапуск боя — создаёт новый GameScene даже если уже в GAME
     QUIT
 };
 
@@ -65,21 +66,21 @@ enum class TileType {
 
 // ===== ГЛОБАЛЬНЫЕ КОНСТАНТЫ =====
 namespace Constants {
-    constexpr int WINDOW_WIDTH = 1280;
-    constexpr int WINDOW_HEIGHT = 720;
-    constexpr float PI = 3.14159265358979323846f;
-    
-    // Цвета
-    const SDL_Color COLOR_WHITE = {255, 255, 255, 255};
-    const SDL_Color COLOR_BLACK = {0, 0, 0, 255};
-    const SDL_Color COLOR_RED = {255, 0, 0, 255};
-    const SDL_Color COLOR_GREEN = {0, 255, 0, 255};
-    const SDL_Color COLOR_BLUE = {0, 0, 255, 255};
-    const SDL_Color COLOR_YELLOW = {255, 255, 0, 255};
-    
-    // Время
-    constexpr float SPLASH_DURATION = 3.0f;
-    constexpr float FRAME_TIME_60FPS = 1.0f / 60.0f;
+constexpr int WINDOW_WIDTH = 1280;
+constexpr int WINDOW_HEIGHT = 720;
+constexpr float PI = 3.14159265358979323846f;
+
+// Цвета
+const SDL_Color COLOR_WHITE = {255, 255, 255, 255};
+const SDL_Color COLOR_BLACK = {0, 0, 0, 255};
+const SDL_Color COLOR_RED = {255, 0, 0, 255};
+const SDL_Color COLOR_GREEN = {0, 255, 0, 255};
+const SDL_Color COLOR_BLUE = {0, 0, 255, 255};
+const SDL_Color COLOR_YELLOW = {255, 255, 0, 255};
+
+// Время
+constexpr float SPLASH_DURATION = 3.0f;
+constexpr float FRAME_TIME_60FPS = 1.0f / 60.0f;
 }
 
 // ===== ВСПОМОГАТЕЛЬНЫЕ МАКРОСЫ =====

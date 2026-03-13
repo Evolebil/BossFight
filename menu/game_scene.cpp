@@ -117,7 +117,7 @@ void GameScene::handleInput(SDL_Event& event, int mouseX, int mouseY,
         retryBtn.wasHovered = retryBtn.isHovered;
         if (retryBtn.isHovered && mouseClicked) {
             if (soundMgr) soundMgr->playClick();
-            nextScene = SceneType::GAME;
+            nextScene = SceneType::RESTART_GAME;
         }
 
         exitBtn.isHovered = exitBtn.contains(mouseX, mouseY);
