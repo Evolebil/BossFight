@@ -136,7 +136,7 @@ public:
 
     // --- Геттеры ---
     [[nodiscard]] SDL_Rect getHitbox() const {
-        // Хитбокс чуть уже спрайта — выглядит честнее
+        // Хитбокс = спрайт (96x84 = RENDER_W x RENDER_H)
         return {
             (int)(x - width / 2),
             (int)(y - height / 2),

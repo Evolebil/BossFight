@@ -345,9 +345,14 @@ float BossGolem::checkPlayerDamage(SDL_Rect playerBox, float deltaTime) {
     if (currentState == BossState::ATTACK_MELEE && !meleeHitDealt &&
         animations.count(BossState::ATTACK_MELEE) &&
         animations.at(BossState::ATTACK_MELEE).getCurrentFrameIndex() >= 4) {
-        int meleeW = (int)(cellSize * 2.0f);
+        // Хитбокс атаки захватывает тело босса + область впереди.
+        // Начинается на 30% ширины тела ПОЗАДИ края — исправляет баг
+        // "вплотную = нет урона" (раньше хитбокс начинался с края тела).
+        int meleeW = (int)(cellSize * 2.0f) + (int)(width * 0.3f);
         int meleeH = (int)height;
-        int meleeX = facingRight ? (int)(x + width/2) : (int)(x - width/2 - meleeW);
+        int meleeX = facingRight
+                         ? (int)(x + width/2 - width*0.3f)          // немного назад от края
+                         : (int)(x - width/2 - meleeW + width*0.3f); // зеркально
         int meleeY = (int)(y - height/2);
 
         SDL_Rect meleeBox = { meleeX, meleeY, meleeW, meleeH };

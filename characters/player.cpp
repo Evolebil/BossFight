@@ -14,7 +14,8 @@
 // ============================================================
 
 Player::Player(float spawnX, float spawnY)
-    : Character(spawnX, spawnY, 40.0f, 72.0f, 100.0f),
+    // RENDER_W=96, RENDER_H=84 — хитбокс совпадает со спрайтом
+    : Character(spawnX, spawnY, 35.0f, 40.0f, 100.0f),
     // --- бой ---
     isAttacking(false),
     isDefending(false),
