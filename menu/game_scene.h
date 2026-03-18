@@ -4,81 +4,81 @@
  * @author evol
  * @date 2026-02-24
  */
-
 #pragma once
 #include "../utils/scene_manager.h"
 #include "../ui/ui.h"
 
-class SoundManager;
+// Forward declarations
 class Player;
 class BossGolem;
+class SoundManager;
 
+// NOTE: PLAYER_SPAWN_COL/ROW и BOSS_SPAWN_COL/ROW объявлены в level1_assets.h
+// Здесь НЕ переопределяем — иначе redefinition error
+
+// Лимит времени для звезды "быстро" — игровая логика, не данные карты
+static constexpr float TIME_LIMIT_SECONDS = 180.0f;
+
+enum class ResultState { PLAYING, VICTORY, DEFEAT };
+
+/**
+ * @class GameScene
+ * @brief Управляет игровым процессом: обновляет Player и BossGolem,
+ *        проверяет урон, считает звёзды, рисует HUD.
+ */
 class GameScene : public Scene {
 private:
-    SceneType nextScene;
+    SceneType     nextScene;
     SoundManager* soundMgr;
+
     bool isPaused;
     bool gameStarted;
 
-    // --- Кнопки паузы ---
+    // Кнопки паузы
     Button continueBtn;
     Button saveBtn;
     Button exitBtn;
+    // Кнопки результата
+    Button nextBtn;
+    Button retryBtn;
 
-    // --- Кнопки экрана результата ---
-    Button nextBtn;     // "В меню уровней" (победа)
-    Button retryBtn;    // "Заново" (поражение)
+    // Персонажи — unique_ptr: не нужен ручной delete
+    std::unique_ptr<Player>    player;
+    std::unique_ptr<BossGolem> boss;
 
-    // --- Персонажи ---
-    Player*    player;
-    BossGolem* boss;
-    int        currentLevel;
+    int   currentLevel;
+    int   livesLeft;
+    float levelTimer;
 
-    // --- Система жизней ---
-    int livesLeft;      // сколько жизней осталось (-1 = бесконечно)
+    bool playerTookDamage;
+    bool bossDefeated;
 
-    // ==============================================
-    //  СИСТЕМА ЗАВЕРШЕНИЯ УРОВНЯ
-    // ==============================================
-
-    float levelTimer;           // Сколько секунд прошло с начала боя
-    bool  playerTookDamage;     // Получал ли игрок урон (звезда "Без урона")
-    bool  bossDefeated;         // Флаг чтобы не вызывать calculateAndSaveStars дважды
-
-    // Состояние: бой / победа / поражение
-    enum class ResultState { PLAYING, VICTORY, DEFEAT };
     ResultState resultState;
-
-    int   earnedStars;          // Сколько звёзд заработано (0-3)
-    float starRevealTimer;      // Таймер анимации появления звёзд
-    int   starsRevealed;        // Сколько звёзд уже показано
-
-    // Условие: 3 минуты
-    static constexpr float TIME_LIMIT_SECONDS = 180.0f;
+    int         earnedStars;
+    float       starRevealTimer;
+    int         starsRevealed;
 
 public:
     GameScene();
-    ~GameScene();
+    ~GameScene() override = default;
 
-    void initPositions();
     void handleInput(SDL_Event& event, int mouseX, int mouseY,
                      bool mouseClicked, bool mouseDown) override;
     void update(float deltaTime) override;
     void render(SDL_Renderer* renderer) override;
-    SceneType getNextScene() override;
+
+    [[nodiscard]] SceneType getNextScene() override;
 
 private:
-    void drawHealthBars(SDL_Renderer* renderer);
+    void initPositions();
+    void respawnPlayer();
     void saveGame();
-    void respawnPlayer();  // пересоздаёт игрока на стартовой позиции
-
-    // Считает звёзды и сохраняет в Config
     void calculateAndSaveStars();
 
-    // Экраны результата
+    [[nodiscard]] static std::pair<float, float> getPlayerSpawnPos();
+
+    void drawHealthBars(SDL_Renderer* renderer);
     void renderVictoryScreen(SDL_Renderer* renderer);
     void renderDefeatScreen(SDL_Renderer* renderer);
-
-    // Рисует один квадрат-звезду
     void drawStar(SDL_Renderer* renderer, int cx, int cy, int size, bool filled);
 };

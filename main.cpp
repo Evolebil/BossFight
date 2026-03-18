@@ -1,3 +1,9 @@
+/**
+ * @file main.cpp
+ * @brief Точка входа — инициализация SDL, создание окна, игровой цикл
+ * @author evol
+ * @date 2026-02-20
+ */
 #include <SDL2/SDL.h>
 #include "config/config.h"
 #include "ui/ui.h"
@@ -6,37 +12,53 @@
 #include "utils/input_manager.h"
 #include "utils/sound_manager.h"
 #include "config/common.h"
-// Глобальный SoundManager (чтобы передавать в сцены)
+
+// Глобальный SoundManager — передаётся в сцены через getSoundManager()
 SoundManager* g_soundMgr = nullptr;
 
-// Функция для получения глобального SoundManager (объявляем здесь)
+// ============================================================
+// ЗАГРУЗКА ЗВУКОВ (вынесено из main для читаемости)
+// ============================================================
 
-int main(int argc, char* argv[]) {
+static void loadSounds(SoundManager& mgr) {
+    // hover, click, slider — одна и та же кнопочная звуковая дорожка
+    const char* btn = "assets/sound/button.mp3";
+    mgr.loadSound("hover",         btn);
+    mgr.loadSound("click",         btn);
+    mgr.loadSound("slider",        btn);
+    mgr.loadSound("attack_golem",  "assets/sound/attak_golem.mp3");
+    mgr.loadSound("laser_attack",  "assets/sound/lazer_attak.mp3");
+    mgr.loadSound("melee_attack",  "assets/sound/mellee_attak_player.mp3");
+    mgr.loadSound("ranged_attack", "assets/sound/ranged_attack_player.mp3");
+    mgr.loadSound("golem_move",    "assets/sound/move_golem.mp3");
+}
+
+// ============================================================
+// MAIN
+// ============================================================
+
+int main(int /*argc*/, char* /*argv*/[]) {
     // === ИНИЦИАЛИЗАЦИЯ SDL ===
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
-        std::cout << "SDL ошибка: " << SDL_GetError() << std::endl;
+        std::cerr << "SDL ошибка: " << SDL_GetError() << "\n";
         return 1;
     }
 
-    // === ИНИЦИАЛИЗАЦИЯ CONFIG ===
+    // === ИНИЦИАЛИЗАЦИЯ CONFIG (шрифты) ===
     if (!Config::init()) {
-        std::cout << "Ошибка инициализации Config" << std::endl;
+        std::cerr << "Ошибка инициализации Config\n";
         SDL_Quit();
         return 1;
     }
 
-    // === СОЗДАНИЕ ОКНА ===
+    // === ОКНО И РЕНДЕРЕР ===
     SDL_Window* window = SDL_CreateWindow(
         "Boss Fight",
-        SDL_WINDOWPOS_CENTERED,
-        SDL_WINDOWPOS_CENTERED,
-        Config::getWindowWidth(),
-        Config::getWindowHeight(),
-        SDL_WINDOW_SHOWN
-        );
-
+        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+        Config::getWindowWidth(), Config::getWindowHeight(),
+        SDL_WINDOW_SHOWN);
     if (!window) {
-        std::cout << "Ошибка создания окна: " << SDL_GetError() << std::endl;
+        std::cerr << "Ошибка создания окна: " << SDL_GetError() << "\n";
         Config::cleanup();
         SDL_Quit();
         return 1;
@@ -44,36 +66,26 @@ int main(int argc, char* argv[]) {
 
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     if (!renderer) {
-        std::cout << "Ошибка создания рендерера: " << SDL_GetError() << std::endl;
+        std::cerr << "Ошибка создания рендерера: " << SDL_GetError() << "\n";
         SDL_DestroyWindow(window);
         Config::cleanup();
         SDL_Quit();
         return 1;
     }
 
-    // === ИНИЦИАЛИЗАЦИЯ ЗВУКОВ ===
-    g_soundMgr = new SoundManager();
+    // === ЗВУК ===
+    // unique_ptr — автоматически удалится при выходе из main
+    auto soundMgrPtr = std::make_unique<SoundManager>();
+    g_soundMgr = soundMgrPtr.get();
 
-    // 1. СНАЧАЛА ИНИЦИАЛИЗИРУЕМ (открываем аудио-устройство)
     if (!g_soundMgr->init()) {
-        std::cerr << "WARNING: Sound system not initialized" << std::endl;
+        std::cerr << "WARNING: звуковая система не инициализирована\n";
     }
-
-    // 2. ПОТОМ ЗАГРУЖАЕМ ФАЙЛЫ
-    g_soundMgr->loadSound("hover", "assets/sound/button.mp3");
-    g_soundMgr->loadSound("click", "assets/sound/button.mp3");
-    g_soundMgr->loadSound("slider", "assets/sound/button.mp3");
-    g_soundMgr->loadSound("attack_golem", "assets/sound/attak_golem.mp3");
-    g_soundMgr->loadSound("laser_attack", "assets/sound/lazer_attak.mp3");
-    g_soundMgr->loadSound("melee_attack", "assets/sound/mellee_attak_player.mp3");
-    g_soundMgr->loadSound("ranged_attack", "assets/sound/ranged_attack_player.mp3");
-    g_soundMgr->loadSound("golem_move", "assets/sound/move_golem.mp3");
-
-    // 3. НАСТРАИВАЕМ ГРОМКОСТЬ
+    loadSounds(*g_soundMgr);
     g_soundMgr->soundVolume = Config::getSoundVolume();
     g_soundMgr->musicVolume = Config::getMusicVolume();
 
-    // === ИНИЦИАЛИЗАЦИЯ ТЕКСТУР ===
+    // === ТЕКСТУРЫ ===
     TextureManager::init(renderer);
 
     // === МЕНЕДЖЕР СЦЕН ===
@@ -81,67 +93,60 @@ int main(int argc, char* argv[]) {
     sceneManager.loadScene(SceneType::SPLASH);
 
     // === ИГРОВОЙ ЦИКЛ ===
-    bool running = true;
+    bool      running  = true;
     SDL_Event event;
-
-    int mouseX = 0, mouseY = 0;
-    bool mouseClicked = false;
-    bool mouseDown = false;
+    int       mouseX   = 0, mouseY = 0;
+    bool      mouseClicked = false;
+    bool      mouseDown    = false;
 
     Uint32 lastTime = SDL_GetTicks();
 
     while (running && !sceneManager.shouldQuit()) {
-        // 1. Расчёт deltaTime
-        Uint32 currentTime = SDL_GetTicks();
-        float deltaTime = (currentTime - lastTime) / 1000.0f;
-        lastTime = currentTime;
+        const Uint32 frameStart = SDL_GetTicks();
 
-        // 2. Сбрасываем флаг клика
+        // Deltatime — время прошедшее с прошлого кадра
+        float deltaTime = (frameStart - lastTime) / 1000.0f;
+        lastTime = frameStart;
+
+        // Сбрасываем одноразовый клик
         mouseClicked = false;
 
-        // === ОБРАБОТКА СОБЫТИЙ ===
+        // === СОБЫТИЯ ===
         while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_QUIT) {
-                running = false;
-            }
+            if (event.type == SDL_QUIT) running = false;
 
-            // Координаты мыши
             if (event.type == SDL_MOUSEMOTION) {
                 mouseX = event.motion.x;
                 mouseY = event.motion.y;
             }
-
-            // Клики мыши
             if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
                 mouseClicked = true;
-                mouseDown = true;
+                mouseDown    = true;
             }
-
             if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT) {
                 mouseDown = false;
             }
 
-            // Передаём событие текущей сцене
             sceneManager.handleInput(event, mouseX, mouseY, mouseClicked, mouseDown);
         }
 
-        // 3. Обновляем InputManager ПОСЛЕ обработки событий
+        // === ОБНОВЛЕНИЕ ===
         InputManager::update();
-
-        // 4. Обновление сцены
         sceneManager.update(deltaTime);
 
-        // 5. Рендеринг
+        // === РЕНДЕРИНГ ===
         SDL_RenderClear(renderer);
         sceneManager.render();
         SDL_RenderPresent(renderer);
 
-        SDL_Delay(16);
+        // Ограничение FPS: ждём остаток от 16ms (≈62 FPS максимум)
+        const Uint32 frameTime = SDL_GetTicks() - frameStart;
+        if (frameTime < 16) SDL_Delay(16 - frameTime);
     }
 
-    // === ОЧИСТКА РЕСУРСОВ ===
+    // === ОЧИСТКА ===
     TextureManager::cleanup();
-    delete g_soundMgr;
+    // g_soundMgr удаляется автоматически (unique_ptr)
     Config::cleanup();
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);

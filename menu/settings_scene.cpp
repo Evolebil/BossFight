@@ -1,183 +1,162 @@
+/**
+ * @file settings_scene.cpp
+ * @brief Реализация экрана настроек
+ * @author evol
+ * @date 2026-02-20
+ */
 #include "../utils/scene_manager.h"
 #include "settings_scene.h"
 #include "../config/config.h"
 #include "../ui/ui.h"
 #include "../backgrounds/forest_bg.h"
 #include "../utils/sound_manager.h"
-#include <vector>
 
-// Убрать весь класс SettingsScene { ... } и заменить на:
-
-SettingsScene::SettingsScene() 
+SettingsScene::SettingsScene()
     : nextScene(SceneType::SETTINGS),
-      soundMgr(getSoundManager()),
-      activeSlider(-1),
-      keyBeingRebound(nullptr),
-      mouseButtonBeingRebound(nullptr),
-      tempBrightness(Config::getBrightness()),
-      tempSoundVolume(Config::getSoundVolume()),
-      tempMusicVolume(Config::getMusicVolume()),
-      tempSensitivity(Config::getSensitivity()),
-      brightnessSlider(350, 150, 400, "Яркость", &tempBrightness, 0),
-      soundSlider(350, 250, 400, "Звук", &tempSoundVolume, 1),
-      musicSlider(350, 350, 400, "Музыка", &tempMusicVolume, 2),
-      sensitivitySlider(350, 450, 400, "Чувствительность", &tempSensitivity, 3),
-      backBtn(20, 20, 100, 50, "Назад") {
-    
-    // Создаём кнопки управления
-    Config::Controls& controls = Config::getControls();
-    controlButtons.push_back({"Атака вблизи", &controls.attack, &controls.attackMouseButton, {850, 180, 250, 40}, false, false});
-    controlButtons.push_back({"Выстрел", &controls.shoot, &controls.shootMouseButton, {850, 225, 250, 40}, false, false});
-    controlButtons.push_back({"Прыжок", &controls.jump, nullptr, {850, 270, 250, 40}, false, false});
-    controlButtons.push_back({"Влево", &controls.left, nullptr, {850, 315, 250, 40}, false, false});
-    controlButtons.push_back({"Вправо", &controls.right, nullptr, {850, 360, 250, 40}, false, false});
-    controlButtons.push_back({"Пригнуться", &controls.crouch, nullptr, {850, 405, 250, 40}, false, false});
-    controlButtons.push_back({"Взаимодействие", &controls.interact, nullptr, {850, 450, 250, 40}, false, false});
+    soundMgr(getSoundManager()),
+    activeSlider(-1),
+    keyBeingRebound(nullptr),
+    mouseButtonBeingRebound(nullptr),
+    tempBrightness (Config::getBrightness()),
+    tempSoundVolume(Config::getSoundVolume()),
+    tempMusicVolume(Config::getMusicVolume()),
+    tempSensitivity(Config::getSensitivity()),
+    brightnessSlider  (350, 150, 400, "Яркость",           &tempBrightness,  0),
+    soundSlider       (350, 250, 400, "Звук",               &tempSoundVolume, 1),
+    musicSlider       (350, 350, 400, "Музыка",             &tempMusicVolume, 2),
+    sensitivitySlider (350, 450, 400, "Чувствительность",   &tempSensitivity, 3),
+    backBtn(20, 20, 100, 50, "Назад") {
+
+    Config::Controls& ctrl = Config::getControls();
+    controlButtons = {
+                       {"Атака вблизи",   &ctrl.attack,   &ctrl.attackMouseButton, {850, 180, 250, 40}, false, false},
+                       {"Выстрел",        &ctrl.shoot,    &ctrl.shootMouseButton,  {850, 225, 250, 40}, false, false},
+                       {"Прыжок",         &ctrl.jump,     nullptr,                 {850, 270, 250, 40}, false, false},
+                       {"Влево",          &ctrl.left,     nullptr,                 {850, 315, 250, 40}, false, false},
+                       {"Вправо",         &ctrl.right,    nullptr,                 {850, 360, 250, 40}, false, false},
+                       {"Пригнуться",     &ctrl.crouch,   nullptr,                 {850, 405, 250, 40}, false, false},
+                       {"Взаимодействие", &ctrl.interact, nullptr,                 {850, 450, 250, 40}, false, false},
+                       };
 }
 
-void SettingsScene::handleInput(SDL_Event& event, int mouseX, int mouseY, bool mouseClicked, bool mouseDown) {
-    // ПЕРЕНАЗНАЧЕНИЕ КНОПОК МЫШИ
-    if (mouseButtonBeingRebound != nullptr && event.type == SDL_MOUSEBUTTONDOWN) {
+void SettingsScene::handleInput(SDL_Event& event, int mx, int my,
+                                bool clicked, bool mouseDown) {
+    // Переназначение кнопки мыши — ждём следующего нажатия
+    if (mouseButtonBeingRebound && event.type == SDL_MOUSEBUTTONDOWN) {
         *mouseButtonBeingRebound = event.button.button;
         if (soundMgr) soundMgr->playClick();
         mouseButtonBeingRebound = nullptr;
-        keyBeingRebound = nullptr;
+        keyBeingRebound         = nullptr;
         return;
     }
-    
-    // ПЕРЕНАЗНАЧЕНИЕ КЛАВИШ
-    if (keyBeingRebound != nullptr && event.type == SDL_KEYDOWN) {
+
+    // Переназначение клавиши — ждём следующего нажатия
+    if (keyBeingRebound && event.type == SDL_KEYDOWN) {
         *keyBeingRebound = event.key.keysym.scancode;
         if (soundMgr) soundMgr->playClick();
-        keyBeingRebound = nullptr;
+        keyBeingRebound         = nullptr;
         mouseButtonBeingRebound = nullptr;
         return;
     }
-    
+
     // Определяем активный слайдер
     if (!mouseDown) activeSlider = -1;
-    if (brightnessSlider.isDragging) activeSlider = 0;
-    if (soundSlider.isDragging) activeSlider = 1;
-    if (musicSlider.isDragging) activeSlider = 2;
-    if (sensitivitySlider.isDragging) activeSlider = 3;
-    
-    // Обновляем слайдеры
-    brightnessSlider.update(mouseX, mouseY, mouseDown, activeSlider);
-    soundSlider.update(mouseX, mouseY, mouseDown, activeSlider);
-    musicSlider.update(mouseX, mouseY, mouseDown, activeSlider);
-    sensitivitySlider.update(mouseX, mouseY, mouseDown, activeSlider);
-    
-    // Применяем настройки к Config
-    Config::setBrightness(tempBrightness);
+    std::array<Slider*, 4> sliders = {
+        &brightnessSlider, &soundSlider, &musicSlider, &sensitivitySlider
+    };
+    for (auto* s : sliders) {
+        if (s->isDragging) activeSlider = s->id;
+    }
+
+    // Обновляем все слайдеры
+    for (auto* s : sliders) s->update(mx, my, mouseDown, activeSlider);
+
+    // Применяем значения в Config
+    Config::setBrightness (tempBrightness);
     Config::setSoundVolume(tempSoundVolume);
     Config::setMusicVolume(tempMusicVolume);
     Config::setSensitivity(tempSensitivity);
-    
-    // Применяем громкость к звукам
+
     if (soundMgr) {
         soundMgr->soundVolume = Config::getSoundVolume();
         soundMgr->musicVolume = Config::getMusicVolume();
     }
-    
+
     // Кнопка "Назад"
-    backBtn.isHovered = backBtn.contains(mouseX, mouseY);
-    if (backBtn.isHovered && !backBtn.wasHovered && soundMgr) {
-        soundMgr->playHover();
-    }
-    backBtn.wasHovered = backBtn.isHovered;
-    
-    if (backBtn.isHovered && mouseClicked) {
-        if (soundMgr) soundMgr->playClick();
-        keyBeingRebound = nullptr;
+    if (updateButton(backBtn, mx, my, clicked, soundMgr)) {
+        keyBeingRebound         = nullptr;
         mouseButtonBeingRebound = nullptr;
         nextScene = SceneType::MAIN_MENU;
     }
-    
-    // Обработка кнопок управления
+
+    // Кнопки переназначения управления
     for (auto& cb : controlButtons) {
-        cb.isHovered = mouseX >= cb.rect.x && mouseX <= cb.rect.x + cb.rect.w &&
-                       mouseY >= cb.rect.y && mouseY <= cb.rect.y + cb.rect.h;
-        
-        if (cb.isHovered && mouseClicked) {
+        cb.isHovered = mx >= cb.rect.x && mx <= cb.rect.x + cb.rect.w &&
+                       my >= cb.rect.y && my <= cb.rect.y + cb.rect.h;
+        if (cb.isHovered && clicked) {
             if (soundMgr) soundMgr->playClick();
-            keyBeingRebound = cb.key;
+            keyBeingRebound         = cb.key;
             mouseButtonBeingRebound = cb.mouseBtn;
         }
     }
 }
 
-void SettingsScene::update(float deltaTime) {
-    // НЕ синхронизируем здесь - это затирает изменения!
-}
+void SettingsScene::update(float /*deltaTime*/) {}
 
 void SettingsScene::render(SDL_Renderer* renderer) {
-    // Синхронизируем ПЕРЕД отрисовкой
-    if (!brightnessSlider.isDragging) tempBrightness = Config::getBrightness();
-    if (!soundSlider.isDragging) tempSoundVolume = Config::getSoundVolume();
-    if (!musicSlider.isDragging) tempMusicVolume = Config::getMusicVolume();
-    if (!sensitivitySlider.isDragging) tempSensitivity = Config::getSensitivity();
-    
-    // Фон
+    // Синхронизируем значения если слайдер не перетаскивается
+    if (!brightnessSlider.isDragging)   tempBrightness  = Config::getBrightness();
+    if (!soundSlider.isDragging)        tempSoundVolume  = Config::getSoundVolume();
+    if (!musicSlider.isDragging)        tempMusicVolume  = Config::getMusicVolume();
+    if (!sensitivitySlider.isDragging)  tempSensitivity  = Config::getSensitivity();
+
     drawForestBackground(renderer, Config::getBrightness());
     drawUIOverlay(renderer, 100);
-    
-    // Заголовок
-    drawText(renderer, Config::getFont(), "Настройки", 0, 50, 
+    drawText(renderer, Config::getFont(), "Настройки", 0, 50,
              {255, 255, 255, 255}, true, Config::getTitleFont());
-    
-    // Слайдеры
-    drawSlider(renderer, Config::getFont(), brightnessSlider, soundMgr);
-    drawSlider(renderer, Config::getFont(), soundSlider, soundMgr);
-    drawSlider(renderer, Config::getFont(), musicSlider, soundMgr);
-    drawSlider(renderer, Config::getFont(), sensitivitySlider, soundMgr);
-    
-    // Управление
+
+    // Слайдеры — через массив
+    std::array<Slider*, 4> sliders = {
+        &brightnessSlider, &soundSlider, &musicSlider, &sensitivitySlider
+    };
+    for (auto* s : sliders) drawSlider(renderer, Config::getFont(), *s, soundMgr);
+
+    // Секция управления
     drawText(renderer, Config::getFont(), "Управление (клик для изменения):", 850, 140);
-    
-    for (auto& cb : controlButtons) {
-        // Проверка какая кнопка ждет ввода
-        bool isWaiting = (keyBeingRebound == cb.key) || 
-                         (cb.mouseBtn != nullptr && mouseButtonBeingRebound == cb.mouseBtn);
-        
-        if (isWaiting) {
-            SDL_SetRenderDrawColor(renderer, 255, 200, 0, 255);
-        } else if (cb.isHovered) {
-            SDL_SetRenderDrawColor(renderer, 100, 150, 220, 255);
-        } else {
-            SDL_SetRenderDrawColor(renderer, 60, 80, 120, 200);
-        }
+
+    for (const auto& cb : controlButtons) {
+        const bool isWaiting = (keyBeingRebound == cb.key) ||
+                               (cb.mouseBtn && mouseButtonBeingRebound == cb.mouseBtn);
+
+        SDL_SetRenderDrawColor(renderer,
+                               isWaiting  ? 255 : (cb.isHovered ? 100 : 60),
+                               isWaiting  ? 200 : (cb.isHovered ? 150 : 80),
+                               isWaiting  ?   0 : (cb.isHovered ? 220 : 120),
+                               isWaiting  ? 255 : 200);
         SDL_RenderFillRect(renderer, &cb.rect);
-        
         SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
         SDL_RenderDrawRect(renderer, &cb.rect);
-        
-        // Текст
-        std::string keyText;
-        if (isWaiting) {
-            keyText = "...";
-        } else {
-            keyText = getKeyName(*cb.key);
-            if (cb.mouseBtn && *cb.mouseBtn > 0) {
-                const char* mouseNames[] = {"", "ЛКМ", "ПКМ", "СКМ"};
-                if (*cb.mouseBtn <= 3) {
-                    keyText += " / " + std::string(mouseNames[*cb.mouseBtn]);
-                }
-            }
+
+        std::string keyText = isWaiting ? "..." : getKeyName(*cb.key);
+        if (!isWaiting && cb.mouseBtn && *cb.mouseBtn > 0) {
+            const char* mouseNames[] = {"", "ЛКМ", "ПКМ", "СКМ"};
+            if (*cb.mouseBtn <= 3)
+                keyText += " / " + std::string(mouseNames[*cb.mouseBtn]);
         }
-        drawText(renderer, Config::getFont(), cb.label + ": " + keyText, 
+        drawText(renderer, Config::getFont(), cb.label + ": " + keyText,
                  cb.rect.x + 10, cb.rect.y + 8);
     }
-    
-    // Подсказка
+
+    // Подсказка внизу
     if (keyBeingRebound || mouseButtonBeingRebound) {
-        drawText(renderer, Config::getFont(), "Нажмите клавишу или кнопку мыши...", 
+        drawText(renderer, Config::getFont(), "Нажмите клавишу или кнопку мыши...",
                  850, 510, {255, 200, 0, 255});
     } else {
-        drawText(renderer, Config::getFont(), 
-                 "Чувствительность: " + std::to_string((int)(Config::getSensitivity() * 100)) + "%", 
+        drawText(renderer, Config::getFont(),
+                 "Чувствительность: " + std::to_string((int)(Config::getSensitivity() * 100)) + "%",
                  850, 510, {200, 200, 200, 255});
     }
-    
+
     drawButton(renderer, Config::getFont(), backBtn);
 }
 

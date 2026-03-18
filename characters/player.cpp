@@ -4,7 +4,6 @@
  * @author evol
  * @date 2026-02-24
  */
-
 #include "player.h"
 #include "../utils/texture_manager.h"
 #include "../utils/input_manager.h"
@@ -14,7 +13,6 @@
 // ============================================================
 
 Player::Player(float spawnX, float spawnY)
-    // RENDER_W=96, RENDER_H=84 — хитбокс совпадает со спрайтом
     : Character(spawnX, spawnY, 35.0f, 40.0f, 100.0f),
     // --- бой ---
     isAttacking(false),
@@ -27,6 +25,9 @@ Player::Player(float spawnX, float spawnY)
     attackHitActive(false),
     attackHitTimer(0.0f),
     attackDamage(0.0f),
+    // --- блок (инициализированы! были UB) ---
+    defendReady(true),
+    defendCooldown(0.0f),
     // --- ввод ---
     wantsToJump(false),
     wantsToAttack(false),
@@ -43,10 +44,9 @@ Player::Player(float spawnX, float spawnY)
     attack1Anim(false),
     attack2Anim(false),
     attack3Anim(false),
-    defendAnim(true, true),   // pingPong — вперёд при зажатии, назад при отпускании
+    defendAnim(true, true),
     hurtAnim(false),
-    deathAnim(false)
-{
+    deathAnim(false) {
     loadAnimations();
 }
 
@@ -55,7 +55,6 @@ Player::Player(float spawnX, float spawnY)
 // ============================================================
 
 void Player::loadAnimations() {
-    // Загружаем каждый файл отдельно
     texIdle    = TextureManager::getTexture("assets/player/IDLE.png");
     texRun     = TextureManager::getTexture("assets/player/RUN.png");
     texWalk    = TextureManager::getTexture("assets/player/WALK.png");
@@ -67,43 +66,41 @@ void Player::loadAnimations() {
     texHurt    = TextureManager::getTexture("assets/player/HURT.png");
     texDeath   = TextureManager::getTexture("assets/player/DEATH.png");
 
-    // --- IDLE: 8 кадров, зациклена ---
+    // IDLE: 7 кадров
     for (int i = 0; i < 7; i++)
         idleAnim.addFrame(i * FRAME_W, 0, FRAME_W, FRAME_H, 0.15f);
 
-    // --- RUN: 9 кадров, зациклена ---
+    // RUN: 8 кадров
     for (int i = 0; i < 8; i++)
         runAnim.addFrame(i * FRAME_W, 0, FRAME_W, FRAME_H, 0.09f);
 
-    // --- JUMP: 6 кадров, одноразовая ---
+    // JUMP: 5 кадров
     for (int i = 0; i < 5; i++)
         jumpAnim.addFrame(i * FRAME_W, 0, FRAME_W, FRAME_H, 0.12f);
 
-    // --- ATTACK_1: 7 кадров, одноразовая, быстрая ---
+    // ATTACK_1: 6 кадров
     for (int i = 0; i < 6; i++)
         attack1Anim.addFrame(i * FRAME_W, 0, FRAME_W, FRAME_H, 0.08f);
 
-    // --- ATTACK_2: 6 кадров, одноразовая ---
+    // ATTACK_2: 5 кадров
     for (int i = 0; i < 5; i++)
         attack2Anim.addFrame(i * FRAME_W, 0, FRAME_W, FRAME_H, 0.09f);
 
-    // --- ATTACK_3: 7 кадров, одноразовая ---
+    // ATTACK_3: 6 кадров
     for (int i = 0; i < 6; i++)
         attack3Anim.addFrame(i * FRAME_W, 0, FRAME_W, FRAME_H, 0.10f);
 
-    // --- DEFEND: 7 кадров, pingPong ---
-    // Вперёд при зажатии ПКМ, назад при отпускании
+    // DEFEND: 6 кадров, pingPong
     for (int i = 0; i < 6; i++)
         defendAnim.addFrame(i * FRAME_W, 0, FRAME_W, FRAME_H, 0.07f);
 
-    // --- HURT: 4 кадра, одноразовая ---
+    // HURT: 4 кадра
     for (int i = 0; i < 4; i++)
         hurtAnim.addFrame(i * FRAME_W, 0, FRAME_W, FRAME_H, 0.10f);
 
-    // --- DEATH: 14 кадров, одноразовая, медленная ---
+    // DEATH: 14 кадров
     for (int i = 0; i < 14; i++)
         deathAnim.addFrame(i * FRAME_W, 0, FRAME_W, FRAME_H, 0.12f);
-
 }
 
 // ============================================================
@@ -111,38 +108,27 @@ void Player::loadAnimations() {
 // ============================================================
 
 void Player::processInput() {
-    // Пока мёртв — никакого ввода
     if (isDead) return;
 
-    Config::Controls& controls = Config::getControls();
+    const Config::Controls& controls = Config::getControls();
 
     wantsToJump   = false;
     wantsToAttack = false;
     velocityX     = 0;
 
+    const bool left  = InputManager::isKeyDown(controls.left);
+    const bool right = InputManager::isKeyDown(controls.right);
 
-    bool left  = InputManager::isKeyDown(controls.left);
-    bool right = InputManager::isKeyDown(controls.right);
-
-    if (left && !right) {
-        velocityX   = -MOVE_SPEED;
-        facingRight = false;
-    }
-    if (right && !left) {
-        velocityX   = MOVE_SPEED;
-        facingRight = true;
-    }
+    if (left && !right) { velocityX = -MOVE_SPEED; facingRight = false; }
+    if (right && !left) { velocityX =  MOVE_SPEED; facingRight = true;  }
 
     if (InputManager::isKeyPressed(controls.jump)) wantsToJump = true;
 
-    // Атака ЛКМ — только если кулдаун прошёл
     if (!isAttacking && !isHurt && attackTimer <= 0.0f) {
-        if (InputManager::isMousePressed(1)) wantsToAttack = true; // 1 = ЛКМ
+        if (InputManager::isMousePressed(1)) wantsToAttack = true;
     }
 
-    // Щит ПКМ — зажимаем и отпускаем
-
-    wantsToDefend = InputManager::isMouseDown(3); // 3 = ПКМ
+    wantsToDefend = InputManager::isMouseDown(3);
 }
 
 // ============================================================
@@ -150,27 +136,25 @@ void Player::processInput() {
 // ============================================================
 
 void Player::startAttack() {
-    isAttacking  = true;
-    attackTimer  = attackCooldown;
-    attackHitActive = false; // урон ещё не нанесён
+    isAttacking     = true;
+    attackTimer     = attackCooldown;
+    attackHitActive = false;
 
-    // Чередуем 3 атаки по кругу
     if (attackCombo == 0) {
         attack1Anim.reset();
-        attackDamage    = DAMAGE_ATTACK1;
-        attackHitTimer  = 0.25f; // урон на 3-м кадре примерно
+        attackDamage   = DAMAGE_ATTACK1;
+        attackHitTimer = 0.25f;
     } else if (attackCombo == 1) {
         attack2Anim.reset();
-        attackDamage    = DAMAGE_ATTACK2;
-        attackHitTimer  = 0.25f;
+        attackDamage   = DAMAGE_ATTACK2;
+        attackHitTimer = 0.25f;
     } else {
         attack3Anim.reset();
-        attackDamage    = DAMAGE_ATTACK3;
-        attackHitTimer  = 0.30f;
+        attackDamage   = DAMAGE_ATTACK3;
+        attackHitTimer = 0.30f;
     }
 
     attackCombo = (attackCombo + 1) % 3;
-
 }
 
 // ============================================================
@@ -195,20 +179,18 @@ void Player::update(float deltaTime) {
     }
 
     // ШАГ 4: Атака
-    if (wantsToAttack) {
-        startAttack();
-    }
+    if (wantsToAttack) startAttack();
 
-    // ШАГ 5: Таймер кулдауна атаки
+    // ШАГ 5: Кулдаун атаки
     if (attackTimer > 0.0f) attackTimer -= deltaTime;
 
-    // ШАГ 6: Таймер нанесения урона во время атаки
-    // Таймер тикает только пока > -999 (после срабатывания уходит в -999)
+    // ШАГ 6: Таймер нанесения урона
+    // После срабатывания уходит в -999 чтобы не повторяться
     if (isAttacking && attackHitTimer > -999.0f) {
         attackHitTimer -= deltaTime;
         if (attackHitTimer <= 0.0f && !attackHitActive) {
             attackHitActive = true;
-            attackHitTimer = -999.0f; // больше не срабатываем до следующей атаки
+            attackHitTimer  = -999.0f;
         }
     }
 
@@ -216,12 +198,9 @@ void Player::update(float deltaTime) {
     if (!isAttacking && !isHurt) {
         if (wantsToDefend) {
             isDefending = true;
-            // Анимация щита идёт вперёд пока зажат
-            if (defendAnim.isGoingForward()) {
-                defendAnim.update(deltaTime);
-            }
+            if (defendAnim.isGoingForward()) defendAnim.update(deltaTime);
         } else if (isDefending) {
-            // ПКМ отпустили — пускаем анимацию назад
+            // ПКМ отпустили — откатываем анимацию назад
             defendAnim.playReverse();
             defendAnim.update(deltaTime);
             if (defendAnim.isFinished()) {
@@ -240,15 +219,13 @@ void Player::update(float deltaTime) {
     // ШАГ 9: Гравитация + коллизии по Y
     applyGravityAndCollisions(deltaTime);
 
-    // ШАГ 10: Обновление анимаций
+    // ШАГ 10: Анимации
     if (isHurt) {
         hurtAnim.update(deltaTime);
-        if (hurtAnim.isFinished()) {
-            isHurt = false;
-        }
+        if (hurtAnim.isFinished()) isHurt = false;
     } else if (isAttacking) {
-        // Обновляем нужную анимацию атаки
-        int combo = (attackCombo + 2) % 3; // текущая атака = предыдущий комбо
+        // Текущая атака = предыдущий шаг комбо
+        const int combo = (attackCombo + 2) % 3;
         if (combo == 0) {
             attack1Anim.update(deltaTime);
             if (attack1Anim.isFinished()) isAttacking = false;
@@ -276,28 +253,21 @@ void Player::takeDamage(float damage) {
     if (isDead) return;
 
     // Щит снижает урон на 75%
-    if (isDefending) {
-        damage *= (1.0f - DEFEND_DAMAGE_REDUCTION);
-    }
+    if (isDefending) damage *= (1.0f - DEFEND_DAMAGE_REDUCTION);
 
     hp -= damage;
-    if (hp < 0) hp = 0;
+    if (hp < 0.0f) hp = 0.0f;
 
-
-    if (hp <= 0) {
-        // Умер
-        isDead = true;
+    if (hp <= 0.0f) {
+        isDead      = true;
         isAttacking = false;
         isDefending = false;
-        isHurt = false;
+        isHurt      = false;
         deathAnim.reset();
-    } else {
-        // Hurt (только если урон > 0)
-        if (damage > 0.0f) {
-            isHurt = true;
-            isAttacking = false;
-            hurtAnim.reset();
-        }
+    } else if (damage > 0.0f) {
+        isHurt      = true;
+        isAttacking = false;
+        hurtAnim.reset();
     }
 }
 
@@ -308,20 +278,17 @@ void Player::takeDamage(float damage) {
 SDL_Rect Player::getAttackHitbox() const {
     if (!isAttacking) return {0, 0, 0, 0};
 
-    // Хитбокс атаки — прямоугольник перед игроком
     constexpr int HIT_W = 60;
     constexpr int HIT_H = 50;
     int hx = facingRight
-                 ? (int)(x + width / 2)          // справа от игрока
-                 : (int)(x - width / 2 - HIT_W); // слева от игрока
+                 ? (int)(x + width / 2)
+                 : (int)(x - width / 2 - HIT_W);
     int hy = (int)(y - height / 4);
-
     return {hx, hy, HIT_W, HIT_H};
 }
 
 float Player::consumeAttackDamage() {
     if (!attackHitActive) return 0.0f;
-    // Возвращаем урон ОДИН РАЗ и сбрасываем флаг
     attackHitActive = false;
     return attackDamage;
 }
@@ -331,43 +298,34 @@ float Player::consumeAttackDamage() {
 // ============================================================
 
 void Player::render(SDL_Renderer* renderer) {
-    // Выбираем текущую текстуру и анимацию
-    SDL_Texture* tex  = nullptr;
-    SDL_Rect     src  = {0, 0, 0, 0};
+    SDL_Texture* tex = nullptr;
+    SDL_Rect     src = {0, 0, 0, 0};
 
     if (isDead) {
-        tex = texDeath;
-        src = deathAnim.getCurrentFrame();
+        tex = texDeath; src = deathAnim.getCurrentFrame();
     } else if (isHurt) {
-        tex = texHurt;
-        src = hurtAnim.getCurrentFrame();
+        tex = texHurt;  src = hurtAnim.getCurrentFrame();
     } else if (isAttacking) {
-        int combo = (attackCombo + 2) % 3;
-        if (combo == 0) { tex = texAttack1; src = attack1Anim.getCurrentFrame(); }
+        const int combo = (attackCombo + 2) % 3;
+        if      (combo == 0) { tex = texAttack1; src = attack1Anim.getCurrentFrame(); }
         else if (combo == 1) { tex = texAttack2; src = attack2Anim.getCurrentFrame(); }
         else                 { tex = texAttack3; src = attack3Anim.getCurrentFrame(); }
     } else if (isDefending) {
-        tex = texDefend;
-        src = defendAnim.getCurrentFrame();
+        tex = texDefend; src = defendAnim.getCurrentFrame();
     } else if (!isGrounded) {
-        tex = texJump;
-        src = jumpAnim.getCurrentFrame();
+        tex = texJump;   src = jumpAnim.getCurrentFrame();
     } else if (velocityX != 0) {
-        tex = texRun;
-        src = runAnim.getCurrentFrame();
+        tex = texRun;    src = runAnim.getCurrentFrame();
     } else {
-        tex = texIdle;
-        src = idleAnim.getCurrentFrame();
+        tex = texIdle;   src = idleAnim.getCurrentFrame();
     }
 
-    // Прямоугольник на экране (используем RENDER_W/H — красиво)
     SDL_Rect dst = {
         (int)(x - RENDER_W / 2),
         (int)(y - RENDER_H / 2),
         (int)RENDER_W,
         (int)RENDER_H
     };
-
     SDL_RendererFlip flip = facingRight ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL;
 
     if (tex) {
@@ -377,5 +335,4 @@ void Player::render(SDL_Renderer* renderer) {
         SDL_SetRenderDrawColor(renderer, 0, 200, 0, 255);
         SDL_RenderFillRect(renderer, &dst);
     }
-
 }

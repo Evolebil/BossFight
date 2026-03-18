@@ -1,4 +1,9 @@
-// common.h
+/**
+ * @file common.h
+ * @brief Общие включения, перечисления и константы для всего проекта
+ * @author evol
+ * @date 2026-02-20
+ */
 #pragma once
 
 // ===== СИСТЕМНЫЕ БИБЛИОТЕКИ =====
@@ -16,10 +21,8 @@
 #include <algorithm>
 #include <cmath>
 #include <random>
-#include <chrono>
 #include <cstring>
 #include <array>
-#include <unistd.h>
 
 // ===== НАШИ КЛАССЫ (только объявления) =====
 class Config;
@@ -38,7 +41,7 @@ enum class SceneType {
     SETTINGS,
     CREDITS,
     GAME,
-    RESTART_GAME,   // перезапуск боя — создаёт новый GameScene даже если уже в GAME
+    RESTART_GAME,  // Перезапуск игровой сцены (scene_manager обрабатывает как GAME)
     QUIT
 };
 
@@ -54,11 +57,11 @@ enum class BossState {
 };
 
 enum class TileType {
-    EMPTY = 0,
-    WALL = 1,
-    PLATFORM = 2,
-    SPIKE = 3,
-    SPAWN = 4,
+    EMPTY      = 0,
+    WALL       = 1,
+    PLATFORM   = 2,
+    SPIKE      = 3,
+    SPAWN      = 4,
     BOSS_SPAWN = 5,
     CHECKPOINT = 6,
     DECORATION = 7
@@ -66,25 +69,33 @@ enum class TileType {
 
 // ===== ГЛОБАЛЬНЫЕ КОНСТАНТЫ =====
 namespace Constants {
-constexpr int WINDOW_WIDTH = 1280;
-constexpr int WINDOW_HEIGHT = 720;
-constexpr float PI = 3.14159265358979323846f;
+constexpr int   WINDOW_WIDTH      = 1280;
+constexpr int   WINDOW_HEIGHT     = 720;
+constexpr float PI                = 3.14159265358979323846f;
+constexpr float SPLASH_DURATION   = 3.0f;
+constexpr float FRAME_TIME_60FPS  = 1.0f / 60.0f;
 
-// Цвета
-const SDL_Color COLOR_WHITE = {255, 255, 255, 255};
-const SDL_Color COLOR_BLACK = {0, 0, 0, 255};
-const SDL_Color COLOR_RED = {255, 0, 0, 255};
-const SDL_Color COLOR_GREEN = {0, 255, 0, 255};
-const SDL_Color COLOR_BLUE = {0, 0, 255, 255};
-const SDL_Color COLOR_YELLOW = {255, 255, 0, 255};
+// Цвета — constexpr (не const)
+constexpr SDL_Color COLOR_WHITE  = {255, 255, 255, 255};
+constexpr SDL_Color COLOR_BLACK  = {  0,   0,   0, 255};
+constexpr SDL_Color COLOR_RED    = {255,   0,   0, 255};
+constexpr SDL_Color COLOR_GREEN  = {  0, 255,   0, 255};
+constexpr SDL_Color COLOR_BLUE   = {  0,   0, 255, 255};
+constexpr SDL_Color COLOR_YELLOW = {255, 255,   0, 255};
+constexpr SDL_Color COLOR_GOLD   = {255, 215,   0, 255};
 
-// Время
-constexpr float SPLASH_DURATION = 3.0f;
-constexpr float FRAME_TIME_60FPS = 1.0f / 60.0f;
+// Утилиты углов — функции вместо макросов
+constexpr float degToRad(float deg) { return deg * PI / 180.0f; }
+constexpr float radToDeg(float rad) { return rad * 180.0f / PI; }
 }
 
-// ===== ВСПОМОГАТЕЛЬНЫЕ МАКРОСЫ =====
-#define SAFE_DELETE(ptr) if (ptr) { delete ptr; ptr = nullptr; }
-#define SAFE_DELETE_ARRAY(ptr) if (ptr) { delete[] ptr; ptr = nullptr; }
-#define DEG_TO_RAD(deg) ((deg) * Constants::PI / 180.0f)
-#define RAD_TO_DEG(rad) ((rad) * 180.0f / Constants::PI)
+// ===== УТИЛИТЫ КОЛЛИЗИЙ =====
+
+/**
+ * @brief Проверяет пересечение двух прямоугольников (AABB).
+ * Используется везде где нужна проверка хитбоксов.
+ */
+[[nodiscard]] inline bool rectsOverlap(const SDL_Rect& a, const SDL_Rect& b) {
+    return a.x < b.x + b.w && a.x + a.w > b.x &&
+           a.y < b.y + b.h && a.y + a.h > b.y;
+}
