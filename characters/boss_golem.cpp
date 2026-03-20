@@ -312,9 +312,12 @@ void BossGolem::spawnProjectile(float playerX, float playerY) {
 }
 
 void BossGolem::spawnLaser() {
-    laser.active      = true;
-    laser.x           = x + (facingRight ? width/2.0f : -width/2.0f);
-    laser.y           = y - height * 0.1f;
+    laser.active       = true;
+    laser.x            = x + (facingRight ? width/2.0f : -width/2.0f);
+
+    // БАГ 4 FIX: спавним лазер ниже — совпадает со смещением в checkPlayerDamage
+    laser.y            = y + height * 0.3f;
+
     laser.facingRight  = facingRight;
     laser.damagePerSec = DAMAGE_LASER_SEC;
 }
@@ -324,26 +327,39 @@ void BossGolem::spawnLaser() {
 // ============================================================
 
 float BossGolem::checkPlayerDamage(SDL_Rect playerBox, float deltaTime) {
-    // Melee — только в середине анимации (кадр 4 из 8)
+
+    // ШАГ 1: MELEE — удар наносится на кадре 5 из 8 (было 4, теперь позже)
+    // БАГ 1 FIX: кадр 5 вместо 4 — даёт время увернуться пока босс замахивается
     if (currentState == BossState::ATTACK_MELEE && !meleeHitDealt &&
         animations.count(BossState::ATTACK_MELEE) &&
-        animations.at(BossState::ATTACK_MELEE).getCurrentFrameIndex() >= 4) {
+        animations.at(BossState::ATTACK_MELEE).getCurrentFrameIndex() >= 6) {
 
-        int meleeW = (int)(cellSize * 2.0f) + (int)(width * 0.3f);
-        int meleeH = (int)height;
+        // БАГ 2+3 FIX: хитбокс короче (было 2.0f клетки, стало 1.4f)
+        // и смещён дальше от центра босса (отступ width*0.5f вместо width*0.3f)
+        int meleeW = (int)(cellSize * 1.0f);
+        int meleeH = (int)(height * 0.85f);
+
+        // БАГ 3 FIX: хитбокс начинается дальше от тела босса
         int meleeX = facingRight
-                         ? (int)(x + width/2 - width*0.3f)
-                         : (int)(x - width/2 - meleeW + width*0.3f);
-        int meleeY = (int)(y - height/2);
+                         ? (int)(x + width * 0.1f)
+                         : (int)(x - width * 0.1f - meleeW);          // левая атака: зеркально
+
+        int meleeY = (int)(y - meleeH / 2);
 
         SDL_Rect meleeBox = {meleeX, meleeY, meleeW, meleeH};
+
+        // БАГ 2 FIX: проверяем попадание ПЕРЕД нанесением урона
         if (rectsOverlap(playerBox, meleeBox)) {
             meleeHitDealt = true;
             return DAMAGE_MELEE;
+        } else {
+            // Игрок вне зоны — помечаем что удар уже был, урон не наносим
+            meleeHitDealt = true;
+            return 0.0f;
         }
     }
 
-    // Снаряды
+    // ШАГ 2: Снаряды — без изменений
     for (auto& proj : projectiles) {
         if (!proj.active) continue;
         constexpr int PROJ_SIZE = 24;
@@ -358,13 +374,17 @@ float BossGolem::checkPlayerDamage(SDL_Rect playerBox, float deltaTime) {
         }
     }
 
-    // Лазер — урон в секунду
+    // ШАГ 3: Лазер
+    // БАГ 4 FIX: лазер смещён ниже — y + height*0.3f вместо центра
     if (laser.active) {
-        const int W      = Config::getWindowWidth();
+        const int W = Config::getWindowWidth();
         constexpr int LASER_H = 20;
+
         int laserX = laser.facingRight ? (int)laser.x : 0;
         int laserW = laser.facingRight ? W - (int)laser.x : (int)laser.x;
-        int laserY = (int)(laser.y - LASER_H / 2);
+
+        // БАГ 4 FIX: хитбокс лазера опускаем на 30% высоты босса вниз
+        int laserY = (int)(laser.y + height * 0.3f - LASER_H / 2);
 
         SDL_Rect laserBox = {laserX, laserY, laserW, LASER_H};
         if (rectsOverlap(playerBox, laserBox))
