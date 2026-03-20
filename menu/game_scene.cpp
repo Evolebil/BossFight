@@ -162,6 +162,21 @@ void GameScene::update(float deltaTime) {
         }
     }
 
+    // Магические снаряды игрока по боссу
+    for (auto& proj : player->getMagicProjectiles()) {
+        if (!proj.active) continue;
+        SDL_Rect projBox = {
+            (int)(proj.x - MagicProjectile::SIZE / 2),
+            (int)(proj.y - MagicProjectile::SIZE / 2),
+            (int)MagicProjectile::SIZE,
+            (int)MagicProjectile::SIZE
+        };
+        if (rectsOverlap(projBox, boss->getHitbox())) {
+            boss->takeDamage(MagicProjectile::DAMAGE);
+            proj.active = false;
+        }
+    }
+
     // Проверяем победу
     if (boss && !boss->isAlive() &&
         boss->getPhase() == BossPhase::PHASE_2 && !bossDefeated) {
@@ -345,6 +360,29 @@ void GameScene::drawHealthBars(SDL_Renderer* renderer) {
                 SDL_SetRenderDrawColor(renderer, 120, 200, 255, 200);
                 SDL_RenderDrawRect(renderer, &cell);
             }
+        }
+
+        // --- Мана игрока (синяя, под HP) ---
+        if (player) {
+            float manaPct = player->getMana() / player->getMaxMana();
+            drawText(renderer, Config::getFont(), "Мана", 20, 85, {150, 150, 255, 255});
+
+            SDL_SetRenderDrawColor(renderer, 20, 20, 60, 220);
+            SDL_Rect manaBg = {20, 105, 200, 14};
+            SDL_RenderFillRect(renderer, &manaBg);
+
+            SDL_SetRenderDrawColor(renderer, 80, 160, 255, 255);
+            SDL_Rect manaBar = {20, 105, (int)(200 * manaPct), 14};
+            SDL_RenderFillRect(renderer, &manaBar);
+
+            SDL_SetRenderDrawColor(renderer, 120, 120, 200, 255);
+            SDL_RenderDrawRect(renderer, &manaBg);
+
+            // Значение маны
+            char manaBuf[16];
+            std::snprintf(manaBuf, sizeof(manaBuf), "%.0f/%.0f",
+                          player->getMana(), player->getMaxMana());
+            drawText(renderer, Config::getFont(), manaBuf, 230, 103, {150, 200, 255, 255});
         }
     }
 

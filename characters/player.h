@@ -1,6 +1,6 @@
 /**
  * @file player.h
- * @brief Класс игрока — управление, прыжки, бой, анимации
+ * @brief Класс игрока — управление, прыжки, бой, магия, анимации
  * @author evol
  * @date 2026-02-24
  */
@@ -10,33 +10,35 @@
 #include "../utils/animation.h"
 #include "character.h"
 
+// --- Магический снаряд ---
+struct MagicProjectile {
+    float x, y;
+    float velX, velY;
+    bool  active;
+
+    static constexpr float DAMAGE = 50.0f;
+    static constexpr float SIZE   = 24.0f;
+};
+
 /**
  * @class Player
  * @brief Главный персонаж игры. Наследует физику и HP от Character.
  *
  * Управление:
- * - A/D   — движение влево/вправо
- * - Space — прыжок
- * - ЛКМ  — атака (чередует ATTACK_1 → ATTACK_2 → ATTACK_3)
- * - F    — щит (кулдаун 1 сек, спадает при получении урона)
- * - Shift — рывок (кулдаун 2 сек)
+ * - A/D       — движение влево/вправо
+ * - Space     — прыжок
+ * - ЛКМ      — ближняя атака (ATTACK_1/2/3)
+ * - ПКМ      — магическая атака (ATTACK_3, стоит 10 маны)
+ * - F (shield) — щит (кулдаун 1 сек)
+ * - Shift (dash) — рывок (кулдаун 2 сек)
  *
- * Анимации (отдельные файлы, кадр 96x84):
- * - IDLE.png     7 кадров  — стоит
- * - RUN.png      8 кадров  — бежит
- * - WALK.png     8 кадров  — не используется пока
- * - JUMP.png     5 кадров  — прыжок
- * - ATTACK_1.png 6 кадров  — атака 1
- * - ATTACK_2.png 5 кадров  — атака 2
- * - ATTACK_3.png 6 кадров  — атака 3
- * - DEFEND.png   6 кадров  — щит (pingPong)
- * - HURT.png     4 кадра   — получение урона
- * - DEATH.png    14 кадров — смерть
+ * Мана: макс 100, +2/сек, расход 10 на снаряд
  */
 class Player : public Character {
 private:
     // --- Состояние боя ---
     bool isAttacking;
+    bool isCastingMagic;
     bool isDefending;
     bool isHurt;
     bool isDead;
@@ -45,13 +47,21 @@ private:
     float attackTimer;
     int   attackCombo;
 
-    // Флаг и таймер активного хита — урон наносится один раз за атаку
     bool  attackHitActive;
     float attackHitTimer;
     float attackDamage;
 
-    // Щит — кулдаун после снятия
-    float defendCooldown;    // текущий кулдаун (убывает до 0)
+    // Щит
+    float defendCooldown;
+
+    // --- Мана ---
+    float mana;
+    float maxMana;
+
+    // --- Магические снаряды ---
+    std::vector<MagicProjectile> magicProjectiles;
+    bool wantsToCastMagic;
+    int  mouseX, mouseY;
 
     // --- Флаги ввода ---
     bool wantsToJump;
@@ -61,7 +71,7 @@ private:
     // --- Рывок ---
     bool  isDashing;
     float dashTimer;
-    float dashCooldown;      // текущий кулдаун (убывает до 0)
+    float dashCooldown;
     bool  wantsToDash;
 
     // --- Текстуры ---
@@ -75,6 +85,7 @@ private:
     SDL_Texture* texDefend;
     SDL_Texture* texHurt;
     SDL_Texture* texDeath;
+    SDL_Texture* texMagic;
 
     // --- Анимации ---
     Animation idleAnim;
@@ -83,6 +94,7 @@ private:
     Animation attack1Anim;
     Animation attack2Anim;
     Animation attack3Anim;
+    Animation magicAnim;
     Animation defendAnim;
     Animation hurtAnim;
     Animation deathAnim;
@@ -97,18 +109,21 @@ private:
     static constexpr float RENDER_W = 96.0f;
     static constexpr float RENDER_H = 84.0f;
 
-    // Урон атак
     static constexpr float DAMAGE_ATTACK1 = 25.0f;
     static constexpr float DAMAGE_ATTACK2 = 35.0f;
     static constexpr float DAMAGE_ATTACK3 = 50.0f;
 
-    // Блок снижает урон на 75%
     static constexpr float DEFEND_DAMAGE_REDUCTION = 0.99f;
-    static constexpr float DEFEND_COOLDOWN_MAX     = 1.0f;  // кулдаун щита (сек)
+    static constexpr float DEFEND_COOLDOWN_MAX     = 1.0f;
 
-    static constexpr float DASH_SPEED       = 600.0f;
-    static constexpr float DASH_DURATION    = 0.15f;
-    static constexpr float DASH_COOLDOWN_MAX = 2.0f;        // кулдаун рывка (сек)
+    static constexpr float DASH_SPEED        = 600.0f;
+    static constexpr float DASH_DURATION     = 0.15f;
+    static constexpr float DASH_COOLDOWN_MAX = 2.0f;
+
+    static constexpr float MANA_MAX        = 100.0f;
+    static constexpr float MANA_REGEN      = 2.0f;
+    static constexpr float MANA_COST_MAGIC = 10.0f;
+    static constexpr float MAGIC_SPEED_MULT = 1.5f;
 
 public:
     explicit Player(float spawnX, float spawnY);
@@ -121,6 +136,8 @@ public:
     [[nodiscard]] SDL_Rect getAttackHitbox() const;
     [[nodiscard]] float    consumeAttackDamage();
 
+    [[nodiscard]] std::vector<MagicProjectile>& getMagicProjectiles() { return magicProjectiles; }
+
     [[nodiscard]] SDL_Rect getHitbox() const {
         return {
             (int)(x - width  / 2),
@@ -130,17 +147,18 @@ public:
         };
     }
 
-    // Геттеры для отображения кулдаунов в HUD
+    [[nodiscard]] float getMana()              const { return mana; }
+    [[nodiscard]] float getMaxMana()           const { return maxMana; }
     [[nodiscard]] float getDefendCooldown()    const { return defendCooldown; }
     [[nodiscard]] float getDefendCooldownMax() const { return DEFEND_COOLDOWN_MAX; }
     [[nodiscard]] float getDashCooldown()      const { return dashCooldown; }
     [[nodiscard]] float getDashCooldownMax()   const { return DASH_COOLDOWN_MAX; }
-
-    [[nodiscard]] bool getIsDefending() const { return isDefending; }
-    [[nodiscard]] bool getIsDead()      const { return isDead; }
+    [[nodiscard]] bool  getIsDefending()       const { return isDefending; }
+    [[nodiscard]] bool  getIsDead()            const { return isDead; }
 
 private:
     void loadAnimations();
     void processInput();
     void startAttack();
+    void castMagic();
 };
