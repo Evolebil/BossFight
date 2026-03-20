@@ -91,6 +91,11 @@ public:
         finished     = false;
         goingForward = true;
     }
+    // Принудительно установить кадр (для рывка)
+    void setFrame(int index) {
+        if (index >= 0 && index < (int)frames.size())
+            currentFrame = index;
+    }
 
     [[nodiscard]] bool isFinished()    const { return finished; }
     [[nodiscard]] bool isGoingForward() const { return goingForward; }

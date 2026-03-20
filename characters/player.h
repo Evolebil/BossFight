@@ -58,6 +58,12 @@ private:
     bool wantsToAttack;
     bool wantsToDefend;
 
+    // --- Рывок ---
+    bool  isDashing;
+    float dashTimer;
+    float dashCooldown;
+    bool  wantsToDash;
+
     // --- Текстуры ---
     SDL_Texture* texIdle;
     SDL_Texture* texRun;
@@ -99,6 +105,11 @@ private:
     // Блок снижает урон на 75% (было 1.0f = 100% — баг!)
     static constexpr float DEFEND_DAMAGE_REDUCTION = 0.75f;
     static constexpr float DEFEND_COOLDOWN         = 2.0f;
+
+    static constexpr float DASH_SPEED    = 600.0f; // скорость рывка (px/s)
+    static constexpr float DASH_DURATION = 0.15f;  // длительность (сек)
+    static constexpr float DASH_COOLDOWN = 2.0f;   // кулдаун (сек)
+
 
 public:
     explicit Player(float spawnX, float spawnY);

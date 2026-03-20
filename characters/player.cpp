@@ -32,6 +32,11 @@ Player::Player(float spawnX, float spawnY)
     wantsToJump(false),
     wantsToAttack(false),
     wantsToDefend(false),
+    // --- рывок ---
+    isDashing(false),
+    dashTimer(0.0f),
+    dashCooldown(0.0f),
+    wantsToDash(false),
     // --- текстуры ---
     texIdle(nullptr), texRun(nullptr), texWalk(nullptr),
     texJump(nullptr), texAttack1(nullptr), texAttack2(nullptr),
@@ -46,8 +51,10 @@ Player::Player(float spawnX, float spawnY)
     attack3Anim(false),
     defendAnim(true, true),
     hurtAnim(false),
-    deathAnim(false) {
+    deathAnim(false)
+{
     loadAnimations();
+
 }
 
 // ============================================================
@@ -128,6 +135,11 @@ void Player::processInput() {
         if (InputManager::isMousePressed(1)) wantsToAttack = true;
     }
 
+    // Рывок — Shift, только если кулдаун прошёл
+    if (InputManager::isKeyPressed(SDL_SCANCODE_LSHIFT) &&
+        dashCooldown <= 0.0f && !isDashing && !isAttacking && !isHurt) {
+        wantsToDash = true;
+    }
     wantsToDefend = InputManager::isMouseDown(3);
 }
 
@@ -181,6 +193,28 @@ void Player::update(float deltaTime) {
     // ШАГ 4: Атака
     if (wantsToAttack) startAttack();
 
+    // ШАГ 4.5: Рывок
+    if (dashCooldown > 0.0f) dashCooldown -= deltaTime;
+
+    if (wantsToDash) {
+        isDashing    = true;
+        dashTimer    = DASH_DURATION;
+        dashCooldown = DASH_COOLDOWN;
+        runAnim.reset();
+        runAnim.setFrame(2); // стартуем с 3-го кадра (индекс 2)
+    }
+    wantsToDash = false;
+
+    if (isDashing) {
+        dashTimer -= deltaTime;
+        // Рывок в сторону куда смотрит игрок — игнорируем ввод
+        velocityX = facingRight ? DASH_SPEED : -DASH_SPEED;
+        if (dashTimer <= 0.0f) {
+            isDashing = false;
+            velocityX = 0.0f;
+        }
+    }
+
     // ШАГ 5: Кулдаун атаки
     if (attackTimer > 0.0f) attackTimer -= deltaTime;
 
@@ -220,7 +254,9 @@ void Player::update(float deltaTime) {
     applyGravityAndCollisions(deltaTime);
 
     // ШАГ 10: Анимации
-    if (isHurt) {
+    if (isDashing) {
+        runAnim.update(deltaTime); // кадры 2-3 анимации бега
+    } else if (isHurt) {
         hurtAnim.update(deltaTime);
         if (hurtAnim.isFinished()) isHurt = false;
     } else if (isAttacking) {

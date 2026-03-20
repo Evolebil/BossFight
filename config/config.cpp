@@ -32,7 +32,7 @@ static Config::Difficulty difficulties[] = {
 // Управление (по умолчанию)
 static Config::Controls controls = {
     SDL_SCANCODE_RSHIFT,  // attack
-    SDL_SCANCODE_LSHIFT,  // shoot
+    SDL_SCANCODE_Q,  // shoot — было LSHIFT, освобождаем под рывок  // shoot
     SDL_SCANCODE_SPACE,   // jump
     SDL_SCANCODE_A,       // left
     SDL_SCANCODE_D,       // right
