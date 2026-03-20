@@ -115,7 +115,7 @@ void GameScene::handleInput(SDL_Event& event, int mx, int my,
     }
 
     if (resultState == ResultState::DEFEAT) {
-        if (updateButton(retryBtn, mx, my, clicked, soundMgr)) nextScene = SceneType::GAME;
+        if (updateButton(retryBtn, mx, my, clicked, soundMgr)) nextScene = SceneType::RESTART_GAME;
         if (updateButton(exitBtn,  mx, my, clicked, soundMgr)) nextScene = SceneType::LEVEL_SELECT;
     }
 }

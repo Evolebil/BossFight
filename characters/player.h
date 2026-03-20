@@ -18,7 +18,8 @@
  * - A/D   — движение влево/вправо
  * - Space — прыжок
  * - ЛКМ  — атака (чередует ATTACK_1 → ATTACK_2 → ATTACK_3)
- * - ПКМ  — щит (снижает урон на 75% пока зажат)
+ * - F    — щит (кулдаун 1 сек, спадает при получении урона)
+ * - Shift — рывок (кулдаун 2 сек)
  *
  * Анимации (отдельные файлы, кадр 96x84):
  * - IDLE.png     7 кадров  — стоит
@@ -42,16 +43,15 @@ private:
 
     float attackCooldown;
     float attackTimer;
-    int   attackCombo;     // 0, 1, 2 — какая атака следующая
+    int   attackCombo;
 
     // Флаг и таймер активного хита — урон наносится один раз за атаку
     bool  attackHitActive;
     float attackHitTimer;
     float attackDamage;
 
-    // Блок — поля объявлены и инициализированы (были UB!)
-    bool  defendReady;
-    float defendCooldown;
+    // Щит — кулдаун после снятия
+    float defendCooldown;    // текущий кулдаун (убывает до 0)
 
     // --- Флаги ввода ---
     bool wantsToJump;
@@ -61,7 +61,7 @@ private:
     // --- Рывок ---
     bool  isDashing;
     float dashTimer;
-    float dashCooldown;
+    float dashCooldown;      // текущий кулдаун (убывает до 0)
     bool  wantsToDash;
 
     // --- Текстуры ---
@@ -102,14 +102,13 @@ private:
     static constexpr float DAMAGE_ATTACK2 = 35.0f;
     static constexpr float DAMAGE_ATTACK3 = 50.0f;
 
-    // Блок снижает урон на 75% (было 1.0f = 100% — баг!)
-    static constexpr float DEFEND_DAMAGE_REDUCTION = 0.75f;
-    static constexpr float DEFEND_COOLDOWN         = 2.0f;
+    // Блок снижает урон на 75%
+    static constexpr float DEFEND_DAMAGE_REDUCTION = 0.99f;
+    static constexpr float DEFEND_COOLDOWN_MAX     = 1.0f;  // кулдаун щита (сек)
 
-    static constexpr float DASH_SPEED    = 600.0f; // скорость рывка (px/s)
-    static constexpr float DASH_DURATION = 0.15f;  // длительность (сек)
-    static constexpr float DASH_COOLDOWN = 2.0f;   // кулдаун (сек)
-
+    static constexpr float DASH_SPEED       = 600.0f;
+    static constexpr float DASH_DURATION    = 0.15f;
+    static constexpr float DASH_COOLDOWN_MAX = 2.0f;        // кулдаун рывка (сек)
 
 public:
     explicit Player(float spawnX, float spawnY);
@@ -119,15 +118,8 @@ public:
     void render(SDL_Renderer* renderer) override;
     void takeDamage(float damage) override;
 
-    /**
-     * @brief Хитбокс атаки перед игроком. {0,0,0,0} если атаки нет.
-     */
     [[nodiscard]] SDL_Rect getAttackHitbox() const;
-
-    /**
-     * @brief Урон текущей атаки. Возвращает > 0 только один раз за удар.
-     */
-    [[nodiscard]] float consumeAttackDamage();
+    [[nodiscard]] float    consumeAttackDamage();
 
     [[nodiscard]] SDL_Rect getHitbox() const {
         return {
@@ -137,6 +129,12 @@ public:
             (int)height
         };
     }
+
+    // Геттеры для отображения кулдаунов в HUD
+    [[nodiscard]] float getDefendCooldown()    const { return defendCooldown; }
+    [[nodiscard]] float getDefendCooldownMax() const { return DEFEND_COOLDOWN_MAX; }
+    [[nodiscard]] float getDashCooldown()      const { return dashCooldown; }
+    [[nodiscard]] float getDashCooldownMax()   const { return DASH_COOLDOWN_MAX; }
 
     [[nodiscard]] bool getIsDefending() const { return isDefending; }
     [[nodiscard]] bool getIsDead()      const { return isDead; }
