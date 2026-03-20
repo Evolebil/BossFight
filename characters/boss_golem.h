@@ -1,6 +1,6 @@
 /**
  * @file boss_golem.h
- * @brief Босс-голем — медленный, сильный, с блоком и лазером
+ * @brief Босс-голем — две фазы, паттерны атак, телепорт
  * @author evol
  * @date 2026-02-20
  */
@@ -12,32 +12,49 @@
 #include "../config/config.h"
 #include "character.h"
 
-// --- Снаряд (рука/меч) для дальней атаки ---
+// --- Снаряд ---
 struct Projectile {
-    float x, y;             // позиция центра
-    float velX, velY;       // скорость пикселей/сек
+    float x, y;
+    float velX, velY;
     float damage;
     bool  active;
-    float trackingTime;     // сколько секунд ещё следить за игроком (0 = летит прямо)
-    float targetX, targetY; // последняя известная позиция игрока
+    float trackingTime;
+    float targetX, targetY;
+    bool  predictive;
 };
 
-// --- Лазер — держится пока идёт анимация ---
+// --- Лазер (только фаза 1) ---
 struct LaserBeam {
     bool  active;
-    float x, y;          // точка выхода (от босса)
-    bool  facingRight;   // направление
-    float damagePerSec;  // урон в секунду
+    float x, y;
+    bool  facingRight;
+    float damagePerSec;
+    float height;
+};
+
+// --- Фаза босса ---
+enum class BossPhase {
+    PHASE_1,        // обычная
+    DYING,          // анимация смерти фазы 1 проигрывается
+    PAUSING,        // пауза после смерти (игрок радуется)
+    TRANSITIONING,  // воскрешение (HURT наоборот)
+    PHASE_2         // агрессивная
+};
+
+// --- Паттерн ближней атаки фазы 2 ---
+enum class MeleePattern {
+    NONE,
+    DOUBLE_STRIKE,         // удар → 0.2 сек → удар (то же направление)
+    DOUBLE_DIRECTION,      // удар → мгновенный разворот → удар в другую сторону
+    STRIKE_TELEPORT_RANGE  // удар → телепорт назад → снаряды
 };
 
 /**
  * @class BossGolem
- * @brief Первый босс игры. Наследует физику и HP от Character.
+ * @brief Первый босс игры. Две фазы, три паттерна ближней атаки в фазе 2.
  *
- * Три типа атак:
- * - Melee:  хитбокс перед боссом, срабатывает в середине анимации
- * - Laser:  луч от босса до края, урон пока игрок внутри
- * - Range:  снаряд летит по вектору к игроку (arm.png)
+ * Переход фаза1→фаза2:
+ *   HP=0 → DYING (анимация смерти) → PAUSING (1.5 сек пауза) → TRANSITIONING (воскрешение) → PHASE_2
  */
 class BossGolem : public Character {
 private:
@@ -45,8 +62,27 @@ private:
     BossState currentState;
     BossState previousState;
 
+    // --- Фаза ---
+    BossPhase phase;
+    float     phaseTimer;       // таймер для DYING/PAUSING/TRANSITIONING
+    bool      phase2Triggered;
+
+    // --- Паттерн ближней атаки (фаза 2) ---
+    MeleePattern currentMeleePattern;
+    int          meleePatternStep;
+    float        meleePatternTimer;
+    bool         meleeTeleportDone;
+    float        meleeAttackDirX;
+    bool         patternFacingRight;
+
+    // --- Телепорт ---
+    bool  isTeleporting;
+    float teleportTargetX;
+    float teleportTargetY;
+
     // --- Анимации ---
     std::map<BossState, Animation> animations;
+    Animation reviveAnim;
 
     // --- Боевые параметры ---
     float defense;
@@ -64,44 +100,48 @@ private:
     float lastStateChangeTime;
 
     // --- Атаки ---
-    bool        meleeHitDealt;   // чтоб мили не дамажил каждый кадр
-    float       meleeHitTime;    // когда в анимации наносить удар (0.0-1.0)
+    bool  meleeHitDealt;
+    bool  meleeSecondHitDealt;
+    float meleeHitTime;
     std::vector<Projectile> projectiles;
-    LaserBeam   laser;
-    bool        attackSpawned;   // снаряд/лазер уже создан для текущей атаки
+    LaserBeam laser;
+    bool  attackSpawned;
 
-    // --- Очередь снарядов (для тройного залпа) ---
-    int   projectileQueue;      // сколько снарядов ещё нужно выпустить
-    float projectileQueueTimer; // таймер между снарядами в очереди
-    float lastPlayerX, lastPlayerY; // последняя позиция игрока (для наведения)
+    // --- Очередь снарядов ---
+    int   projectileQueue;
+    float projectileQueueTimer;
+    float lastPlayerX, lastPlayerY;
 
-    // --- Множитель сложности ---
-    float attackSpeedMult;      // влияет на кулдаун и количество снарядов
+    // --- Сложность ---
+    float attackSpeedMult;
 
-    // --- Текстуры снарядов ---
+    // --- Текстуры ---
     SDL_Texture* armTexture;
     SDL_Texture* laserTexture;
 
     // --- Константы урона ---
-    static constexpr float DAMAGE_MELEE      = 25.0f;
-    static constexpr float DAMAGE_RANGE      = 15.0f;
-    static constexpr float DAMAGE_LASER_SEC  = 30.0f; // урон в секунду
+    static constexpr float DAMAGE_MELEE        = 25.0f;
+    static constexpr float DAMAGE_MELEE_P2     = 30.0f;
+    static constexpr float DAMAGE_RANGE        = 15.0f;
+    static constexpr float DAMAGE_RANGE_P2     = 20.0f;
+    static constexpr float DAMAGE_LASER_SEC    = 30.0f;
 
-    // --- Константы дистанций (в клетках) ---
+    // --- Дистанции ---
     static constexpr float RANGE_MELEE  = 2.0f;
     static constexpr float RANGE_RANGED = 6.0f;
     static constexpr float RANGE_LASER  = 12.0f;
 
-    // --- Скорость снаряда ---
+    // --- Скорости ---
     static constexpr float PROJECTILE_SPEED = 400.0f;
+    static constexpr float TELEPORT_SPEED   = 1200.0f;
 
-    // --- Кулдаун смены состояний ---
+    // --- Прочее ---
     static constexpr float STATE_CHANGE_COOLDOWN = 0.5f;
+    static constexpr float SPRITE_SCALE          = 2.5f;
+    static constexpr float BLOCK_HP_THRESHOLD    = 0.7f;
+    static constexpr float PHASE2_PAUSE_DURATION = 1.5f; // пауза между смертью и воскрешением
 
-    // --- Масштаб спрайта ---
-    static constexpr float SPRITE_SCALE = 2.5f;
-
-    // --- Генератор случайных чисел ---
+    // --- RNG ---
     std::mt19937 rng;
 
 public:
@@ -113,31 +153,40 @@ public:
     void render(SDL_Renderer* renderer) override;
     void takeDamage(float damage) override;
 
-    // --- Геттеры ---
-    [[nodiscard]] float     getDefense()   const { return defense; }
-    [[nodiscard]] BossState getState()     const { return currentState; }
+    [[nodiscard]] float     getDefense() const { return defense; }
+    [[nodiscard]] BossState getState()   const { return currentState; }
+    [[nodiscard]] BossPhase getPhase()   const { return phase; }
 
     [[nodiscard]] SDL_Rect getHitbox() const {
         return { (int)(x - width/2), (int)(y - height/2), (int)width, (int)height };
     }
 
-    // Проверить урон по игроку — вызывается из GameScene
-    // Возвращает урон если игрок попал под атаку, иначе 0
     [[nodiscard]] float checkPlayerDamage(SDL_Rect playerHitbox, float deltaTime);
 
 private:
     void loadAnimations();
     void loadAttackTextures();
+
     void updateAI(float deltaTime, float playerX, float playerY);
+    void updateAI_Phase1(float deltaTime, float playerX, float playerY);
+    void updateAI_Phase2(float deltaTime, float playerX, float playerY);
+
+    // Переход фаза 1 → фаза 2
+    void updatePhaseTransition(float deltaTime);
+
+    void startMeleePattern(float playerX, float playerY);
+    void updateMeleePattern(float deltaTime);
+
+    void startTeleport(float targetX, float targetY);
+    void updateTeleport(float deltaTime);
+
     void setState(BossState newState);
+    void forceState(BossState newState);
     [[nodiscard]] bool canChangeState() const;
 
-    // Спавн атак
-    void spawnProjectile(float playerX, float playerY);
-    void spawnLaser();
+    void spawnProjectile(float playerX, float playerY, bool predictive = false);
+    void spawnLaser(bool phase2 = false);
 
-    // Рендер атак
     void renderProjectiles(SDL_Renderer* renderer);
     void renderLaser(SDL_Renderer* renderer);
-    void renderMeleeHitbox(SDL_Renderer* renderer); // только для отладки
 };

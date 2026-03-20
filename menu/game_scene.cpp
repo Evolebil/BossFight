@@ -163,7 +163,8 @@ void GameScene::update(float deltaTime) {
     }
 
     // Проверяем победу
-    if (boss && !boss->isAlive() && !bossDefeated) {
+    if (boss && !boss->isAlive() &&
+        boss->getPhase() == BossPhase::PHASE_2 && !bossDefeated) {
         bossDefeated = true;
         calculateAndSaveStars();
         resultState = ResultState::VICTORY;
