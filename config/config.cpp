@@ -48,11 +48,11 @@ bool Config::init() {
         std::cout << "SDL_ttf ошибка: " << TTF_GetError() << std::endl;
         return false;
     }
-    
+
     // Загрузка шрифтов
     font = TTF_OpenFont("/usr/share/fonts/TTF/DejaVuSans.ttf", 24);
     titleFont = TTF_OpenFont("/usr/share/fonts/TTF/DejaVuSans-Bold.ttf", 48);
-    
+
     if (!font || !titleFont) {
         std::cout << "Ошибка загрузки шрифтов: " << TTF_GetError() << std::endl;
         return false;
