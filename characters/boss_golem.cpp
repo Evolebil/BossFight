@@ -572,20 +572,24 @@ void BossGolem::updateMeleePattern(float deltaTime) {
             float targetX = x + (-meleeAttackDirX) * cellSize * TELEPORT_P2_CELLS;
             startTeleport(targetX, y);
         } else if (meleePatternStep == 1 && !isTeleporting) {
-            // Телепорт завершён — ждём 0.1 сек
-            meleePatternStep  = 2;
-            meleePatternTimer = 0.1f;
-            facingRight        = (meleeAttackDirX > 0);
-            patternFacingRight = facingRight;
-            forceState(BossState::IDLE);
-        } else if (meleePatternStep == 2 && meleePatternTimer <= 0.0f) {
-            // Запускаем мегалазер на всю карту
+            // Сразу запускаем мегалазер, без ожидания
             attackSpawned = false;
-            facingRight        = (meleeAttackDirX > 0);
+            facingRight = (meleeAttackDirX > 0);
             patternFacingRight = facingRight;
-            spawnLaser(true); // true = мегалазер
+            spawnLaser(true);  // ← БУМС! ��азер уже летит!
             forceState(BossState::LASER);
-            meleePatternStep = 3;
+            meleePatternStep = 2;  // Было 3 степа, станет 2
+        }
+        else if (meleePatternStep == 2) {
+            // Ждём окончания анимации лазера
+            if (animations.count(BossState::LASER))
+                animations[BossState::LASER].update(deltaTime);
+
+            if (animations[BossState::LASER].isFinished()) {
+                laser.active        = false;
+                currentMeleePattern = MeleePattern::NONE;
+                setState(BossState::IDLE);
+            }
         } else if (meleePatternStep == 3) {
             // Обновляем анимацию лазера вручную
             if (animations.count(BossState::LASER))

@@ -1,3 +1,5 @@
+#ifndef COLLISION_SYSTEM_H
+#define COLLISION_SYSTEM_H
 /**
  * @file collision_system.h
  * @brief Система коллизий — AABB проверки для всех персонажей
