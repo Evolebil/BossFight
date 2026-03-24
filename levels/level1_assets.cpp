@@ -76,6 +76,7 @@ const std::unordered_map<std::string, TileInfo>& getTileLookup() {
         // --- Открытая дверь (solid=false) ---
         {"odb0000",  {10, 13, 0.0, SDL_FLIP_NONE,     false}},
         {"odb1000",  {11, 13, 0.0, SDL_FLIP_NONE,     false}},
+        {"stf0000", {14, 1, 0.0, SDL_FLIP_NONE, false}},
         };
 return lookup;
 }

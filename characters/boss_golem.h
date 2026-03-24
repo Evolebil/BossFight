@@ -23,7 +23,7 @@ struct Projectile {
     bool  predictive;
 };
 
-// --- Лазер (только фаза 1) ---
+// --- Лазер ---
 struct LaserBeam {
     bool  active;
     float x, y;
@@ -32,29 +32,35 @@ struct LaserBeam {
     float height;
 };
 
+// --- Шипы (атака прыжком по площади) ---
+struct GroundSpike {
+    SDL_Rect rect;   // позиция и размер на экране
+    float    damage;
+    float    lifetime;
+    bool     active;
+    bool     hitDealt; // урон наносится только один раз
+};
+
 // --- Фаза босса ---
 enum class BossPhase {
-    PHASE_1,        // обычная
-    DYING,          // анимация смерти фазы 1 проигрывается
-    PAUSING,        // пауза после смерти (игрок радуется)
-    TRANSITIONING,  // воскрешение (HURT наоборот)
-    PHASE_2         // агрессивная
+    PHASE_1,
+    DYING,
+    PAUSING,
+    TRANSITIONING,
+    PHASE_2
 };
 
 // --- Паттерн ближней атаки фазы 2 ---
 enum class MeleePattern {
     NONE,
-    DOUBLE_STRIKE,         // удар → 0.2 сек → удар (то же направление)
-    DOUBLE_DIRECTION,      // удар → мгновенный разворот → удар в другую сторону
-    STRIKE_TELEPORT_RANGE  // удар → телепорт назад → снаряды
+    DOUBLE_STRIKE,        // два очень быстрых удара
+    JUMP_SLAM,            // прыжок → приземление → шипы по площади
+    TELEPORT_LASER        // удар → телепорт → лазер на всю карту через 0.1 сек
 };
 
 /**
  * @class BossGolem
  * @brief Первый босс игры. Две фазы, три паттерна ближней атаки в фазе 2.
- *
- * Переход фаза1→фаза2:
- *   HP=0 → DYING (анимация смерти) → PAUSING (1.5 сек пауза) → TRANSITIONING (воскрешение) → PHASE_2
  */
 class BossGolem : public Character {
 private:
@@ -64,7 +70,7 @@ private:
 
     // --- Фаза ---
     BossPhase phase;
-    float     phaseTimer;       // таймер для DYING/PAUSING/TRANSITIONING
+    float     phaseTimer;
     bool      phase2Triggered;
 
     // --- Паттерн ближней атаки (фаза 2) ---
@@ -74,6 +80,14 @@ private:
     bool         meleeTeleportDone;
     float        meleeAttackDirX;
     bool         patternFacingRight;
+
+    // --- Прыжок (JUMP_SLAM) ---
+    bool  isJumping;
+    float jumpVelocityY;
+    bool  jumpLanded;
+
+    // --- Шипы ---
+    std::vector<GroundSpike> groundSpikes;
 
     // --- Телепорт ---
     bool  isTeleporting;
@@ -125,21 +139,34 @@ private:
     static constexpr float DAMAGE_RANGE        = 15.0f;
     static constexpr float DAMAGE_RANGE_P2     = 20.0f;
     static constexpr float DAMAGE_LASER_SEC    = 30.0f;
+    static constexpr float DAMAGE_MEGA_LASER_SEC = 50.0f;
+    static constexpr float DAMAGE_SPIKE        = 35.0f;
 
-    // --- Дистанции ---
+    // --- Дистанции (в клетках) ---
     static constexpr float RANGE_MELEE  = 2.0f;
-    static constexpr float RANGE_RANGED = 6.0f;
-    static constexpr float RANGE_LASER  = 12.0f;
+    static constexpr float RANGE_RANGED = 99.0f; // стреляет всегда когда игрок выше
+    static constexpr float RANGE_LASER  = 6.0f;  // было 12, теперь 6
 
     // --- Скорости ---
-    static constexpr float PROJECTILE_SPEED = 400.0f;
-    static constexpr float TELEPORT_SPEED   = 1200.0f;
+    static constexpr float PROJECTILE_SPEED  = 400.0f;
+    static constexpr float TELEPORT_SPEED    = 1200.0f;
+    // Телепорт в фазе 2 дальше — множитель дистанции
+    static constexpr float TELEPORT_P2_CELLS = 8.0f; // было 5, теперь 8
 
     // --- Прочее ---
     static constexpr float STATE_CHANGE_COOLDOWN = 0.5f;
     static constexpr float SPRITE_SCALE          = 2.5f;
-    static constexpr float BLOCK_HP_THRESHOLD    = 0.7f;
-    static constexpr float PHASE2_PAUSE_DURATION = 1.5f; // пауза между смертью и воскрешением
+    static constexpr float BLOCK_HP_THRESHOLD    = 0.7f;  // блок при HP < 70%
+    static constexpr float PHASE2_PAUSE_DURATION = 1.5f;
+
+    // --- Блок (фаза 1) ---
+    // Кулдаун 5 сек, независимо от атак, при HP < 70%
+    static constexpr float BLOCK_COOLDOWN_P1 = 5.0f;
+
+    // --- Прыжок ---
+    static constexpr float JUMP_VELOCITY     = -700.0f;
+    static constexpr float SPIKE_AREA_CELLS  = 6.0f;
+    static constexpr float SPIKE_LIFETIME    = 1.2f;
 
     // --- RNG ---
     std::mt19937 rng;
@@ -171,11 +198,15 @@ private:
     void updateAI_Phase1(float deltaTime, float playerX, float playerY);
     void updateAI_Phase2(float deltaTime, float playerX, float playerY);
 
-    // Переход фаза 1 → фаза 2
     void updatePhaseTransition(float deltaTime);
 
     void startMeleePattern(float playerX, float playerY);
     void updateMeleePattern(float deltaTime);
+
+    // Прыжок и шипы
+    void updateJump(float deltaTime);
+    void spawnSpikes();
+    void updateSpikes(float deltaTime);
 
     void startTeleport(float targetX, float targetY);
     void updateTeleport(float deltaTime);
@@ -185,8 +216,10 @@ private:
     [[nodiscard]] bool canChangeState() const;
 
     void spawnProjectile(float playerX, float playerY, bool predictive = false);
-    void spawnLaser(bool phase2 = false);
+    void spawnLaser(bool megaLaser = false);
+    void spawnTwoProjectiles(float playerX, float playerY, bool withTracking);
 
     void renderProjectiles(SDL_Renderer* renderer);
     void renderLaser(SDL_Renderer* renderer);
+    void renderSpikes(SDL_Renderer* renderer);
 };
