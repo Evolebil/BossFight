@@ -12,7 +12,7 @@ pkg_check_modules(SDL2IMG  REQUIRED SDL2_image)
 pkg_check_modules(SDL2TTF  REQUIRED SDL2_ttf)
 pkg_check_modules(SDL2MIX  REQUIRED SDL2_mixer)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_executable(BossFight main.cpp
@@ -61,7 +61,6 @@ add_executable(BossFight main.cpp
     utils/sound_manager.h
     utils/texture_manager.cpp
     utils/texture_manager.h
-    config/common.h
     utils/collision_system.h
     utils/collision_system.cpp
     characters/character.h
@@ -76,6 +75,7 @@ add_executable(BossFight main.cpp
     assets/player/JUMP.png
     assets/player/RUN.png
     assets/player/WALK.png
+    assets/magic/01.png
     utils/animation.cpp )
 
 # ───────────────────────────────────────────────
