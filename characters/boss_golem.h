@@ -168,6 +168,12 @@ private:
     static constexpr float SPIKE_AREA_CELLS  = 6.0f;
     static constexpr float SPIKE_LIFETIME    = 1.2f;
 
+    // --- Анимации снарядов и лазера ---
+    Animation projectileAnim;
+    Animation laserChargeAnim;
+    Animation laserBeamAnim;
+    bool laserFullyCharged;
+
     // --- RNG ---
     std::mt19937 rng;
 
