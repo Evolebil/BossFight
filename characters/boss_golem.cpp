@@ -292,6 +292,14 @@ void BossGolem::update(float deltaTime, float playerX, float playerY) {
 
     // Анимация лазера — зарядка -> луч
     if (laser.active) {
+        laserTimer -= deltaTime;  // ⏱️ ГЛАВНОЕ: уменьшаем таймер
+
+        // Если время вышло — выключаем
+        if (laserTimer <= 0.0f) {
+            laser.active = false;
+        }
+
+        // Обновляем анимации как раньше
         if (!laserFullyCharged) {
             laserChargeAnim.update(deltaTime);
             if (laserChargeAnim.isFinished())
@@ -335,9 +343,8 @@ void BossGolem::update(float deltaTime, float playerX, float playerY) {
         animations[currentState].isFinished()) {
 
         if (currentState == BossState::LASER) {
-            // Ждём пока луч тоже отыграет
-            if (!laser.active || (laserFullyCharged && laserBeamAnim.isFinished())) {
-                laser.active = false;
+            // Ждём пока лазер выключится
+            if (!laser.active) {  // ✅ Просто проверяем флаг active
                 setState(BossState::IDLE);
             }
         } else {
@@ -756,7 +763,10 @@ void BossGolem::spawnLaser(bool megaLaser) {
     laser.damagePerSec = megaLaser ? DAMAGE_MEGA_LASER_SEC : DAMAGE_LASER_SEC;
     laser.height       = megaLaser ? 120.0f : 80.0f;
 
-    // Сброс анимаций лазера
+    // ⏱️ ТАЙМЕР
+    laserDuration = megaLaser ? 3.5f : 2.0f;  // обычный 2 сек, мега 3.5 сек
+    laserTimer = laserDuration;
+
     laserChargeAnim.reset();
     laserBeamAnim.reset();
     laserFullyCharged = false;
@@ -1042,15 +1052,30 @@ void BossGolem::renderLaser(SDL_Renderer* renderer) {
                              0, nullptr, SDL_FLIP_NONE);
         } else {
             // Фаза луча — растягиваем на всю длину
+            // 🔧 ИСПРАВКА 2: Красный лазер во фазе 2
             SDL_Rect src = laserBeamAnim.getCurrentFrame();
             SDL_Rect dst = {laserX, laserY, laserW, laserH};
+
+            if (phase == BossPhase::PHASE_2) {
+                SDL_SetTextureColorMod(laserTexture, 255, 80, 80);  // Красный мега-лазер
+            } else {
+                SDL_SetTextureColorMod(laserTexture, 255, 255, 255);  // Белый обычный
+            }
+
             SDL_RenderCopyEx(renderer, laserTexture, &src, &dst,
                              0, nullptr, flip);
+            SDL_SetTextureColorMod(laserTexture, 255, 255, 255);
         }
     } else {
         // Заглушка
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(renderer, 50, 150, 255, 200);
+
+        if (phase == BossPhase::PHASE_2) {
+            SDL_SetRenderDrawColor(renderer, 255, 80, 80, 200);  // Красный
+        } else {
+            SDL_SetRenderDrawColor(renderer, 50, 150, 255, 200);  // Голубой
+        }
+
         SDL_Rect dst = {laserX, laserY, laserW, laserH};
         SDL_RenderFillRect(renderer, &dst);
     }

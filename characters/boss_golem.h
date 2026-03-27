@@ -173,6 +173,8 @@ private:
     Animation laserChargeAnim;
     Animation laserBeamAnim;
     bool laserFullyCharged;
+    float laserTimer = 0.0f;      // ⏱️ таймер лазера
+    float laserDuration = 0.0f;   // ⏱️ макс время
 
     // --- RNG ---
     std::mt19937 rng;
