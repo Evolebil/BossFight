@@ -144,23 +144,21 @@ private:
 
     // --- Дистанции (в клетках) ---
     static constexpr float RANGE_MELEE  = 2.0f;
-    static constexpr float RANGE_RANGED = 99.0f; // стреляет всегда когда игрок выше
-    static constexpr float RANGE_LASER  = 6.0f;  // было 12, теперь 6
+    static constexpr float RANGE_RANGED = 99.0f;
+    static constexpr float RANGE_LASER  = 6.0f;
 
     // --- Скорости ---
     static constexpr float PROJECTILE_SPEED  = 400.0f;
-    static constexpr float TELEPORT_SPEED = 3000.0f;  // было 1200
-    // Телепорт в фазе 2 дальше — множитель дистанции
-    static constexpr float TELEPORT_P2_CELLS = 8.0f; // было 5, теперь 8
+    static constexpr float TELEPORT_SPEED    = 3000.0f;
+    static constexpr float TELEPORT_P2_CELLS = 8.0f;
 
     // --- Прочее ---
     static constexpr float STATE_CHANGE_COOLDOWN = 0.5f;
     static constexpr float SPRITE_SCALE          = 2.5f;
-    static constexpr float BLOCK_HP_THRESHOLD    = 0.7f;  // блок при HP < 70%
+    static constexpr float BLOCK_HP_THRESHOLD    = 0.7f;
     static constexpr float PHASE2_PAUSE_DURATION = 1.5f;
 
     // --- Блок (фаза 1) ---
-    // Кулдаун 5 сек, независимо от атак, при HP < 70%
     static constexpr float BLOCK_COOLDOWN_P1 = 5.0f;
 
     // --- Прыжок ---
@@ -180,14 +178,17 @@ private:
     Animation projectileAnim;
     Animation laserChargeAnim;
     Animation laserBeamAnim;
-    bool laserFullyCharged;
-    float laserTimer = 0.0f;      // ⏱️ таймер лазера
-    float laserDuration = 0.0f;   // ⏱️ макс время
+    bool  laserFullyCharged;
+    float laserTimer    = 0.0f;
+    float laserDuration = 0.0f;
 
     // --- RNG ---
     std::mt19937 rng;
 
 public:
+    // --- Debug ---
+    bool showHitboxes = false;
+
     BossGolem(float spawnX, float spawnY, float attackSpeedMult = 1.0f);
     ~BossGolem() override = default;
 
@@ -217,9 +218,8 @@ private:
     void updatePhaseTransition(float deltaTime);
 
     void startMeleePattern(float playerX, float playerY);
-    void updateMeleePattern(float deltaTime);  // уже есть deltaTime!
+    void updateMeleePattern(float deltaTime);
 
-    // Прыжок и шипы
     void updateJump(float deltaTime);
     void spawnSpikes();
     void updateSpikes(float deltaTime);
@@ -238,4 +238,5 @@ private:
     void renderProjectiles(SDL_Renderer* renderer);
     void renderLaser(SDL_Renderer* renderer);
     void renderSpikes(SDL_Renderer* renderer);
+    void renderHitboxes(SDL_Renderer* renderer);  // DEBUG
 };

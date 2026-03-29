@@ -23,16 +23,6 @@ struct MagicProjectile {
 /**
  * @class Player
  * @brief Главный персонаж игры. Наследует физику и HP от Character.
- *
- * Управление:
- * - A/D       — движение влево/вправо
- * - Space     — прыжок
- * - ЛКМ      — ближняя атака (ATTACK_1/2/3)
- * - ПКМ      — магическая атака (ATTACK_3, стоит 10 маны)
- * - F (shield) — щит (кулдаун 1 сек)
- * - Shift (dash) — рывок (кулдаун 2 сек)
- *
- * Мана: макс 100, +2/сек, расход 10 на снаряд
  */
 class Player : public Character {
 private:
@@ -126,6 +116,9 @@ private:
     static constexpr float MAGIC_SPEED_MULT = 1.5f;
 
 public:
+    // --- Debug ---
+    bool showHitboxes = false;
+
     explicit Player(float spawnX, float spawnY);
     ~Player() override = default;
 
@@ -161,4 +154,5 @@ private:
     void processInput();
     void startAttack();
     void castMagic();
+    void renderHitboxes(SDL_Renderer* renderer);  // DEBUG
 };

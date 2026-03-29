@@ -91,7 +91,6 @@ void Player::loadAnimations() {
     for (int i = 0; i < 6; i++)
         attack3Anim.addFrame(i * FRAME_W, 0, FRAME_W, FRAME_H, 0.10f);
 
-    // Магическая атака — та же ATTACK_3
     for (int i = 0; i < 6; i++)
         magicAnim.addFrame(i * FRAME_W, 0, FRAME_W, FRAME_H, 0.10f);
 
@@ -127,13 +126,11 @@ void Player::processInput() {
 
     if (InputManager::isKeyPressed(controls.jump)) wantsToJump = true;
 
-    // ЛКМ — ближняя атака
     if (!isAttacking && !isCastingMagic && !isHurt && !isDefending && attackTimer <= 0.0f) {
         if (InputManager::isMousePressed(controls.attackMouseButton))
             wantsToAttack = true;
     }
 
-    // ПКМ — магическая атака (из настроек)
     if (!isAttacking && !isCastingMagic && !isHurt && !isDefending) {
         if (InputManager::isMousePressed(controls.magicMouseButton) &&
             mana >= MANA_COST_MAGIC) {
@@ -142,12 +139,10 @@ void Player::processInput() {
         }
     }
 
-    // Щит — из настроек (controls.shield)
     wantsToDefend = InputManager::isKeyDown(controls.shield) &&
                     defendCooldown <= 0.0f &&
                     !isAttacking && !isCastingMagic && !isHurt;
 
-    // Рывок — из настроек (controls.dash)
     if (InputManager::isKeyPressed(controls.dash) &&
         dashCooldown <= 0.0f && !isDashing && !isHurt) {
         wantsToDash = true;
@@ -220,7 +215,6 @@ void Player::update(float deltaTime) {
         return;
     }
 
-    // Прыжок — при щите запрещён
     if (wantsToJump && isGrounded && !isDefending) {
         velocityY  = JUMP_VELOCITY;
         isGrounded = false;
@@ -230,7 +224,6 @@ void Player::update(float deltaTime) {
     if (wantsToAttack)    startAttack();
     if (wantsToCastMagic) castMagic();
 
-    // Рывок
     if (dashCooldown > 0.0f) dashCooldown -= deltaTime;
 
     if (wantsToDash) {
@@ -255,10 +248,8 @@ void Player::update(float deltaTime) {
         }
     }
 
-    // Кулдаун ближней атаки
     if (attackTimer > 0.0f) attackTimer -= deltaTime;
 
-    // Таймер хита
     if (isAttacking && attackHitTimer > -999.0f) {
         attackHitTimer -= deltaTime;
         if (attackHitTimer <= 0.0f && !attackHitActive) {
@@ -267,7 +258,6 @@ void Player::update(float deltaTime) {
         }
     }
 
-    // Щит
     if (defendCooldown > 0.0f) defendCooldown -= deltaTime;
 
     if (!isAttacking && !isCastingMagic && !isHurt) {
@@ -285,16 +275,13 @@ void Player::update(float deltaTime) {
         }
     }
 
-    // Движение
     x += velocityX * deltaTime;
     applyCollisionsX();
     applyGravityAndCollisions(deltaTime);
 
-    // Мана восстанавливается
     mana += MANA_REGEN * deltaTime;
     if (mana > maxMana) mana = maxMana;
 
-    // Магические снаряды
     for (auto& proj : magicProjectiles) {
         if (!proj.active) continue;
         proj.x += proj.velX * deltaTime;
@@ -310,7 +297,6 @@ void Player::update(float deltaTime) {
                        [](const MagicProjectile& p){ return !p.active; }),
         magicProjectiles.end());
 
-    // Анимации
     if (isDashing) {
         runAnim.update(deltaTime);
     } else if (isHurt) {
@@ -332,7 +318,7 @@ void Player::update(float deltaTime) {
             if (attack3Anim.isFinished()) isAttacking = false;
         }
     } else if (isDefending) {
-        // Обновляется в блоке щита выше
+        // обновляется в блоке щита выше
     } else if (!isGrounded) {
         jumpAnim.update(deltaTime);
     } else if (velocityX != 0) {
@@ -465,7 +451,6 @@ void Player::render(SDL_Renderer* renderer) {
     const int barX = (int)(x - BAR_W / 2);
     const int barY = (int)(y - RENDER_H / 2) - 18;
 
-    // Рывок (красный)
     if (dashCooldown > 0.0f) {
         float pct = dashCooldown / DASH_COOLDOWN_MAX;
         SDL_SetRenderDrawColor(renderer, 60, 20, 20, 200);
@@ -476,7 +461,6 @@ void Player::render(SDL_Renderer* renderer) {
         SDL_RenderFillRect(renderer, &fill);
     }
 
-    // Щит (жёлтый)
     if (defendCooldown > 0.0f) {
         float pct = defendCooldown / DEFEND_COOLDOWN_MAX;
         SDL_SetRenderDrawColor(renderer, 60, 60, 20, 200);
@@ -485,5 +469,45 @@ void Player::render(SDL_Renderer* renderer) {
         SDL_SetRenderDrawColor(renderer, 220, 200, 50, 255);
         SDL_Rect fill = {barX, barY + BAR_H + BAR_GAP, (int)(BAR_W * pct), BAR_H};
         SDL_RenderFillRect(renderer, &fill);
+    }
+
+    // DEBUG хитбоксы — поверх всего
+    renderHitboxes(renderer);
+}
+
+// ============================================================
+//  DEBUG: ХИТБОКСЫ ИГРОКА
+// ============================================================
+
+void Player::renderHitboxes(SDL_Renderer* renderer) {
+    if (!showHitboxes) return;
+
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
+    // Хитбокс тела (голубой)
+    SDL_SetRenderDrawColor(renderer, 0, 200, 255, 200);
+    SDL_Rect bodyBox = getHitbox();
+    SDL_RenderDrawRect(renderer, &bodyBox);
+
+    // Хитбокс ближней атаки (красный) — только когда активна
+    if (isAttacking) {
+        SDL_Rect atkBox = getAttackHitbox();
+        if (atkBox.w > 0) {
+            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 200);
+            SDL_RenderDrawRect(renderer, &atkBox);
+        }
+    }
+
+    // Магические снаряды (жёлтый)
+    SDL_SetRenderDrawColor(renderer, 255, 255, 0, 200);
+    for (const auto& proj : magicProjectiles) {
+        if (!proj.active) continue;
+        constexpr int S = (int)MagicProjectile::SIZE;
+        SDL_Rect projBox = {
+            (int)(proj.x - S / 2),
+            (int)(proj.y - S / 2),
+            S, S
+        };
+        SDL_RenderDrawRect(renderer, &projBox);
     }
 }

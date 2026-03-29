@@ -46,7 +46,6 @@ GameScene::GameScene()
     nextBtn.centerX(W);
     retryBtn.centerX(W);
 
-    // Кнопки экрана поражения позиционируем здесь (не в render каждый кадр!)
     retryBtn.rect.y = 320;
     retryBtn.rect.x = (W - retryBtn.rect.w) / 2;
     exitBtn.rect.y  = 400;
@@ -96,10 +95,25 @@ void GameScene::initPositions() {
 void GameScene::handleInput(SDL_Event& event, int mx, int my,
                             bool clicked, bool /*mouseDown*/) {
     if (resultState == ResultState::PLAYING) {
-        if (event.type == SDL_KEYDOWN &&
-            event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
-            isPaused = !isPaused;
-            if (soundMgr) soundMgr->playClick();
+        if (event.type == SDL_KEYDOWN) {
+            switch (event.key.keysym.scancode) {
+            case SDL_SCANCODE_ESCAPE:
+                isPaused = !isPaused;
+                if (soundMgr) soundMgr->playClick();
+                break;
+
+            // H — toggle хитбоксов у игрока и босса одновременно
+            case SDL_SCANCODE_H:
+                if (player && boss) {
+                    bool next = !player->showHitboxes;
+                    player->showHitboxes = next;
+                    boss->showHitboxes   = next;
+                }
+                break;
+
+            default:
+                break;
+            }
         }
     }
 
@@ -127,7 +141,6 @@ void GameScene::handleInput(SDL_Event& event, int mx, int my,
 void GameScene::update(float deltaTime) {
     if (isPaused) return;
 
-    // Анимация появления звёзд после победы
     if (resultState == ResultState::VICTORY && starsRevealed < earnedStars) {
         starRevealTimer += deltaTime;
         if (starRevealTimer >= 0.4f) {
@@ -145,7 +158,6 @@ void GameScene::update(float deltaTime) {
     if (boss && player) {
         boss->update(deltaTime, player->getX(), player->getY());
 
-        // Урон боссу по игроку
         SDL_Rect pb = player->getHitbox();
         float dmgToPlayer = boss->checkPlayerDamage(pb, deltaTime);
         if (dmgToPlayer > 0.0f) {
@@ -153,7 +165,6 @@ void GameScene::update(float deltaTime) {
             playerTookDamage = true;
         }
 
-        // Урон игрока по боссу — используем rectsOverlap из common.h
         float dmgToBoss = player->consumeAttackDamage();
         if (dmgToBoss > 0.0f) {
             SDL_Rect atk  = player->getAttackHitbox();
@@ -162,7 +173,6 @@ void GameScene::update(float deltaTime) {
         }
     }
 
-    // Магические снаряды игрока по боссу
     for (auto& proj : player->getMagicProjectiles()) {
         if (!proj.active) continue;
         SDL_Rect projBox = {
@@ -177,7 +187,6 @@ void GameScene::update(float deltaTime) {
         }
     }
 
-    // Проверяем победу
     if (boss && !boss->isAlive() &&
         boss->getPhase() == BossPhase::PHASE_2 && !bossDefeated) {
         bossDefeated = true;
@@ -185,10 +194,8 @@ void GameScene::update(float deltaTime) {
         resultState = ResultState::VICTORY;
     }
 
-    // Проверяем смерть игрока
     if (player && !player->isAlive() && resultState == ResultState::PLAYING) {
         if (livesLeft == -1) {
-            // Бесконечные жизни (режим "Нуб")
             respawnPlayer();
         } else if (livesLeft > 0) {
             livesLeft--;
@@ -204,9 +211,10 @@ void GameScene::update(float deltaTime) {
 // ============================================================
 
 void GameScene::respawnPlayer() {
-    // Позиция вычисляется в одном месте — нет дублирования с initPositions
     auto [px, py] = getPlayerSpawnPos();
     player = std::make_unique<Player>(px, py);
+    // Сохраняем флаг хитбоксов при респавне
+    if (boss) player->showHitboxes = boss->showHitboxes;
     playerTookDamage = true;
 }
 
@@ -215,9 +223,9 @@ void GameScene::respawnPlayer() {
 // ============================================================
 
 void GameScene::calculateAndSaveStars() {
-    earnedStars = 1; // за убийство босса — всегда
-    if (!playerTookDamage)                    earnedStars++;
-    if (levelTimer <= TIME_LIMIT_SECONDS)     earnedStars++;
+    earnedStars = 1;
+    if (!playerTookDamage)                earnedStars++;
+    if (levelTimer <= TIME_LIMIT_SECONDS) earnedStars++;
 
     int prev = Config::getLevelStars(currentLevel);
     if (earnedStars > prev)
@@ -240,7 +248,7 @@ void GameScene::render(SDL_Renderer* renderer) {
 
     drawHealthBars(renderer);
 
-    // --- Пауза ---
+    // Пауза
     if (isPaused && resultState == ResultState::PLAYING) {
         drawUIOverlay(renderer, 150);
         drawText(renderer, Config::getFont(), "ПАУЗА", 0, 100,
@@ -306,7 +314,6 @@ void GameScene::renderDefeatScreen(SDL_Renderer* renderer) {
     std::snprintf(timeBuf, sizeof(timeBuf), "Прожил: %d:%02d", mins, secs);
     drawText(renderer, Config::getFont(), timeBuf, 0, 250, {200, 200, 200, 255}, true);
 
-    // Позиции кнопок выставлены в конструкторе — здесь только рисуем
     drawButton(renderer, Config::getFont(), retryBtn);
     drawButton(renderer, Config::getFont(), exitBtn);
 }
@@ -331,7 +338,6 @@ void GameScene::drawStar(SDL_Renderer* renderer, int cx, int cy, int size, bool 
 void GameScene::drawHealthBars(SDL_Renderer* renderer) {
     const int W = Config::getWindowWidth();
 
-    // --- HP игрока ---
     if (player) {
         float pct = player->getHP() / player->getMaxHP();
         drawText(renderer, Config::getFont(), "Игрок", 20, 15, {200, 200, 200, 255});
@@ -345,7 +351,6 @@ void GameScene::drawHealthBars(SDL_Renderer* renderer) {
         SDL_SetRenderDrawColor(renderer, 180, 180, 180, 255);
         SDL_RenderDrawRect(renderer, &bg);
 
-        // Жизни
         constexpr int LIFE_W   = 16;
         constexpr int LIFE_H   = 12;
         constexpr int LIFE_GAP = 4;
@@ -362,31 +367,36 @@ void GameScene::drawHealthBars(SDL_Renderer* renderer) {
             }
         }
 
-        // --- Мана игрока (синяя, под HP) ---
-        if (player) {
-            float manaPct = player->getMana() / player->getMaxMana();
-            drawText(renderer, Config::getFont(), "Мана", 20, 85, {150, 150, 255, 255});
+        float manaPct = player->getMana() / player->getMaxMana();
+        drawText(renderer, Config::getFont(), "Мана", 20, 85, {150, 150, 255, 255});
 
-            SDL_SetRenderDrawColor(renderer, 20, 20, 60, 220);
-            SDL_Rect manaBg = {20, 105, 200, 14};
-            SDL_RenderFillRect(renderer, &manaBg);
+        SDL_SetRenderDrawColor(renderer, 20, 20, 60, 220);
+        SDL_Rect manaBg = {20, 105, 200, 14};
+        SDL_RenderFillRect(renderer, &manaBg);
 
-            SDL_SetRenderDrawColor(renderer, 80, 160, 255, 255);
-            SDL_Rect manaBar = {20, 105, (int)(200 * manaPct), 14};
-            SDL_RenderFillRect(renderer, &manaBar);
+        SDL_SetRenderDrawColor(renderer, 80, 160, 255, 255);
+        SDL_Rect manaBar = {20, 105, (int)(200 * manaPct), 14};
+        SDL_RenderFillRect(renderer, &manaBar);
 
-            SDL_SetRenderDrawColor(renderer, 120, 120, 200, 255);
-            SDL_RenderDrawRect(renderer, &manaBg);
+        SDL_SetRenderDrawColor(renderer, 120, 120, 200, 255);
+        SDL_RenderDrawRect(renderer, &manaBg);
 
-            // Значение маны
-            char manaBuf[16];
-            std::snprintf(manaBuf, sizeof(manaBuf), "%.0f/%.0f",
-                          player->getMana(), player->getMaxMana());
-            drawText(renderer, Config::getFont(), manaBuf, 230, 103, {150, 200, 255, 255});
-        }
+        char manaBuf[16];
+        std::snprintf(manaBuf, sizeof(manaBuf), "%.0f/%.0f",
+                      player->getMana(), player->getMaxMana());
+        drawText(renderer, Config::getFont(), manaBuf, 230, 103, {150, 200, 255, 255});
     }
 
-    // --- Таймер по центру ---
+    // Подсказка хитбоксов
+    {
+        bool hbOn = (player && player->showHitboxes);
+        SDL_Color c = hbOn ? SDL_Color{100, 255, 100, 255} : SDL_Color{150, 150, 150, 180};
+        drawText(renderer, Config::getFont(),
+                 hbOn ? "[H] Хитбоксы: ВКЛ" : "[H] Хитбоксы: ВЫКЛ",
+                 0, Config::getWindowHeight() - 30, c, true);
+    }
+
+    // Таймер по центру
     if (resultState == ResultState::PLAYING) {
         int remaining = std::max(0, (int)(TIME_LIMIT_SECONDS - levelTimer));
         char buf[16];
@@ -394,7 +404,7 @@ void GameScene::drawHealthBars(SDL_Renderer* renderer) {
         drawText(renderer, Config::getFont(), buf, 0, 15, {255, 255, 255, 255}, true);
     }
 
-    // --- HP босса ---
+    // HP босса
     if (boss) {
         float pct = boss->getHP() / boss->getMaxHP();
         drawText(renderer, Config::getFont(), "Босс", W - 220, 15, {200, 200, 200, 255});
