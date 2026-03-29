@@ -127,7 +127,7 @@ void BossGolem::loadAttackTextures() {
     projectileAnim = Animation(true, false);
     for (int row = 0; row < 2; row++)
         for (int col = 0; col < 3; col++)
-            projectileAnim.addFrame(col * 102, row * 102, 102, 102, 0.08f);
+            projectileAnim.addFrame(col * 102, row * 102, 102, 102, 0.18f);
 
     // Лазер зарядка: Laser.png строки 0-7, кадр 308x108
     laserChargeAnim = Animation(false, false);
@@ -519,7 +519,7 @@ void BossGolem::startMeleePattern(float /*playerX*/, float /*playerY*/) {
     meleeSecondHitDealt = false;
     attackSpawned       = false;
 
-    if      (roll == 0) currentMeleePattern = MeleePattern::DOUBLE_STRIKE;
+    if      (roll == 0) currentMeleePattern = MeleePattern::DASH_STRIKE;
     else if (roll == 1) currentMeleePattern = MeleePattern::JUMP_SLAM;
     else                currentMeleePattern = MeleePattern::TELEPORT_LASER;
 
@@ -548,19 +548,60 @@ void BossGolem::updateMeleePattern(float deltaTime) {
     if (isTeleporting) return;
 
     // ----------------------------------------------------------------
-    // ПАТТЕРН 1: DOUBLE_STRIKE
+    // ПАТТЕРН 1: DASH_STRIKE
     // ----------------------------------------------------------------
-    if (currentMeleePattern == MeleePattern::DOUBLE_STRIKE) {
+    if (currentMeleePattern == MeleePattern::DASH_STRIKE) {
         if (meleePatternStep == 0) {
+            // Замах — чуть медленнее обычного (стоим 0.2 сек)
+            meleePatternTimer = 0.2f;
             meleePatternStep  = 1;
-            meleePatternTimer = 0.05f;
-        } else if (meleePatternStep == 1 && meleePatternTimer <= 0.0f) {
-            meleeHitDealt = false;
-            attackSpawned = false;
-            facingRight   = patternFacingRight;
-            forceState(BossState::ATTACK_MELEE);
-            meleePatternStep = 2;
+            // Показываем начало анимации атаки как "замах"
+            animations[BossState::ATTACK_MELEE].reset();
+            currentState = BossState::ATTACK_MELEE;
+
+        } else if (meleePatternStep == 1) {
+            if (meleePatternTimer > 0.0f) return;
+            // Старт рывка вправо
+            dashStrikeVelX     = DASH_STRIKE_SPEED;
+            dashStrikeTimer    = DASH_STRIKE_DURATION;
+            dashStrikeHitDealt = false;
+            facingRight        = true;
+            patternFacingRight = true;
+            meleePatternStep   = 2;
+            animations[BossState::ATTACK_MELEE].reset();
+            currentState = BossState::ATTACK_MELEE;
+
         } else if (meleePatternStep == 2) {
+            // Рывок вправо
+            dashStrikeTimer -= deltaTime;
+            x += dashStrikeVelX * deltaTime;
+            applyCollisionsX();
+            animations[BossState::ATTACK_MELEE].update(deltaTime);
+            if (dashStrikeTimer > 0.0f) return;
+            // Пауза перед рывком влево
+            meleePatternTimer = 0.08f;
+            meleePatternStep  = 3;
+
+        } else if (meleePatternStep == 3) {
+            if (meleePatternTimer > 0.0f) return;
+            // Старт рывка влево
+            dashStrikeVelX     = -DASH_STRIKE_SPEED;
+            dashStrikeTimer    = DASH_STRIKE_DURATION;
+            dashStrikeHitDealt = false;
+            facingRight        = false;
+            patternFacingRight = false;
+            meleePatternStep   = 4;
+            animations[BossState::ATTACK_MELEE].reset();
+            currentState = BossState::ATTACK_MELEE;
+
+        } else if (meleePatternStep == 4) {
+            // Рывок влево
+            dashStrikeTimer -= deltaTime;
+            x += dashStrikeVelX * deltaTime;
+            applyCollisionsX();
+            animations[BossState::ATTACK_MELEE].update(deltaTime);
+            if (dashStrikeTimer > 0.0f) return;
+            // Готово
             currentMeleePattern = MeleePattern::NONE;
             setState(BossState::IDLE);
         }
@@ -571,6 +612,9 @@ void BossGolem::updateMeleePattern(float deltaTime) {
     // ----------------------------------------------------------------
     else if (currentMeleePattern == MeleePattern::JUMP_SLAM) {
         if (meleePatternStep == 0) {
+            // Используем HURT анимацию — она не триггерит melee урон
+            // НО сбрасываем meleeHitDealt чтобы он не наносил урон от предыдущей атаки
+            meleeHitDealt = true;  // блокируем урон пока прыгаем
             auto& anim = animations[BossState::HURT];
             anim.update(deltaTime);
             if (anim.getCurrentFrameIndex() >= 3) {
@@ -579,6 +623,7 @@ void BossGolem::updateMeleePattern(float deltaTime) {
                 jumpLanded       = false;
                 jumpVelocityY    = JUMP_VELOCITY;
                 forceState(BossState::HURT);
+                meleeHitDealt    = true;  // всё ещё блокируем
             }
         } else if (meleePatternStep == 1) {
             if (jumpLanded) {
@@ -604,7 +649,6 @@ void BossGolem::updateMeleePattern(float deltaTime) {
             // Первый удар доиграл — проверяем это отдельно
             if (currentState == BossState::ATTACK_MELEE &&
                 !animations[BossState::ATTACK_MELEE].isFinished()) return;
-
             meleePatternStep = 1;
             float targetX = x + (-meleeAttackDirX) * cellSize * TELEPORT_P2_CELLS;
             startTeleport(targetX, y);
@@ -617,8 +661,7 @@ void BossGolem::updateMeleePattern(float deltaTime) {
             meleePatternStep = 2;
         } else if (meleePatternStep == 2) {
             // Завершаем когда луч отыграл (не анимация персонажа — она короткая)
-            if (laserFullyCharged && laserBeamAnim.isFinished()) {
-                laser.active        = false;
+            if (!laser.active) {
                 currentMeleePattern = MeleePattern::NONE;
                 setState(BossState::IDLE);
             }
@@ -821,7 +864,7 @@ float BossGolem::checkPlayerDamage(SDL_Rect playerBox, float deltaTime) {
     // Снаряды
     for (auto& proj : projectiles) {
         if (!proj.active) continue;
-        constexpr int PROJ_SIZE = 24;
+        constexpr int PROJ_SIZE = 36;
         SDL_Rect projBox = {
             (int)(proj.x - PROJ_SIZE/2),
             (int)(proj.y - PROJ_SIZE/2),
@@ -855,6 +898,23 @@ float BossGolem::checkPlayerDamage(SDL_Rect playerBox, float deltaTime) {
         }
     }
 
+    // Урон от DASH_STRIKE рывка
+    if (currentMeleePattern == MeleePattern::DASH_STRIKE &&
+        (meleePatternStep == 2 || meleePatternStep == 4) &&
+        !dashStrikeHitDealt) {
+
+        constexpr int DASH_HIT_W = 80;
+        constexpr int DASH_HIT_H = 80;
+        int hx = facingRight ? (int)(x + width * 0.1f)
+                             : (int)(x - width * 0.1f - DASH_HIT_W);
+        int hy = (int)(y - DASH_HIT_H / 2);
+        SDL_Rect dashBox = {hx, hy, DASH_HIT_W, DASH_HIT_H};
+
+        if (rectsOverlap(playerBox, dashBox)) {
+            dashStrikeHitDealt = true;
+            return DAMAGE_MELEE_P2;
+        }
+    }
     return 0.0f;
 }
 
@@ -1005,10 +1065,13 @@ void BossGolem::renderProjectiles(SDL_Renderer* renderer) {
     if (!armTexture) return;
 
     SDL_Rect src       = projectileAnim.getCurrentFrame();
-    constexpr int SIZE = 164;  // размер не тронут
+    constexpr int SIZE = 80;  // визуальный размер уменьшен
 
     for (const auto& proj : projectiles) {
         if (!proj.active) continue;
+
+        // Угол поворота по направлению полёта
+        double angle = std::atan2(proj.velY, proj.velX) * 180.0 / M_PI;
 
         SDL_Rect dst = {
             (int)(proj.x - SIZE / 2),
@@ -1021,7 +1084,8 @@ void BossGolem::renderProjectiles(SDL_Renderer* renderer) {
         else
             SDL_SetTextureColorMod(armTexture, 255, 255, 255);
 
-        SDL_RenderCopy(renderer, armTexture, &src, &dst);
+        SDL_RenderCopyEx(renderer, armTexture, &src, &dst,
+                         angle, nullptr, SDL_FLIP_NONE);
     }
 
     SDL_SetTextureColorMod(armTexture, 255, 255, 255);

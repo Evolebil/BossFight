@@ -116,8 +116,8 @@ private:
     static constexpr float DEFEND_DAMAGE_REDUCTION = 0.99f;
     static constexpr float DEFEND_COOLDOWN_MAX     = 1.0f;
 
-    static constexpr float DASH_SPEED        = 600.0f;
-    static constexpr float DASH_DURATION     = 0.15f;
+    static constexpr float DASH_SPEED        = 900.0f;
+    static constexpr float DASH_DURATION     = 0.22f;
     static constexpr float DASH_COOLDOWN_MAX = 2.0f;
 
     static constexpr float MANA_MAX        = 100.0f;

@@ -149,8 +149,7 @@ void Player::processInput() {
 
     // Рывок — из настроек (controls.dash)
     if (InputManager::isKeyPressed(controls.dash) &&
-        dashCooldown <= 0.0f && !isDashing &&
-        !isAttacking && !isCastingMagic && !isHurt) {
+        dashCooldown <= 0.0f && !isDashing && !isHurt) {
         wantsToDash = true;
     }
 }

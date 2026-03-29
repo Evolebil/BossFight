@@ -53,7 +53,7 @@ enum class BossPhase {
 // --- Паттерн ближней атаки фазы 2 ---
 enum class MeleePattern {
     NONE,
-    DOUBLE_STRIKE,        // два очень быстрых удара
+    DASH_STRIKE,        // два очень быстрых удара
     JUMP_SLAM,            // прыжок → приземление → шипы по площади
     TELEPORT_LASER        // удар → телепорт → лазер на всю карту через 0.1 сек
 };
@@ -149,7 +149,7 @@ private:
 
     // --- Скорости ---
     static constexpr float PROJECTILE_SPEED  = 400.0f;
-    static constexpr float TELEPORT_SPEED    = 1200.0f;
+    static constexpr float TELEPORT_SPEED = 3000.0f;  // было 1200
     // Телепорт в фазе 2 дальше — множитель дистанции
     static constexpr float TELEPORT_P2_CELLS = 8.0f; // было 5, теперь 8
 
@@ -165,8 +165,16 @@ private:
 
     // --- Прыжок ---
     static constexpr float JUMP_VELOCITY     = -700.0f;
-    static constexpr float SPIKE_AREA_CELLS  = 6.0f;
-    static constexpr float SPIKE_LIFETIME    = 1.2f;
+    static constexpr float SPIKE_AREA_CELLS  = 10.0f;
+    static constexpr float SPIKE_LIFETIME    = 1.8f;
+
+    // --- DASH_STRIKE поля ---
+    float dashStrikeVelX     = 0.0f;
+    float dashStrikeTimer    = 0.0f;
+    bool  dashStrikeHitDealt = false;
+
+    static constexpr float DASH_STRIKE_SPEED    = 700.0f;
+    static constexpr float DASH_STRIKE_DURATION = 0.18f;
 
     // --- Анимации снарядов и лазера ---
     Animation projectileAnim;
@@ -209,7 +217,7 @@ private:
     void updatePhaseTransition(float deltaTime);
 
     void startMeleePattern(float playerX, float playerY);
-    void updateMeleePattern(float deltaTime);
+    void updateMeleePattern(float deltaTime);  // уже есть deltaTime!
 
     // Прыжок и шипы
     void updateJump(float deltaTime);
