@@ -83,6 +83,7 @@ public:
     // NOTE: virtual — босс переопределяет (учитывает defense)
     virtual void takeDamage(float damage);
     void heal(float amount);
+    void renderDebugBounds(SDL_Renderer* renderer, float spriteW, float spriteH) const;
 
 protected:
     /**

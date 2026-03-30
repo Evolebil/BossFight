@@ -437,6 +437,10 @@ void Player::render(SDL_Renderer* renderer) {
     };
     SDL_RendererFlip flip = facingRight ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL;
 
+    if (showHitboxes) {
+        renderDebugBounds(renderer, RENDER_W, RENDER_H);
+    }
+
     if (tex) {
         SDL_RenderCopyEx(renderer, tex, &src, &dst, 0, nullptr, flip);
     } else {
@@ -480,34 +484,35 @@ void Player::render(SDL_Renderer* renderer) {
 // ============================================================
 
 void Player::renderHitboxes(SDL_Renderer* renderer) {
-    if (!showHitboxes) return;
-
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-
-    // Хитбокс тела (голубой)
-    SDL_SetRenderDrawColor(renderer, 0, 200, 255, 200);
-    SDL_Rect bodyBox = getHitbox();
-    SDL_RenderDrawRect(renderer, &bodyBox);
-
-    // Хитбокс ближней атаки (красный) — только когда активна
-    if (isAttacking) {
-        SDL_Rect atkBox = getAttackHitbox();
-        if (atkBox.w > 0) {
-            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 200);
-            SDL_RenderDrawRect(renderer, &atkBox);
-        }
+    if (!spritesheet) {
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+        SDL_Rect rect = {(int)(x - width / 2), (int)(y - height / 2), (int)width, (int)height};
+        SDL_RenderFillRect(renderer, &rect);
+        return;
     }
 
-    // Магические снаряды (жёлтый)
-    SDL_SetRenderDrawColor(renderer, 255, 255, 0, 200);
-    for (const auto& proj : magicProjectiles) {
-        if (!proj.active) continue;
-        constexpr int S = (int)MagicProjectile::SIZE;
-        SDL_Rect projBox = {
-            (int)(proj.x - S / 2),
-            (int)(proj.y - S / 2),
-            S, S
-        };
-        SDL_RenderDrawRect(renderer, &projBox);
+    // Получаем ТЕКУЩИЙ фрейм анимации
+    SDL_Rect src = {0, 0, 0, 0};
+    if (animations.count(currentState)) {
+        src = animations[currentState].getCurrentFrame();
+    }
+
+    // ВЫЧИСЛЯЕМ размеры спрайта НА ОСНОВЕ ТЕКУЩЕГО ФРЕЙМА
+    int dstW = RENDER_W;
+    int dstH = RENDER_H;
+    int dstX = (int)(x - dstW / 2);
+    int dstY = (int)(y - dstH / 2);
+
+    SDL_Rect dst = {dstX, dstY, dstW, dstH};
+    SDL_RendererFlip flip = facingRight ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL;
+
+    SDL_RenderCopyEx(renderer, spritesheet, &src, &dst, 0, nullptr, flip);
+
+    // DEBUG: Рисуем границы ДИНАМИЧЕСКИ из текущего фрейма
+    if (showHitboxes) {
+        // Спрайт вычисляется из размеров ТЕКУЩЕЙ отрисовки
+        renderDebugBounds(renderer,
+                          static_cast<float>(dstW),
+                          static_cast<float>(dstH));
     }
 }

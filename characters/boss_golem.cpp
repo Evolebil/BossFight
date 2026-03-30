@@ -1126,16 +1126,69 @@ void BossGolem::renderLaser(SDL_Renderer* renderer) {
 // ============================================================
 
 void BossGolem::renderHitboxes(SDL_Renderer* renderer) {
+    renderSpikes(renderer);
+    renderProjectiles(renderer);
+    renderLaser(renderer);
+
+    if (!spritesheet) {
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+        SDL_Rect rect = {(int)(x - width/2), (int)(y - height/2), (int)width, (int)height};
+        SDL_RenderFillRect(renderer, &rect);
+        renderHitboxes(renderer);
+        return;
+    }
+
+    SDL_Rect src = {0, 0, 0, 0};
+
+    if (phase == BossPhase::TRANSITIONING) {
+        src = reviveAnim.getCurrentFrame();
+    } else if (phase == BossPhase::PAUSING) {
+        auto it = animations.find(BossState::DEATH);
+        if (it == animations.end()) return;
+        src = it->second.getCurrentFrame();
+    } else if (isTeleporting) {
+        auto it = animations.find(BossState::IDLE);
+        if (it == animations.end()) return;
+        src = it->second.getCurrentFrame();
+    } else if (currentMeleePattern == MeleePattern::JUMP_SLAM &&
+               meleePatternStep == 0) {
+        src = animations[BossState::HURT].getCurrentFrame();
+    } else {
+        auto it = animations.find(currentState);
+        if (it == animations.end()) return;
+        src = it->second.getCurrentFrame();
+    }
+
+    // ВЫЧИСЛЯЕМ размеры спрайта из ТЕКУЩЕГО фрейма
+    int dstW = (int)(src.w * SPRITE_SCALE);
+    int dstH = (int)(src.h * SPRITE_SCALE);
+    int dstX = (int)(x - dstW / 2);
+    int dstY = (int)(y + height/2 - dstH);
+
+    SDL_Rect dst = {dstX, dstY, dstW, dstH};
+    SDL_RendererFlip flip = facingRight ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL;
+
+    if (phase == BossPhase::PHASE_2)
+        SDL_SetTextureColorMod(spritesheet, 255, 150, 150);
+    else
+        SDL_SetTextureColorMod(spritesheet, 255, 255, 255);
+
+    SDL_RenderCopyEx(renderer, spritesheet, &src, &dst, 0, nullptr, flip);
+    SDL_SetTextureColorMod(spritesheet, 255, 255, 255);
+
+    // DEBUG: Рисуем границы ДИНАМИЧЕСКИ
+    renderHitboxes(renderer, dstW, dstH);
+}
+
+void BossGolem::renderHitboxes(SDL_Renderer* renderer)  {
     if (!showHitboxes) return;
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-    // Хитбокс босса (зелёный)
-    SDL_SetRenderDrawColor(renderer, 0, 255, 0, 200);
-    SDL_Rect bossBox = getHitbox();
-    SDL_RenderDrawRect(renderer, &bossBox);
+    // Основной хитбокс и спрайт (спрайт ДИНАМИЧЕСКИЙ!)
+    renderDebugBounds(renderer, static_cast<float>(spriteW), static_cast<float>(spriteH));
 
-    // Хитбокс ближней атаки (красный) — кадр >= 6
+    // Ближняя атака (красный)
     if (currentState == BossState::ATTACK_MELEE &&
         animations.count(BossState::ATTACK_MELEE) &&
         animations.at(BossState::ATTACK_MELEE).getCurrentFrameIndex() >= 6) {
@@ -1145,37 +1198,41 @@ void BossGolem::renderHitboxes(SDL_Renderer* renderer) {
         int meleeX = facingRight ? (int)(x + width * 0.1f)
                                  : (int)(x - width * 0.1f - meleeW);
         int meleeY = (int)(y - meleeH / 2);
+
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 200);
         SDL_Rect meleeBox = {meleeX, meleeY, meleeW, meleeH};
         SDL_RenderDrawRect(renderer, &meleeBox);
     }
 
-    // Хитбокс DASH_STRIKE (оранжевый)
+    // DASH_STRIKE (оранжевый)
     if (currentMeleePattern == MeleePattern::DASH_STRIKE &&
         (meleePatternStep == 2 || meleePatternStep == 4)) {
+
         constexpr int DASH_HIT_W = 80;
         constexpr int DASH_HIT_H = 80;
         int hx = facingRight ? (int)(x + width * 0.1f)
                              : (int)(x - width * 0.1f - DASH_HIT_W);
         int hy = (int)(y - DASH_HIT_H / 2);
+
         SDL_SetRenderDrawColor(renderer, 255, 140, 0, 200);
         SDL_Rect dashBox = {hx, hy, DASH_HIT_W, DASH_HIT_H};
         SDL_RenderDrawRect(renderer, &dashBox);
     }
 
-    // Хитбокс шипов (жёлтый)
+    // Шипы (жёлтый)
     SDL_SetRenderDrawColor(renderer, 255, 255, 0, 200);
     for (const auto& spike : groundSpikes) {
         if (spike.active) SDL_RenderDrawRect(renderer, &spike.rect);
     }
 
-    // Хитбокс лазера (голубой) — только когда заряжен
+    // Лазер (голубой)
     if (laser.active && laserFullyCharged) {
         const int W = Config::getWindowWidth();
         int laserH  = (int)laser.height;
         int laserX  = laser.facingRight ? (int)laser.x : 0;
         int laserW  = laser.facingRight ? W - (int)laser.x : (int)laser.x;
         int laserY  = (int)(laser.y - laserH / 2);
+
         SDL_SetRenderDrawColor(renderer, 0, 200, 255, 200);
         SDL_Rect laserBox = {laserX, laserY, laserW, laserH};
         SDL_RenderDrawRect(renderer, &laserBox);

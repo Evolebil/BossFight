@@ -76,7 +76,9 @@ add_executable(BossFight main.cpp
     assets/player/RUN.png
     assets/player/WALK.png
     assets/magic/01.png
-    utils/animation.cpp )
+    utils/animation.cpp
+
+)
 
 # ───────────────────────────────────────────────
 # Include-директории
