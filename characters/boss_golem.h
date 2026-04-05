@@ -238,5 +238,9 @@ private:
     void renderProjectiles(SDL_Renderer* renderer);
     void renderLaser(SDL_Renderer* renderer);
     void renderSpikes(SDL_Renderer* renderer);
-    void renderHitboxes(SDL_Renderer* renderer, int spriteW, int spriteH);
+    mutable int currentSpriteW = 0;
+    mutable int currentSpriteH = 0;
+
+    [[nodiscard]] SDL_Rect getCurrentFrame() const;
+    void renderHitboxes(SDL_Renderer* renderer, int spriteX, int spriteY, int spriteW, int spriteH);
 };

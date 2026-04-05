@@ -484,35 +484,54 @@ void Player::render(SDL_Renderer* renderer) {
 // ============================================================
 
 void Player::renderHitboxes(SDL_Renderer* renderer) {
-    if (!spritesheet) {
-        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-        SDL_Rect rect = {(int)(x - width / 2), (int)(y - height / 2), (int)width, (int)height};
-        SDL_RenderFillRect(renderer, &rect);
-        return;
+    if (!showHitboxes) return;
+
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
+    // Границы СПРАЙТА (синий прямоугольник)
+    SDL_SetRenderDrawColor(renderer, 0, 100, 255, 255);
+    SDL_Rect spriteBounds = {
+        (int)(x - RENDER_W / 2),
+        (int)(y - RENDER_H / 2),
+        (int)RENDER_W,
+        (int)RENDER_H
+    };
+    SDL_RenderDrawRect(renderer, &spriteBounds);
+
+    // ХИТБОКС физический (зелёный прямоугольник) — меньше спрайта
+    SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+    SDL_Rect hitbox = getHitbox();
+    SDL_RenderDrawRect(renderer, &hitbox);
+
+    // Центр (белая точка)
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderDrawPoint(renderer, (int)x, (int)y);
+
+    // Направление (жёлтая линия)
+    SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+    int lineLen = 40;
+    int endX = facingRight ? (int)(x + lineLen) : (int)(x - lineLen);
+    SDL_RenderDrawLine(renderer, (int)x, (int)y, endX, (int)y);
+
+    // Ближняя атака (красный хитбокс)
+    if (isAttacking && attackHitActive) {
+        SDL_Rect attackBox = getAttackHitbox();
+        if (attackBox.w > 0 && attackBox.h > 0) {
+            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+            SDL_RenderDrawRect(renderer, &attackBox);
+        }
     }
 
-    // Получаем ТЕКУЩИЙ фрейм анимации
-    SDL_Rect src = {0, 0, 0, 0};
-    if (animations.count(currentState)) {
-        src = animations[currentState].getCurrentFrame();
-    }
-
-    // ВЫЧИСЛЯЕМ размеры спрайта НА ОСНОВЕ ТЕКУЩЕГО ФРЕЙМА
-    int dstW = RENDER_W;
-    int dstH = RENDER_H;
-    int dstX = (int)(x - dstW / 2);
-    int dstY = (int)(y - dstH / 2);
-
-    SDL_Rect dst = {dstX, dstY, dstW, dstH};
-    SDL_RendererFlip flip = facingRight ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL;
-
-    SDL_RenderCopyEx(renderer, spritesheet, &src, &dst, 0, nullptr, flip);
-
-    // DEBUG: Рисуем границы ДИНАМИЧЕСКИ из текущего фрейма
-    if (showHitboxes) {
-        // Спрайт вычисляется из размеров ТЕКУЩЕЙ отрисовки
-        renderDebugBounds(renderer,
-                          static_cast<float>(dstW),
-                          static_cast<float>(dstH));
+    // Магические снаряды (фиолетовый)
+    for (const auto& proj : magicProjectiles) {
+        if (!proj.active) continue;
+        constexpr int PROJ_SIZE = 32;
+        SDL_Rect projBox = {
+            (int)(proj.x - PROJ_SIZE / 2),
+            (int)(proj.y - PROJ_SIZE / 2),
+            PROJ_SIZE, PROJ_SIZE
+        };
+        SDL_SetRenderDrawColor(renderer, 200, 0, 255, 255);
+        SDL_RenderDrawRect(renderer, &projBox);
     }
 }

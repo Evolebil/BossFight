@@ -43,36 +43,32 @@ void Character::applyCollisionsX() {
     CollisionSystem::resolveX(x, y, velocityX, width, height);
 }
 
-void Player::render(SDL_Renderer* renderer) {
-    if (!spritesheet) {
-        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-        SDL_Rect rect = {(int)(x - width / 2), (int)(y - height / 2), (int)width, (int)height};
-        SDL_RenderFillRect(renderer, &rect);
-        return;
-    }
+void Character::renderDebugBounds(SDL_Renderer* renderer, float spriteW, float spriteH) const {
+    // Вычисляем координаты хитбокса (x, y — центр)
+    int left   = static_cast<int>(x - spriteW / 2.0f);
+    int top    = static_cast<int>(y - spriteH / 2.0f);
+    int right  = left + static_cast<int>(spriteW);
+    int bottom = top + static_cast<int>(spriteH);
 
-    // Получаем ТЕКУЩИЙ фрейм анимации
-    SDL_Rect src = {0, 0, 0, 0};
-    if (animations.count(currentState)) {
-        src = animations[currentState].getCurrentFrame();
-    }
+    // Прямоугольник хитбокса (ЗЕЛЁНЫЙ = физический хитбокс для коллизий)
+    SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+    SDL_Rect hitbox = {left, top, static_cast<int>(spriteW), static_cast<int>(spriteH)};
+    SDL_RenderDrawRect(renderer, &hitbox);
 
-    // ВЫЧИСЛЯЕМ размеры спрайта НА ОСНОВЕ ТЕКУЩЕГО ФРЕЙМА
-    int dstW = RENDER_W;
-    int dstH = RENDER_H;
-    int dstX = (int)(x - dstW / 2);
-    int dstY = (int)(y - dstH / 2);
+    // Центр (БЕЛАЯ ТОЧКА)
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderDrawPoint(renderer, static_cast<int>(x), static_cast<int>(y));
 
-    SDL_Rect dst = {dstX, dstY, dstW, dstH};
-    SDL_RendererFlip flip = facingRight ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL;
+    // Направление взгляда (СИНЯЯ СТРЕЛКА)
+    SDL_SetRenderDrawColor(renderer, 0, 100, 255, 255);
+    int arrowLen = static_cast<int>(spriteW / 4.0f);
+    int arrowX = facingRight ? right : left;
+    SDL_RenderDrawLine(renderer, static_cast<int>(x), static_cast<int>(y),
+                       arrowX, static_cast<int>(y));
 
-    SDL_RenderCopyEx(renderer, spritesheet, &src, &dst, 0, nullptr, flip);
-
-    // DEBUG: Рисуем границы ДИНАМИЧЕСКИ из текущего фрейма
-    if (showHitboxes) {
-        // Спрайт вычисляется из размеров ТЕКУЩЕЙ отрисовки
-        renderDebugBounds(renderer,
-                          static_cast<float>(dstW),
-                          static_cast<float>(dstH));
+    // Статус заземления (ЖЁЛТАЯ ЛИНИЯ снизу если isGrounded)
+    if (isGrounded) {
+        SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+        SDL_RenderDrawLine(renderer, left, bottom, right, bottom);
     }
 }
