@@ -155,6 +155,7 @@ private:
     // --- Прочее ---
     static constexpr float STATE_CHANGE_COOLDOWN = 0.5f;
     static constexpr float SPRITE_SCALE          = 2.5f;
+    static constexpr int   SPRITE_OFFSET_Y       = 0;//подбор насколько спрайт сходиться по высоте
     static constexpr float BLOCK_HP_THRESHOLD    = 0.7f;
     static constexpr float PHASE2_PAUSE_DURATION = 1.5f;
 

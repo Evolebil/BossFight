@@ -76,75 +76,44 @@ void BossGolem::loadAnimations() {
         spritesheet = TextureManager::getTexture("Character.png");
     if (!spritesheet) return;
 
-    // Сетка спрайтшита:
-    // - Начало: X=20, Y=20 (первоначальный отступ)
-    // - Шаг по X: 100 (75px спрайт + 25px отступ)
-    // - Шаг по Y: 50 (фиксированный)
-    // - Ширина кадра: 75px (всегда)
-    // - Высота: разная для каждой анимации
-
-    const int START_X = 25;   // Начальный отступ слева
-    const int START_Y = 20;   // Начальный отступ сверху
-    const int STEP_X = 100;   // Шаг по горизонтали
-    const int STEP_Y = 55;    // Шаг по вертикали
-    const int FRAME_W = 75;   // Ширина кадра
-
-    // --- IDLE: ряд 0, 4 кадра, 75x49 ---
-    // Y = 20 + 0*50 + 2 = 22 (небольшой сдвиг внутри ячейки)
     animations[BossState::IDLE] = Animation(true, false);
     for (int i = 0; i < 4; i++)
-        animations[BossState::IDLE].addFrame(START_X + i*STEP_X, START_Y + 2, FRAME_W, 49, 0.2f);
+        animations[BossState::IDLE].addFrame(i*100, 0, 100, 100, 0.2f);
 
-    // --- WALK: ряд 6, 10 кадров, 75x50 ---
-    // Y = 20 + 12*50 = 620, но в коде было 624 — проверь спрайт, использую 624
     animations[BossState::WALK] = Animation(true, false);
     for (int i = 0; i < 10; i++)
-        animations[BossState::WALK].addFrame(START_X + i*STEP_X, 624, FRAME_W, 50, 0.08f);
+        animations[BossState::WALK].addFrame(i*100, 600, 100, 100, 0.08f);
 
-    // --- ATTACK_MELEE: ряд 4, 8 кадров, 75x57 ---
-    // Y = 20 + 8*50 = 420, в коде было 422
     animations[BossState::ATTACK_MELEE] = Animation(false, false);
     for (int i = 0; i < 8; i++)
-        animations[BossState::ATTACK_MELEE].addFrame(START_X + i*STEP_X, 422, FRAME_W, 57, 0.1f);
+        animations[BossState::ATTACK_MELEE].addFrame(i*100, 400, 100, 100, 0.1f);
 
-    // --- ATTACK_RANGE: ряд 2, 7 кадров, 75x48 ---
-    // Y = 20 + 4*50 = 220, в коде было 224
     animations[BossState::ATTACK_RANGE] = Animation(false, false);
     for (int i = 0; i < 7; i++)
-        animations[BossState::ATTACK_RANGE].addFrame(START_X + i*STEP_X, 224, FRAME_W, 48, 0.09f);
+        animations[BossState::ATTACK_RANGE].addFrame(i*100, 200, 100, 100, 0.09f);
 
-    // --- LASER: ряд 5, 7 кадров, 75x51 ---
-    // Y = 20 + 10*50 = 520, в коде было 524
     animations[BossState::LASER] = Animation(false, false);
     for (int i = 0; i < 7; i++)
-        animations[BossState::LASER].addFrame(START_X + i*STEP_X, 524, FRAME_W, 51, 0.13f);
+        animations[BossState::LASER].addFrame(i*100, 500, 100, 100, 0.13f);
 
-    // --- BLOCK: ряд 3, 8 кадров, 75x53 ---
-    // Y = 20 + 6*50 = 320, в коде было 322
     animations[BossState::BLOCK] = Animation(false, true);
     for (int i = 0; i < 8; i++)
-        animations[BossState::BLOCK].addFrame(START_X + i*STEP_X, 322, FRAME_W, 53, 0.1f);
+        animations[BossState::BLOCK].addFrame(i*100, 300, 100, 100, 0.1f);
 
-    // --- HURT: ряд 1, 8 кадров, 75x53 ---
-    // Y = 20 + 2*50 = 120, в коде было 122
     animations[BossState::HURT] = Animation(false, false);
     for (int i = 0; i < 8; i++)
-        animations[BossState::HURT].addFrame(START_X + i*STEP_X, 122, FRAME_W, 53, 0.07f);
+        animations[BossState::HURT].addFrame(i*100, 100, 100, 100, 0.07f);
 
-    // --- DEATH: ряды 7-8, 14 кадров ---
-    // Ряд 7: Y = 20 + 14*50 = 720, в коде было 721, высота 73
-    // Ряд 8: Y = 20 + 16*50 = 820, в коде было 834, высота 61
     animations[BossState::DEATH] = Animation(false, false);
     for (int i = 0; i < 10; i++)
-        animations[BossState::DEATH].addFrame(START_X + i*STEP_X, 721, FRAME_W, 73, 0.1f);
+        animations[BossState::DEATH].addFrame(i*100, 700, 100, 100, 0.1f);
     for (int i = 0; i < 4; i++)
-        animations[BossState::DEATH].addFrame(START_X + i*STEP_X, 834, FRAME_W, 61, 0.15f);
+        animations[BossState::DEATH].addFrame(i*100, 800, 100, 100, 0.15f);
 
-    // --- REVIVE: обратная смерть ---
     for (int i = 3; i >= 0; i--)
-        reviveAnim.addFrame(START_X + i*STEP_X, 834, FRAME_W, 61, 0.12f);
+        reviveAnim.addFrame(i*100, 800, 100, 100, 0.12f);
     for (int i = 9; i >= 0; i--)
-        reviveAnim.addFrame(START_X + i*STEP_X, 721, FRAME_W, 73, 0.08f);
+        reviveAnim.addFrame(i*100, 700, 100, 100, 0.08f);
 }
 
 void BossGolem::loadAttackTextures() {
@@ -772,14 +741,14 @@ void BossGolem::startTeleport(float targetX, float targetY) {
 }
 
 void BossGolem::updateTeleport(float deltaTime) {
-    float dx  = teleportTargetX - x;
-    float len = std::abs(dx);
+    float dx   = teleportTargetX - x;
+    float step = TELEPORT_SPEED * deltaTime;
 
-    if (len < 5.0f) {
+    if (std::abs(dx) <= step) {  // не перелетит за этот кадр
         x             = teleportTargetX;
         isTeleporting = false;
     } else {
-        x += (dx > 0 ? 1.0f : -1.0f) * TELEPORT_SPEED * deltaTime;
+        x += (dx > 0 ? 1.0f : -1.0f) * step;
     }
 }
 
@@ -1006,7 +975,7 @@ void BossGolem::render(SDL_Renderer* renderer) {
     int dstW = (int)(src.w * SPRITE_SCALE);
     int dstH = (int)(src.h * SPRITE_SCALE);
     int dstX = (int)(x - dstW / 2);
-    int dstY = (int)(y + height/2 - dstH);
+    int dstY = (int)(y - dstH / 2) + SPRITE_OFFSET_Y;
 
     SDL_Rect dst = {dstX, dstY, dstW, dstH};
     SDL_RendererFlip flip = facingRight ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL;
