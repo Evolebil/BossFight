@@ -23,7 +23,7 @@
 #include <random>
 #include <cstring>
 #include <array>
-
+#include <unordered_map>
 // ===== НАШИ КЛАССЫ (только объявления) =====
 class Config;
 class Scene;

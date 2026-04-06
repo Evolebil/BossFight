@@ -7,7 +7,7 @@
 #pragma once
 #include "../utils/scene_manager.h"
 #include "../ui/ui.h"
-#include <vector>
+#include "../config/config.h"
 #include "splash_scene.h"
 
 class SoundManager;

@@ -7,6 +7,11 @@
 #pragma once
 #include "../utils/scene_manager.h"
 #include "../ui/ui.h"
+#include "../levels/ilevel.h"
+#include "../characters/boss_golem.h"
+#include "../config/config.h"
+#include "../characters/player.h"
+#include "../utils/sound_manager.h"
 
 // Forward declarations
 class Player;
@@ -44,7 +49,8 @@ private:
 
     // Персонажи — unique_ptr: не нужен ручной delete
     std::unique_ptr<Player>    player;
-    std::unique_ptr<BossGolem> boss;
+    std::unique_ptr<Character>  boss;
+    std::unique_ptr<ILevel>     level;
 
     int   currentLevel;
     int   livesLeft;
@@ -75,7 +81,7 @@ private:
     void saveGame();
     void calculateAndSaveStars();
 
-    [[nodiscard]] static std::pair<float, float> getPlayerSpawnPos();
+    [[nodiscard]] std::pair<float, float> getPlayerSpawnPos();
 
     void drawHealthBars(SDL_Renderer* renderer);
     void renderVictoryScreen(SDL_Renderer* renderer);

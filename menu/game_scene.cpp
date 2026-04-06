@@ -4,14 +4,12 @@
  * @author evol
  * @date 2026-02-20
  */
-#include "../utils/scene_manager.h"
+
 #include "game_scene.h"
-#include "../config/config.h"
-#include "../ui/ui.h"
-#include "../levels/level1_assets.h"
-#include "../characters/boss_golem.h"
-#include "../characters/player.h"
-#include "../utils/sound_manager.h"
+
+
+// Глобальный указатель на текущий уровень — читается в CollisionSystem
+extern ILevel* g_currentLevel;
 
 // ============================================================
 //  КОНСТРУКТОР
@@ -29,6 +27,7 @@ GameScene::GameScene()
     retryBtn   (0, 350, 300, 60, "Заново"),
     player(nullptr),
     boss(nullptr),
+    level(nullptr),
     currentLevel(0),
     livesLeft(0),
     levelTimer(0.0f),
@@ -56,36 +55,33 @@ GameScene::GameScene()
 }
 
 // ============================================================
-//  ВЫЧИСЛЕНИЕ ПОЗИЦИИ СПАВНА ИГРОКА
-// ============================================================
-
-std::pair<float, float> GameScene::getPlayerSpawnPos() {
-    int ox = 0, oy = 0;
-    getMapOffset(ox, oy);
-    return {
-        ox + PLAYER_SPAWN_COL * TILE_SIZE + TILE_SIZE / 2.0f,
-        oy + PLAYER_SPAWN_ROW * TILE_SIZE + TILE_SIZE / 2.0f
-    };
-}
-
-// ============================================================
 //  ИНИЦИАЛИЗАЦИЯ ПОЗИЦИЙ
 // ============================================================
 
 void GameScene::initPositions() {
-    auto [px, py] = getPlayerSpawnPos();
+    // Создаём уровень по индексу и выставляем глобальный указатель
+    // чтобы CollisionSystem знал с каким уровнем работать
+    level          = createLevel(currentLevel);
+    g_currentLevel = level.get();
 
-    int ox = 0, oy = 0;
-    getMapOffset(ox, oy);
-    float bossX = ox + BOSS_SPAWN_COL * TILE_SIZE + TILE_SIZE / 2.0f;
-    float bossY = oy + BOSS_SPAWN_ROW * TILE_SIZE + TILE_SIZE / 2.0f;
+    auto [px, py] = level->getPlayerSpawn();
+    auto [bx, by] = level->getBossSpawn();
 
     const Config::Difficulty& diff = Config::getDifficulties()[Config::getCurrentDifficulty()];
     livesLeft = diff.respawns;
 
     player = std::make_unique<Player>(px, py);
-    boss   = std::make_unique<BossGolem>(bossX, bossY, diff.projectileSpeed);
+    boss   = level->createBoss(bx, by, diff.projectileSpeed);
     gameStarted = true;
+}
+
+// ============================================================
+//  ВЫЧИСЛЕНИЕ ПОЗИЦИИ СПАВНА ИГРОКА (для респавна)
+// ============================================================
+
+std::pair<float, float> GameScene::getPlayerSpawnPos() {
+    if (level) return level->getPlayerSpawn();
+    return {0.0f, 0.0f};
 }
 
 // ============================================================
@@ -105,9 +101,12 @@ void GameScene::handleInput(SDL_Event& event, int mx, int my,
             // H — toggle хитбоксов у игрока и босса одновременно
             case SDL_SCANCODE_H:
                 if (player && boss) {
+                    // Пытаемся скастовать к BossGolem для доступа к showHitboxes
+                    // NOTE: если появятся другие боссы — добавить аналогично
                     bool next = !player->showHitboxes;
                     player->showHitboxes = next;
-                    boss->showHitboxes   = next;
+                    if (auto* golem = dynamic_cast<BossGolem*>(boss.get()))
+                        golem->showHitboxes = next;
                 }
                 break;
 
@@ -156,44 +155,72 @@ void GameScene::update(float deltaTime) {
     if (player) player->update(deltaTime);
 
     if (boss && player) {
-        boss->update(deltaTime, player->getX(), player->getY());
+        // Вызываем update через интерфейс Character
+        // Для боссов с расширенным update (BossGolem) используем dynamic_cast
+        if (auto* golem = dynamic_cast<BossGolem*>(boss.get()))
+            golem->update(deltaTime, player->getX(), player->getY());
+        else
+            boss->update(deltaTime);
 
-        SDL_Rect pb = player->getHitbox();
-        float dmgToPlayer = boss->checkPlayerDamage(pb, deltaTime);
-        if (dmgToPlayer > 0.0f) {
-            player->takeDamage(dmgToPlayer);
-            playerTookDamage = true;
+        SDL_Rect pb       = player->getHitbox();
+        SDL_Rect bossHitbox = {
+            (int)(boss->getX() - 50), (int)(boss->getY() - 50), 100, 100
+        };
+
+        // Урон по игроку от босса
+        if (auto* golem = dynamic_cast<BossGolem*>(boss.get())) {
+            float dmgToPlayer = golem->checkPlayerDamage(pb, deltaTime);
+            if (dmgToPlayer > 0.0f) {
+                player->takeDamage(dmgToPlayer);
+                playerTookDamage = true;
+            }
         }
 
+        // Урон по боссу от игрока
         float dmgToBoss = player->consumeAttackDamage();
         if (dmgToBoss > 0.0f) {
-            SDL_Rect atk  = player->getAttackHitbox();
-            SDL_Rect bhb  = boss->getHitbox();
-            if (rectsOverlap(atk, bhb)) boss->takeDamage(dmgToBoss);
+            SDL_Rect atk = player->getAttackHitbox();
+            if (auto* golem = dynamic_cast<BossGolem*>(boss.get())) {
+                if (rectsOverlap(atk, golem->getHitbox()))
+                    golem->takeDamage(dmgToBoss);
+            }
         }
     }
 
-    for (auto& proj : player->getMagicProjectiles()) {
-        if (!proj.active) continue;
-        SDL_Rect projBox = {
-            (int)(proj.x - MagicProjectile::SIZE / 2),
-            (int)(proj.y - MagicProjectile::SIZE / 2),
-            (int)MagicProjectile::SIZE,
-            (int)MagicProjectile::SIZE
-        };
-        if (rectsOverlap(projBox, boss->getHitbox())) {
-            boss->takeDamage(MagicProjectile::DAMAGE);
-            proj.active = false;
+    // Магические снаряды
+    if (player && boss) {
+        for (auto& proj : player->getMagicProjectiles()) {
+            if (!proj.active) continue;
+            SDL_Rect projBox = {
+                (int)(proj.x - MagicProjectile::SIZE / 2),
+                (int)(proj.y - MagicProjectile::SIZE / 2),
+                (int)MagicProjectile::SIZE,
+                (int)MagicProjectile::SIZE
+            };
+            SDL_Rect bossHb = {
+                (int)(boss->getX() - 50), (int)(boss->getY() - 50), 100, 100
+            };
+            if (rectsOverlap(projBox, bossHb)) {
+                boss->takeDamage(MagicProjectile::DAMAGE);
+                proj.active = false;
+            }
         }
     }
 
-    if (boss && !boss->isAlive() &&
-        boss->getPhase() == BossPhase::PHASE_2 && !bossDefeated) {
-        bossDefeated = true;
-        calculateAndSaveStars();
-        resultState = ResultState::VICTORY;
+    // Победа — проверяем через BossGolem (у него две фазы)
+    if (boss && !boss->isAlive() && !bossDefeated) {
+        bool finalDead = true;
+        if (auto* golem = dynamic_cast<BossGolem*>(boss.get()))
+            finalDead = (golem->getPhase() == BossPhase::PHASE_2);
+
+        if (finalDead) {
+            bossDefeated = true;
+            calculateAndSaveStars();
+            resultState = ResultState::VICTORY;
+        }
     }
 
+    // Поражение
     if (player && !player->isAlive() && resultState == ResultState::PLAYING) {
         if (livesLeft == -1) {
             respawnPlayer();
@@ -214,7 +241,8 @@ void GameScene::respawnPlayer() {
     auto [px, py] = getPlayerSpawnPos();
     player = std::make_unique<Player>(px, py);
     // Сохраняем флаг хитбоксов при респавне
-    if (boss) player->showHitboxes = boss->showHitboxes;
+    if (auto* golem = dynamic_cast<BossGolem*>(boss.get()))
+        player->showHitboxes = golem->showHitboxes;
     playerTookDamage = true;
 }
 
@@ -241,7 +269,8 @@ void GameScene::render(SDL_Renderer* renderer) {
     SDL_Rect bg = {0, 0, Config::getWindowWidth(), Config::getWindowHeight()};
     SDL_RenderFillRect(renderer, &bg);
 
-    if (currentLevel == 0) drawLevel1Map(renderer);
+    // Рисуем карту текущего уровня через интерфейс
+    if (level) level->drawMap(renderer);
 
     if (player) player->render(renderer);
     if (boss)   boss->render(renderer);
@@ -387,7 +416,7 @@ void GameScene::drawHealthBars(SDL_Renderer* renderer) {
         drawText(renderer, Config::getFont(), manaBuf, 230, 103, {150, 200, 255, 255});
     }
 
-    // Подсказка хитбоксов
+    // Подсказки внизу экрана
     {
         bool hbOn = (player && player->showHitboxes);
         SDL_Color c = hbOn ? SDL_Color{100, 255, 100, 255} : SDL_Color{150, 150, 150, 180};
@@ -395,6 +424,8 @@ void GameScene::drawHealthBars(SDL_Renderer* renderer) {
                  hbOn ? "[H] Хитбоксы: ВКЛ" : "[H] Хитбоксы: ВЫКЛ",
                  0, Config::getWindowHeight() - 30, c, true);
     }
+    drawText(renderer, Config::getFont(), "ESC - пауза",
+             0, Config::getWindowHeight() - 55, {150, 150, 150, 180}, true);
 
     // Таймер по центру
     if (resultState == ResultState::PLAYING) {

@@ -77,6 +77,9 @@ add_executable(BossFight main.cpp
     assets/player/WALK.png
     assets/magic/01.png
     utils/animation.cpp
+    levels/ilevel.h
+    levels/ilevel.cpp
+    levels/level1.h
 
 )
 
