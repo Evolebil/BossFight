@@ -80,6 +80,8 @@ add_executable(BossFight main.cpp
     levels/ilevel.h
     levels/ilevel.cpp
     levels/level1.h
+    utils/camera.h
+    utils/camera.cpp
 
 )
 
