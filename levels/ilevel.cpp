@@ -6,7 +6,7 @@
  */
 #include "ilevel.h"
 #include "level1.h"
-// #include "level2.h"  // раскомментировать когда будет готов
+#include "level2.h"
 // #include "level3.h"
 
 // Глобальный указатель на текущий уровень — используется CollisionSystem

@@ -82,6 +82,8 @@ add_executable(BossFight main.cpp
     levels/level1.h
     utils/camera.h
     utils/camera.cpp
+    levels/level2.h
+    levels/level2.cpp
 
 )
 
