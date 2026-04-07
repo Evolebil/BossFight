@@ -158,12 +158,16 @@ static void generateRandomBg() {
 // ГЛАВНАЯ ФУНКЦИЯ ОТРИСОВКИ
 // ============================================================
 
-void drawLevel1Map(SDL_Renderer* renderer) {
+void drawLevel1Map(SDL_Renderer* renderer, int camX, int camY) {
     SDL_Texture* tileset = TextureManager::getTexture("assets/map1/map1.png");
     if (!tileset) {
         // Заглушка — тёмный прямоугольник
         int ox, oy;
         getMapOffset(ox, oy);
+
+        ox -= camX;
+        oy -= camY;
+
         SDL_SetRenderDrawColor(renderer, 40, 40, 50, 255);
         SDL_Rect fb = {ox, oy, LEVEL1_WIDTH * TILE_SIZE, LEVEL1_HEIGHT * TILE_SIZE};
         SDL_RenderFillRect(renderer, &fb);
@@ -174,6 +178,9 @@ void drawLevel1Map(SDL_Renderer* renderer) {
 
     int ox, oy;
     getMapOffset(ox, oy);
+
+    ox -= camX;
+    oy -= camY;
 
     // СЛОЙ 1: рандомный фон
     for (int row = 0; row < LEVEL1_HEIGHT; row++) {

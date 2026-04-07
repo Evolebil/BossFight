@@ -12,6 +12,8 @@
 #include "../config/config.h"
 #include "../characters/player.h"
 #include "../utils/sound_manager.h"
+#include "../utils/camera.h"
+#include "../levels/level1_assets.h"
 
 // Forward declarations
 class Player;
@@ -51,6 +53,7 @@ private:
     std::unique_ptr<Player>    player;
     std::unique_ptr<Character>  boss;
     std::unique_ptr<ILevel>     level;
+    std::unique_ptr<Camera> camera;
 
     int   currentLevel;
     int   livesLeft;

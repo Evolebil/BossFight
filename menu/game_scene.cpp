@@ -73,6 +73,12 @@ void GameScene::initPositions() {
     player = std::make_unique<Player>(px, py);
     boss   = level->createBoss(bx, by, diff.projectileSpeed);
     gameStarted = true;
+
+    // Создаём камеру — размер карты в пикселях
+    int mapW = LEVEL1_WIDTH  * TILE_SIZE;
+    int mapH = LEVEL1_HEIGHT * TILE_SIZE;
+    camera = std::make_unique<Camera>(mapW, mapH);
+    g_camera = camera.get();
 }
 
 // ============================================================
@@ -153,6 +159,10 @@ void GameScene::update(float deltaTime) {
     levelTimer += deltaTime;
 
     if (player) player->update(deltaTime);
+
+    // Обновляем камеру по позиции игрока
+    if (camera && player)
+        camera->update(player->getX(), player->getY());
 
     if (boss && player) {
         // Вызываем update через интерфейс Character
@@ -270,11 +280,19 @@ void GameScene::render(SDL_Renderer* renderer) {
     SDL_RenderFillRect(renderer, &bg);
 
     // Рисуем карту текущего уровня через интерфейс
-    if (level) level->drawMap(renderer);
+    if (level) {
+        int camX = camera ? (int)camera->getOffsetX() : 0;
+        int camY = camera ? (int)camera->getOffsetY() : 0;
+        level->drawMap(renderer, camX, camY);
+    }
+    int camOffX = camera ? (int)camera->getOffsetX() : 0;
+    int camOffY = camera ? (int)camera->getOffsetY() : 0;
 
-    if (player) player->render(renderer);
+    if (player) {
+        player->setCameraPos(camOffX, camOffY);
+        player->render(renderer);
+    }
     if (boss)   boss->render(renderer);
-
     drawHealthBars(renderer);
 
     // Пауза

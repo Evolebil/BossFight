@@ -954,6 +954,8 @@ void BossGolem::takeDamage(float damage) {
 // ============================================================
 
 void BossGolem::render(SDL_Renderer* renderer) {
+
+
     renderSpikes(renderer);
     renderProjectiles(renderer);
     renderLaser(renderer);
@@ -974,8 +976,10 @@ void BossGolem::render(SDL_Renderer* renderer) {
     // ДИНАМИЧЕСКИЕ размеры спрайта на основе текущего кадра
     int dstW = (int)(src.w * SPRITE_SCALE);
     int dstH = (int)(src.h * SPRITE_SCALE);
-    int dstX = (int)(x - dstW / 2);
-    int dstY = (int)(y - dstH / 2) + SPRITE_OFFSET_Y;
+    int cx = g_camera ? (int)g_camera->getOffsetX() : 0;
+    int cy = g_camera ? (int)g_camera->getOffsetY() : 0;
+    int dstX = (int)(x - dstW / 2) - cx;
+    int dstY = (int)(y - dstH / 2) + SPRITE_OFFSET_Y - cy;
 
     SDL_Rect dst = {dstX, dstY, dstW, dstH};
     SDL_RendererFlip flip = facingRight ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL;

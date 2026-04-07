@@ -395,13 +395,17 @@ float Player::consumeAttackDamage() {
 // ============================================================
 
 void Player::render(SDL_Renderer* renderer) {
+
+    const int cx = camX;
+    const int cy = camY;
+
     // Магические снаряды
     for (const auto& proj : magicProjectiles) {
         if (!proj.active) continue;
         constexpr int PROJ_RENDER = 32;
         SDL_Rect dst = {
-            (int)(proj.x - PROJ_RENDER / 2),
-            (int)(proj.y - PROJ_RENDER / 2),
+            (int)(proj.x - PROJ_RENDER / 2) - cx,
+            (int)(proj.y - PROJ_RENDER / 2) - cy,
             PROJ_RENDER, PROJ_RENDER
         };
         if (texMagic) {
@@ -438,8 +442,8 @@ void Player::render(SDL_Renderer* renderer) {
     }
 
     SDL_Rect dst = {
-        (int)(x - RENDER_W / 2),
-        (int)(y - RENDER_H / 2),
+        (int)(x - RENDER_W / 2) - cx,
+        (int)(y - RENDER_H / 2) - cy,
         (int)RENDER_W,
         (int)RENDER_H
     };

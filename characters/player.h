@@ -9,6 +9,7 @@
 #include "../config/config.h"
 #include "../utils/animation.h"
 #include "character.h"
+#include "../utils/camera.h"
 
 // --- Магический снаряд ---
 struct MagicProjectile {
@@ -89,6 +90,10 @@ private:
     Animation hurtAnim;
     Animation deathAnim;
 
+    // --- Камера ---        // ← ДОБАВИТЬ ЭТИ СТРОКИ
+    int camX = 0;            // ←
+    int camY = 0;            // ←
+
     // --- Константы ---
     static constexpr float JUMP_VELOCITY   = -600.0f;
     static constexpr float MOVE_SPEED      = 200.0f;
@@ -125,6 +130,7 @@ public:
     void update(float deltaTime) override;
     void render(SDL_Renderer* renderer) override;
     void takeDamage(float damage) override;
+    void setCameraPos(int cx, int cy) { camX = cx; camY = cy; }
 
     [[nodiscard]] SDL_Rect getAttackHitbox() const;
     [[nodiscard]] float    consumeAttackDamage();

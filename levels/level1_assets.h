@@ -186,7 +186,7 @@ const std::string LEVEL1_DECO[LEVEL1_HEIGHT][LEVEL1_WIDTH] = {
  * Карта центрирована на экране, за краями чёрный фон.
  * Рандомный фон генерируется один раз при первом вызове.
  */
-void drawLevel1Map(SDL_Renderer* renderer);
+void drawLevel1Map(SDL_Renderer* renderer, int camX = 0, int camY = 0);
 
 /**
  * @brief Проверяет твёрдость тайла в данной пиксельной позиции.

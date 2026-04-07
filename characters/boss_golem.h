@@ -11,6 +11,7 @@
 #include "../utils/texture_manager.h"
 #include "../config/config.h"
 #include "character.h"
+#include "../utils/camera.h"
 
 // --- Снаряд ---
 struct Projectile {

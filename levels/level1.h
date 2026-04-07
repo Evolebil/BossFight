@@ -11,8 +11,8 @@
 
 class Level1 : public ILevel {
 public:
-    void drawMap(SDL_Renderer* renderer) override {
-        drawLevel1Map(renderer);
+    void drawMap(SDL_Renderer* renderer, int camX = 0, int camY = 0) override {
+        drawLevel1Map(renderer, camX, camY);
     }
 
     bool isSolid(int pixelX, int pixelY) override {

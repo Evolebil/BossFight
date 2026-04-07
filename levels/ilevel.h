@@ -6,8 +6,9 @@
  */
 #pragma once
 #include "../config/common.h"
-#include "../characters/character.h"
 #include "../config/config.h"
+#include "../characters/character.h"
+
 /**
  * @class ILevel
  * @brief Интерфейс уровня — GameScene работает только через него.
@@ -22,7 +23,7 @@ public:
     virtual ~ILevel() = default;
 
     // --- Карта ---
-    virtual void drawMap(SDL_Renderer* renderer) = 0;
+    virtual void drawMap(SDL_Renderer* renderer, int camX = 0, int camY = 0) = 0;
     virtual bool isSolid(int pixelX, int pixelY) = 0;
     virtual bool isPlatform(int pixelX, int pixelY) = 0;
     virtual void getMapOffset(int& outX, int& outY) = 0;

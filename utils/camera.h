@@ -27,3 +27,6 @@ public:
     [[nodiscard]] float getOffsetX() const { return offsetX; }
     [[nodiscard]] float getOffsetY() const { return offsetY; }
 };
+
+// Глобальная камера — читается в render() персонажей
+extern Camera* g_camera;

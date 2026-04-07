@@ -7,6 +7,8 @@
 #include "camera.h"
 #include "../config/config.h"
 
+Camera* g_camera = nullptr;
+
 Camera::Camera(int mapWidthPx, int mapHeightPx)
     : offsetX(0.0f), offsetY(0.0f),
     mapWidth(mapWidthPx), mapHeight(mapHeightPx) {
@@ -37,6 +39,9 @@ void Camera::update(float playerX, float playerY) {
     if (screenY > zoneBottom) offsetY += (screenY - zoneBottom);
 
     // Clamp — камера не выходит за границы карты
-    offsetX = std::clamp(offsetX, 0.0f, (float)(mapWidth  - viewWidth));
-    offsetY = std::clamp(offsetY, 0.0f, (float)(mapHeight - viewHeight));
+    // Если карта меньше экрана — камера не двигается по этой оси
+    float maxOffsetX = std::max(0.0f, (float)(mapWidth  - viewWidth));
+    float maxOffsetY = std::max(0.0f, (float)(mapHeight - viewHeight));
+    offsetX = std::clamp(offsetX, 0.0f, maxOffsetX);
+    offsetY = std::clamp(offsetY, 0.0f, maxOffsetY);
 }
