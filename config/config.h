@@ -17,6 +17,10 @@ private:
     static float musicVolume;
     static float sensitivity;
 
+    static bool  isFullscreen;
+    static float scaleX;
+    static float scaleY;
+
     static int currentDifficulty;
     static int levelStars[3];
 
@@ -41,6 +45,13 @@ public:
     static void setSoundVolume(float val);
     static void setMusicVolume(float val);
     static void setSensitivity(float val);
+
+    // --- Fullscreen ---
+    static void toggleFullscreen(SDL_Window* window);
+    static void updateScale(SDL_Window* window);
+    static bool getIsFullscreen() { return isFullscreen; }
+    static float getScaleX()      { return scaleX; }
+    static float getScaleY()      { return scaleY; }
 
     static int getCurrentDifficulty()      { return currentDifficulty; }
     static int getLevelStars(int level)    { return levelStars[level]; }

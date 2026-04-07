@@ -15,6 +15,10 @@ float Config::soundVolume = 0.5f;
 float Config::musicVolume = 0.5f;
 float Config::sensitivity = 1.0f;
 
+bool  Config::isFullscreen = false;
+float Config::scaleX       = 1.0f;
+float Config::scaleY       = 1.0f;
+
 int Config::currentDifficulty = 2;
 int Config::levelStars[3]     = {0, 0, 0};
 int Config::selectedLevel     = 0;
@@ -95,3 +99,17 @@ void Config::setSelectedLevel(int level) {
 }
 
 int Config::getSelectedLevel() { return selectedLevel; }
+
+void Config::toggleFullscreen(SDL_Window* window) {
+    isFullscreen = !isFullscreen;
+    SDL_SetWindowFullscreen(window,
+                            isFullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+    updateScale(window);
+}
+
+void Config::updateScale(SDL_Window* window) {
+    int realW, realH;
+    SDL_GetWindowSize(window, &realW, &realH);
+    scaleX = (float)realW  / (float)windowWidth;
+    scaleY = (float)realH / (float)windowHeight;
+}

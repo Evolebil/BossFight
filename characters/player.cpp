@@ -135,7 +135,15 @@ void Player::processInput() {
         if (InputManager::isMousePressed(controls.magicMouseButton) &&
             mana >= MANA_COST_MAGIC) {
             wantsToCastMagic = true;
-            InputManager::getMousePos(mouseX, mouseY);
+
+            // Получаем реальные координаты мыши
+            int rawX, rawY;
+            InputManager::getMousePos(rawX, rawY);
+
+            // Переводим в виртуальные координаты 1280x720
+            // scaleX/Y = реальный экран / виртуальный
+            mouseX = (int)((float)rawX / Config::getScaleX());
+            mouseY = (int)((float)rawY / Config::getScaleY());
         }
     }
 

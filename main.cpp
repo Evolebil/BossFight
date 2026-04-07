@@ -73,6 +73,11 @@ int main(int /*argc*/, char* /*argv*/[]) {
         return 1;
     }
 
+    // Виртуальное разрешение — SDL сам масштабирует на реальный экран
+    SDL_RenderSetLogicalSize(renderer,
+                             Config::getWindowWidth(),
+                             Config::getWindowHeight());
+
     // === ЗВУК ===
     // unique_ptr — автоматически удалится при выходе из main
     auto soundMgrPtr = std::make_unique<SoundManager>();
@@ -114,6 +119,11 @@ int main(int /*argc*/, char* /*argv*/[]) {
         // === СОБЫТИЯ ===
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) running = false;
+
+            if (event.type == SDL_KEYDOWN &&
+                event.key.keysym.scancode == SDL_SCANCODE_F11) {
+                Config::toggleFullscreen(window);
+            }
 
             if (event.type == SDL_MOUSEMOTION) {
                 mouseX = event.motion.x;
