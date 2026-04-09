@@ -6,6 +6,9 @@
  */
 #pragma once
 #include "../config/common.h"
+#include "../characters/boss_golem.h"
+#include "../levels/level1_assets.h"
+#include "../characters/player.h"
 
 class Camera {
 private:
@@ -19,6 +22,7 @@ public:
 
     // Обновляет позицию камеры по позиции игрока
     void update(float playerX, float playerY);
+    void snapTo(float playerX, float playerY);
 
     // Перевод мировых координат в экранные
     [[nodiscard]] float worldToScreenX(float worldX) const { return worldX - offsetX; }

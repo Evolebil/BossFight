@@ -102,7 +102,7 @@ SDL_Rect getTileRect(int col, int row) {
 // РИСОВАНИЕ ОДНОГО ТАЙЛА
 // ============================================================
 
-static void drawTileByCode(SDL_Renderer* renderer,
+void drawTileByCode(SDL_Renderer* renderer,
                            SDL_Texture* tileset,
                            const std::string& code,
                            int x, int y)

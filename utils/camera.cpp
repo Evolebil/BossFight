@@ -45,3 +45,12 @@ void Camera::update(float playerX, float playerY) {
     offsetX = std::clamp(offsetX, 0.0f, maxOffsetX);
     offsetY = std::clamp(offsetY, 0.0f, maxOffsetY);
 }
+// После метода update() добавь:
+void Camera::snapTo(float playerX, float playerY) {
+    offsetX = playerX - viewWidth  * 0.5f;
+    offsetY = playerY - viewHeight * 0.5f;
+    float maxOffX = std::max(0.0f, (float)(mapWidth  - viewWidth));
+    float maxOffY = std::max(0.0f, (float)(mapHeight - viewHeight));
+    offsetX = std::clamp(offsetX, 0.0f, maxOffX);
+    offsetY = std::clamp(offsetY, 0.0f, maxOffY);
+}

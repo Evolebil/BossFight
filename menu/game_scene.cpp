@@ -75,10 +75,11 @@ void GameScene::initPositions() {
     gameStarted = true;
 
     // Создаём камеру — размер карты в пикселях
-    int mapW = LEVEL1_WIDTH  * TILE_SIZE;
-    int mapH = LEVEL1_HEIGHT * TILE_SIZE;
+    int mapW = level->getMapWidth();
+    int mapH = level->getMapHeight();
     camera = std::make_unique<Camera>(mapW, mapH);
     g_camera = camera.get();
+    g_camera->snapTo(px, py);  // ← добавить эту строку
 }
 
 // ============================================================
@@ -285,11 +286,8 @@ void GameScene::render(SDL_Renderer* renderer) {
         int camY = camera ? (int)camera->getOffsetY() : 0;
         level->drawMap(renderer, camX, camY);
     }
-    int camOffX = camera ? (int)camera->getOffsetX() : 0;
-    int camOffY = camera ? (int)camera->getOffsetY() : 0;
 
     if (player) {
-        player->setCameraPos(camOffX, camOffY);
         player->render(renderer);
     }
     if (boss)   boss->render(renderer);

@@ -38,6 +38,8 @@ public:
     // --- Мета ---
     virtual std::string getMusicName() = 0;
     virtual std::string getLevelName() = 0;
+    virtual int getMapWidth() const = 0;   // ширина карты в пикселях
+    virtual int getMapHeight() const = 0;  // высота карты в пикселях
 };
 
 /**

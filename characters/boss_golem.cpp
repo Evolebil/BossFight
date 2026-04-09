@@ -85,7 +85,7 @@ void BossGolem::loadAnimations() {
         animations[BossState::WALK].addFrame(i*100, 600, 100, 100, 0.08f);
 
     animations[BossState::ATTACK_MELEE] = Animation(false, false);
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < 7; i++)
         animations[BossState::ATTACK_MELEE].addFrame(i*100, 400, 100, 100, 0.1f);
 
     animations[BossState::ATTACK_RANGE] = Animation(false, false);
@@ -1045,11 +1045,9 @@ void BossGolem::renderProjectiles(SDL_Renderer* renderer) {
 
         double angle = std::atan2(proj.velY, proj.velX) * 180.0 / M_PI;
 
-        SDL_Rect dst = {
-            (int)(proj.x - SIZE / 2),
-            (int)(proj.y - SIZE / 2),
-            SIZE, SIZE
-        };
+        const int px = g_camera ? (int)g_camera->worldToScreenX(proj.x) : (int)proj.x;
+        const int py = g_camera ? (int)g_camera->worldToScreenY(proj.y) : (int)proj.y;
+        SDL_Rect dst = { px - SIZE/2, py - SIZE/2, SIZE, SIZE };
 
         if (proj.predictive)
             SDL_SetTextureColorMod(armTexture, 255, 180, 80);
@@ -1068,10 +1066,11 @@ void BossGolem::renderLaser(SDL_Renderer* renderer) {
 
     const int W      = Config::getWindowWidth();
     const int laserH = (int)laser.height;
-    const int laserX = laser.facingRight ? (int)laser.x : 0;
-    const int laserW = laser.facingRight ? W - (int)laser.x : (int)laser.x;
-    const int laserY = (int)(laser.y - laserH / 2);
-
+    const float screenLaserX = g_camera ? g_camera->worldToScreenX(laser.x) : laser.x;
+    const float screenLaserY = g_camera ? g_camera->worldToScreenY(laser.y) : laser.y;
+    const int laserX = laser.facingRight ? (int)screenLaserX : 0;
+    const int laserW = laser.facingRight ? W - (int)screenLaserX : (int)screenLaserX;
+    const int laserY = (int)(screenLaserY - laserH / 2);
     SDL_RendererFlip flip = laser.facingRight ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL;
 
     if (laserTexture) {

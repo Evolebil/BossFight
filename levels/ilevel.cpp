@@ -15,7 +15,7 @@ ILevel* g_currentLevel = nullptr;
 std::unique_ptr<ILevel> createLevel(int index) {
     switch (index) {
     case 0:  return std::make_unique<Level1>();
-    // case 1:  return std::make_unique<Level2>();
+    case 1:  return std::make_unique<Level2>();
     // case 2:  return std::make_unique<Level3>();
     default: return std::make_unique<Level1>();
     }

@@ -51,4 +51,6 @@ public:
 
     std::string getMusicName() override { return "level1_music"; }
     std::string getLevelName() override { return "Уровень 1: Голем"; }
+    int getMapWidth() const override { return LEVEL1_WIDTH * TILE_SIZE; }
+    int getMapHeight() const override { return LEVEL1_HEIGHT * TILE_SIZE; }
 };

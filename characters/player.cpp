@@ -396,8 +396,8 @@ float Player::consumeAttackDamage() {
 
 void Player::render(SDL_Renderer* renderer) {
 
-    const int cx = camX;
-    const int cy = camY;
+    const int cx = g_camera ? (int)g_camera->getOffsetX() : 0;
+    const int cy = g_camera ? (int)g_camera->getOffsetY() : 0;
 
     // Магические снаряды
     for (const auto& proj : magicProjectiles) {
@@ -464,8 +464,8 @@ void Player::render(SDL_Renderer* renderer) {
     constexpr int BAR_W   = 40;
     constexpr int BAR_H   = 5;
     constexpr int BAR_GAP = 3;
-    const int barX = (int)(x - BAR_W / 2);
-    const int barY = (int)(y - RENDER_H / 2) - 18;
+    const int barX = (g_camera ? (int)g_camera->worldToScreenX(x) : (int)x) - BAR_W / 2;
+    const int barY = (g_camera ? (int)g_camera->worldToScreenY(y) : (int)y) - (int)(RENDER_H / 2) - 18;
 
     if (dashCooldown > 0.0f) {
         float pct = dashCooldown / DASH_COOLDOWN_MAX;
@@ -498,37 +498,46 @@ void Player::render(SDL_Renderer* renderer) {
 void Player::renderHitboxes(SDL_Renderer* renderer) {
     if (!showHitboxes) return;
 
+    // Переводим мировые координаты в экранные
+    const int sx = g_camera ? (int)g_camera->worldToScreenX(x) : (int)x;
+    const int sy = g_camera ? (int)g_camera->worldToScreenY(y) : (int)y;
+
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-    // Границы СПРАЙТА (синий прямоугольник)
+    // Спрайт (синий)
     SDL_SetRenderDrawColor(renderer, 0, 100, 255, 255);
     SDL_Rect spriteBounds = {
-        (int)(x - RENDER_W / 2),
-        (int)(y - RENDER_H / 2),
-        (int)RENDER_W,
-        (int)RENDER_H
+        sx - (int)(RENDER_W / 2),
+        sy - (int)(RENDER_H / 2),
+        (int)RENDER_W, (int)RENDER_H
     };
     SDL_RenderDrawRect(renderer, &spriteBounds);
 
-    // ХИТБОКС физический (зелёный прямоугольник) — меньше спрайта
+    // Физический хитбокс (зелёный)
     SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
-    SDL_Rect hitbox = getHitbox();
+    SDL_Rect hitbox = {
+        sx - (int)(width  / 2),
+        sy - (int)(height / 2),
+        (int)width, (int)height
+    };
     SDL_RenderDrawRect(renderer, &hitbox);
 
     // Центр (белая точка)
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    SDL_RenderDrawPoint(renderer, (int)x, (int)y);
+    SDL_RenderDrawPoint(renderer, sx, sy);
 
     // Направление (жёлтая линия)
     SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
-    int lineLen = 40;
-    int endX = facingRight ? (int)(x + lineLen) : (int)(x - lineLen);
-    SDL_RenderDrawLine(renderer, (int)x, (int)y, endX, (int)y);
+    int endX = facingRight ? sx + 40 : sx - 40;
+    SDL_RenderDrawLine(renderer, sx, sy, endX, sy);
 
-    // Ближняя атака (красный хитбокс)
+    // Ближняя атака (красный)
     if (isAttacking && attackHitActive) {
         SDL_Rect attackBox = getAttackHitbox();
-        if (attackBox.w > 0 && attackBox.h > 0) {
+        if (attackBox.w > 0) {
+            // getAttackHitbox() считает от x,y — переводим в экранные
+            attackBox.x = g_camera ? (int)g_camera->worldToScreenX((float)attackBox.x) : attackBox.x;
+            attackBox.y = g_camera ? (int)g_camera->worldToScreenY((float)attackBox.y) : attackBox.y;
             SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
             SDL_RenderDrawRect(renderer, &attackBox);
         }
@@ -539,8 +548,8 @@ void Player::renderHitboxes(SDL_Renderer* renderer) {
         if (!proj.active) continue;
         constexpr int PROJ_SIZE = 32;
         SDL_Rect projBox = {
-            (int)(proj.x - PROJ_SIZE / 2),
-            (int)(proj.y - PROJ_SIZE / 2),
+            g_camera ? (int)g_camera->worldToScreenX(proj.x - PROJ_SIZE/2) : (int)(proj.x - PROJ_SIZE/2),
+            g_camera ? (int)g_camera->worldToScreenY(proj.y - PROJ_SIZE/2) : (int)(proj.y - PROJ_SIZE/2),
             PROJ_SIZE, PROJ_SIZE
         };
         SDL_SetRenderDrawColor(renderer, 200, 0, 255, 255);
