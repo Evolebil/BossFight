@@ -57,6 +57,8 @@ BossGolem::BossGolem(float spawnX, float spawnY, float attackSpeedMult)
     laserTexture(nullptr),
     laser({false, 0, 0, true, DAMAGE_LASER_SEC, 80.0f}),
     laserFullyCharged(false),
+    mapW(Config::getWindowWidth()),
+    mapH(Config::getWindowHeight()),
     rng(std::random_device{}()) {
 
     cellSize  = Config::getWindowWidth() / 40;
@@ -256,9 +258,13 @@ void BossGolem::update(float deltaTime, float playerX, float playerY) {
         proj.x += proj.velX * deltaTime;
         proj.y += proj.velY * deltaTime;
 
-        const int W = Config::getWindowWidth();
-        const int H = Config::getWindowHeight();
-        if (proj.x < -100 || proj.x > W + 100 || proj.y > H + 100)
+        // Граница по размеру карты (мировые координаты) + запас PROJ_MARGIN.
+        // mapW/mapH устанавливается из GameScene через setMapSize().
+        // Без этого снаряды убиваются мгновенно на картах больше экрана.
+        if (proj.x < -PROJ_MARGIN ||
+            proj.x >  mapW + PROJ_MARGIN ||
+            proj.y < -PROJ_MARGIN ||
+            proj.y >  mapH + PROJ_MARGIN)
             proj.active = false;
     }
 
@@ -999,6 +1005,10 @@ void BossGolem::render(SDL_Renderer* renderer) {
 void BossGolem::renderSpikes(SDL_Renderer* renderer) {
     if (groundSpikes.empty()) return;
 
+    // Получаем смещение камеры
+    const int cx = g_camera ? (int)g_camera->getOffsetX() : 0;
+    const int cy = g_camera ? (int)g_camera->getOffsetY() : 0;
+
     SDL_Texture* tileset = TextureManager::getTexture("assets/map1/map1.png");
     SDL_Rect src = {1 * TILE_SOURCE, 14 * TILE_SOURCE, TILE_SOURCE, TILE_SOURCE};
 
@@ -1009,11 +1019,12 @@ void BossGolem::renderSpikes(SDL_Renderer* renderer) {
         int       numTiles = spike.rect.w / tileW + 1;
 
         for (int i = 0; i < numTiles; i++) {
-            int dstX  = spike.rect.x + i * tileW;
-            int drawW = std::min(tileW, spike.rect.x + spike.rect.w - dstX);
+            // spike.rect хранит мировые координаты → вычитаем камеру
+            int dstX  = spike.rect.x + i * tileW - cx;
+            int drawW = std::min(tileW, spike.rect.x + spike.rect.w - (spike.rect.x + i * tileW));
             if (drawW <= 0) break;
 
-            SDL_Rect dst = {dstX, spike.rect.y, drawW, tileW};
+            SDL_Rect dst = {dstX, spike.rect.y - cy, drawW, tileW};
 
             if (tileset) {
                 if (spike.lifetime < 0.3f) {
@@ -1066,20 +1077,25 @@ void BossGolem::renderLaser(SDL_Renderer* renderer) {
 
     const int W      = Config::getWindowWidth();
     const int laserH = (int)laser.height;
+
+    // Переводим мировые координаты лазера в экранные
     const float screenLaserX = g_camera ? g_camera->worldToScreenX(laser.x) : laser.x;
     const float screenLaserY = g_camera ? g_camera->worldToScreenY(laser.y) : laser.y;
+
     const int laserX = laser.facingRight ? (int)screenLaserX : 0;
     const int laserW = laser.facingRight ? W - (int)screenLaserX : (int)screenLaserX;
     const int laserY = (int)(screenLaserY - laserH / 2);
+
     SDL_RendererFlip flip = laser.facingRight ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL;
 
     if (laserTexture) {
         if (!laserFullyCharged) {
             SDL_Rect src = laserChargeAnim.getCurrentFrame();
             constexpr int CHARGE_SIZE = 96;
+            // ИСПРАВЛЕНО: зарядка тоже использует экранные координаты
             SDL_Rect dst = {
-                (int)laser.x - CHARGE_SIZE / 2,
-                (int)laser.y - CHARGE_SIZE / 2,
+                (int)screenLaserX - CHARGE_SIZE / 2,
+                (int)screenLaserY - CHARGE_SIZE / 2,
                 CHARGE_SIZE, CHARGE_SIZE
             };
             SDL_RenderCopyEx(renderer, laserTexture, &src, &dst,
@@ -1134,19 +1150,26 @@ SDL_Rect BossGolem::getCurrentFrame() const {
 // ============================================================
 
 void BossGolem::renderHitboxes(SDL_Renderer* renderer, int spriteX, int spriteY, int spriteW, int spriteH) {
+    if (!showHitboxes) return;  // ВАЖНО: рисуем только если включён режим отладки
+
+    // Получаем смещение камеры для перевода мировых координат в экранные
+    const int cx = g_camera ? (int)g_camera->getOffsetX() : 0;
+    const int cy = g_camera ? (int)g_camera->getOffsetY() : 0;
+
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-    // Границы СПРАЙТА (синий прямоугольник) - динамические
+    // Границы СПРАЙТА (синий) — spriteX/Y уже экранные (вычислены в render())
     SDL_SetRenderDrawColor(renderer, 0, 100, 255, 255);
     SDL_Rect spriteBounds = {spriteX, spriteY, spriteW, spriteH};
     SDL_RenderDrawRect(renderer, &spriteBounds);
 
-    // ХИТБОКС физический (зелёный прямоугольник) - постоянный
+    // ФИЗИЧЕСКИЙ ХИТБОКС (зелёный) — getHitbox() возвращает мировые → вычитаем камеру
     SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
     SDL_Rect hitbox = getHitbox();
-    SDL_RenderDrawRect(renderer, &hitbox);
+    SDL_Rect hitboxScreen = {hitbox.x - cx, hitbox.y - cy, hitbox.w, hitbox.h};
+    SDL_RenderDrawRect(renderer, &hitboxScreen);
 
-    // Хитбокс ближней атаки (красный)
+    // Хитбокс ближней атаки (красный) — x, y мировые → вычитаем камеру
     if (currentState == BossState::ATTACK_MELEE && !meleeHitDealt) {
         int meleeW = (int)(cellSize * 1.0f);
         int meleeH = (int)(height * 0.85f);
@@ -1155,7 +1178,7 @@ void BossGolem::renderHitboxes(SDL_Renderer* renderer, int spriteX, int spriteY,
                          : (int)(x - width * 0.1f - meleeW);
         int meleeY = (int)(y - meleeH / 2);
 
-        SDL_Rect meleeBox = {meleeX, meleeY, meleeW, meleeH};
+        SDL_Rect meleeBox = {meleeX - cx, meleeY - cy, meleeW, meleeH};
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
         SDL_RenderDrawRect(renderer, &meleeBox);
     }
@@ -1169,31 +1192,34 @@ void BossGolem::renderHitboxes(SDL_Renderer* renderer, int spriteX, int spriteY,
         int hx = facingRight ? (int)(x + width * 0.1f)
                              : (int)(x - width * 0.1f - DASH_HIT_W);
         int hy = (int)(y - DASH_HIT_H / 2);
-        SDL_Rect dashBox = {hx, hy, DASH_HIT_W, DASH_HIT_H};
+        SDL_Rect dashBox = {hx - cx, hy - cy, DASH_HIT_W, DASH_HIT_H};
         SDL_SetRenderDrawColor(renderer, 255, 150, 0, 255);
         SDL_RenderDrawRect(renderer, &dashBox);
     }
 
-    // Лазер (жёлтый)
+    // Лазер (жёлтый) — используем те же экранные координаты что и renderLaser()
     if (laser.active && laserFullyCharged) {
         const int W = Config::getWindowWidth();
-        int laserH  = (int)laser.height;
-        int laserX  = laser.facingRight ? (int)laser.x : 0;
-        int laserW  = laser.facingRight ? W - (int)laser.x : (int)laser.x;
-        int laserY  = (int)(laser.y - laserH / 2);
+        const float screenLaserX = g_camera ? g_camera->worldToScreenX(laser.x) : laser.x;
+        const float screenLaserY = g_camera ? g_camera->worldToScreenY(laser.y) : laser.y;
+
+        int laserH = (int)laser.height;
+        int laserX = laser.facingRight ? (int)screenLaserX : 0;
+        int laserW = laser.facingRight ? W - (int)screenLaserX : (int)screenLaserX;
+        int laserY = (int)(screenLaserY - laserH / 2);
 
         SDL_Rect laserBox = {laserX, laserY, laserW, laserH};
         SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
         SDL_RenderDrawRect(renderer, &laserBox);
     }
 
-    // Центр (белая точка)
+    // Центр босса (белая точка) — мировые → экранные
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    SDL_RenderDrawPoint(renderer, (int)x, (int)y);
+    SDL_RenderDrawPoint(renderer, (int)x - cx, (int)y - cy);
 
     // Направление (фиолетовая линия)
     SDL_SetRenderDrawColor(renderer, 200, 0, 255, 255);
-    int lineLen = 40;
+    constexpr int lineLen = 40;
     int endX = facingRight ? (int)(x + lineLen) : (int)(x - lineLen);
-    SDL_RenderDrawLine(renderer, (int)x, (int)y, endX, (int)y);
+    SDL_RenderDrawLine(renderer, (int)x - cx, (int)y - cy, endX - cx, (int)y - cy);
 }

@@ -59,7 +59,7 @@ GameScene::GameScene()
 // ============================================================
 
 void GameScene::initPositions() {
-    // Создаём уровень по индексу и выставляем глобальный указатель
+    // Создаём уровень по индексу и выставляем глобальный указатель,
     // чтобы CollisionSystem знал с каким уровнем работать
     level          = createLevel(currentLevel);
     g_currentLevel = level.get();
@@ -70,16 +70,27 @@ void GameScene::initPositions() {
     const Config::Difficulty& diff = Config::getDifficulties()[Config::getCurrentDifficulty()];
     livesLeft = diff.respawns;
 
+    // Получаем размер карты в пикселях — нужен для границ снарядов и камеры
+    const int mapW = level->getMapWidth();
+    const int mapH = level->getMapHeight();
+
     player = std::make_unique<Player>(px, py);
-    boss   = level->createBoss(bx, by, diff.projectileSpeed);
+    // Передаём размер карты игроку — иначе снаряды магии убиваются
+    // мгновенно на картах больше экрана (проверка границ по мировым координатам)
+    player->setMapSize(mapW, mapH);
+
+    boss = level->createBoss(bx, by, diff.projectileSpeed);
+    // Передаём размер карты боссу — та же причина что и для игрока
+    if (auto* golem = dynamic_cast<BossGolem*>(boss.get()))
+        golem->setMapSize(mapW, mapH);
+
     gameStarted = true;
 
-    // Создаём камеру — размер карты в пикселях
-    int mapW = level->getMapWidth();
-    int mapH = level->getMapHeight();
-    camera = std::make_unique<Camera>(mapW, mapH);
+    // Создаём камеру по размеру карты и сразу центрируем на игроке,
+    // чтобы не было телепорта камеры в первый кадр
+    camera   = std::make_unique<Camera>(mapW, mapH);
     g_camera = camera.get();
-    g_camera->snapTo(px, py);  // ← добавить эту строку
+    g_camera->snapTo(px, py);
 }
 
 // ============================================================

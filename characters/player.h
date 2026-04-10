@@ -13,7 +13,7 @@
 
 // --- Магический снаряд ---
 struct MagicProjectile {
-    float x, y;
+    float x, y;       // мировые координаты
     float velX, velY;
     bool  active;
 
@@ -52,7 +52,7 @@ private:
     // --- Магические снаряды ---
     std::vector<MagicProjectile> magicProjectiles;
     bool wantsToCastMagic;
-    int  mouseX, mouseY;
+    int  mouseX, mouseY;   // экранные координаты курсора (виртуальные 1280x720)
 
     // --- Флаги ввода ---
     bool wantsToJump;
@@ -64,6 +64,12 @@ private:
     float dashTimer;
     float dashCooldown;
     bool  wantsToDash;
+
+    // --- Размер карты (мировые координаты) ---
+    // Нужен для правильной проверки выхода снаряда за границы карты.
+    // Устанавливается из GameScene через setMapSize() после создания уровня.
+    int mapW;
+    int mapH;
 
     // --- Текстуры ---
     SDL_Texture* texIdle;
@@ -111,10 +117,13 @@ private:
     static constexpr float DASH_DURATION     = 0.22f;
     static constexpr float DASH_COOLDOWN_MAX = 2.0f;
 
-    static constexpr float MANA_MAX        = 100.0f;
-    static constexpr float MANA_REGEN      = 2.0f;
-    static constexpr float MANA_COST_MAGIC = 10.0f;
+    static constexpr float MANA_MAX         = 100.0f;
+    static constexpr float MANA_REGEN       = 2.0f;
+    static constexpr float MANA_COST_MAGIC  = 10.0f;
     static constexpr float MAGIC_SPEED_MULT = 1.5f;
+
+    // Запас за краем карты перед деактивацией снаряда (px)
+    static constexpr int PROJ_OUT_OF_BOUNDS_MARGIN = 200;
 
 public:
     // --- Debug ---
@@ -126,6 +135,9 @@ public:
     void update(float deltaTime) override;
     void render(SDL_Renderer* renderer) override;
     void takeDamage(float damage) override;
+
+    // Вызывать из GameScene сразу после создания уровня
+    void setMapSize(int w, int h) { mapW = w; mapH = h; }
 
     [[nodiscard]] SDL_Rect getAttackHitbox() const;
     [[nodiscard]] float    consumeAttackDamage();

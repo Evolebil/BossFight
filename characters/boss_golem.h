@@ -184,6 +184,14 @@ private:
     float laserTimer    = 0.0f;
     float laserDuration = 0.0f;
 
+    // --- Размер карты (мировые координаты) ---
+    // Устанавливается из GameScene через setMapSize() после создания уровня.
+    int mapW;
+    int mapH;
+
+    // Запас за краем карты перед деактивацией снаряда (px)
+    static constexpr int PROJ_MARGIN = 200;
+
     // --- RNG ---
     std::mt19937 rng;
 
@@ -198,6 +206,7 @@ public:
     void update(float deltaTime) override { (void)deltaTime; }
     void render(SDL_Renderer* renderer) override;
     void takeDamage(float damage) override;
+    void setMapSize(int w, int h) { mapW = w; mapH = h; }
 
     [[nodiscard]] float     getDefense() const { return defense; }
     [[nodiscard]] BossState getState()   const { return currentState; }
