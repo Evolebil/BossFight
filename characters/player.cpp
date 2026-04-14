@@ -9,58 +9,18 @@
 #include "../utils/input_manager.h"
 
 // ============================================================
-//  КОНСТРУКТОР
+// КОНСТРУКТОР — чистый, всё в .h
 // ============================================================
 
 Player::Player(float spawnX, float spawnY)
-    : Character(spawnX, spawnY, 35.0f, 40.0f, 100.0f),
-    isAttacking(false),
-    isCastingMagic(false),
-    isDefending(false),
-    isHurt(false),
-    isDead(false),
-    attackCooldown(ATTACK_COOLDOWN),
-    attackTimer(0.0f),
-    attackCombo(0),
-    attackHitActive(false),
-    attackHitTimer(0.0f),
-    attackDamage(0.0f),
-    defendCooldown(0.0f),
-    mana(MANA_MAX),
-    maxMana(MANA_MAX),
-    wantsToCastMagic(false),
-    mouseX(0),
-    mouseY(0),
-    wantsToJump(false),
-    wantsToAttack(false),
-    wantsToDefend(false),
-    isDashing(false),
-    dashTimer(0.0f),
-    dashCooldown(0.0f),
-    wantsToDash(false),
-    // По умолчанию — размер экрана. GameScene сразу перезапишет через setMapSize()
-    mapW(Config::getWindowWidth()),
-    mapH(Config::getWindowHeight()),
-    texIdle(nullptr), texRun(nullptr), texWalk(nullptr),
-    texJump(nullptr), texAttack1(nullptr), texAttack2(nullptr),
-    texAttack3(nullptr), texDefend(nullptr),
-    texHurt(nullptr), texDeath(nullptr), texMagic(nullptr),
-    idleAnim(true),
-    runAnim(true),
-    jumpAnim(false),
-    attack1Anim(false),
-    attack2Anim(false),
-    attack3Anim(false),
-    magicAnim(false),
-    defendAnim(true, true),
-    hurtAnim(false),
-    deathAnim(false)
+    : Character(spawnX, spawnY, HITBOX_W, HITBOX_H, BASE_HP)
+// ВСЁ остальное имеет дефолты в .h
 {
     loadAnimations();
 }
 
 // ============================================================
-//  ЗАГРУЗКА АНИМАЦИЙ
+// ЗАГРУЗКА АНИМАЦИЙ
 // ============================================================
 
 void Player::loadAnimations() {
@@ -108,7 +68,7 @@ void Player::loadAnimations() {
 }
 
 // ============================================================
-//  ВВОД
+// ВВОД
 // ============================================================
 
 void Player::processInput() {
@@ -139,11 +99,9 @@ void Player::processInput() {
             mana >= MANA_COST_MAGIC) {
             wantsToCastMagic = true;
 
-            // Получаем реальные координаты мыши
             int rawX, rawY;
             InputManager::getMousePos(rawX, rawY);
 
-            // Переводим в виртуальные координаты 1280x720
             mouseX = (int)((float)rawX / Config::getScaleX());
             mouseY = (int)((float)rawY / Config::getScaleY());
         }
@@ -160,7 +118,7 @@ void Player::processInput() {
 }
 
 // ============================================================
-//  ЗАПУСК БЛИЖНЕЙ АТАКИ
+// ЗАПУСК БЛИЖНЕЙ АТАКИ
 // ============================================================
 
 void Player::startAttack() {
@@ -171,22 +129,22 @@ void Player::startAttack() {
     if (attackCombo == 0) {
         attack1Anim.reset();
         attackDamage   = DAMAGE_ATTACK1;
-        attackHitTimer = 0.25f;
+        attackHitTimer = ATTACK1_HIT_DELAY;  // ← константа вместо 0.25f
     } else if (attackCombo == 1) {
         attack2Anim.reset();
         attackDamage   = DAMAGE_ATTACK2;
-        attackHitTimer = 0.25f;
+        attackHitTimer = ATTACK2_HIT_DELAY;  // ← константа вместо 0.25f
     } else {
         attack3Anim.reset();
         attackDamage   = DAMAGE_ATTACK3;
-        attackHitTimer = 0.30f;
+        attackHitTimer = ATTACK3_HIT_DELAY;  // ← константа вместо 0.30f
     }
 
     attackCombo = (attackCombo + 1) % 3;
 }
 
 // ============================================================
-//  ЗАПУСК МАГИЧЕСКОЙ АТАКИ
+// ЗАПУСК МАГИЧЕСКОЙ АТАКИ
 // ============================================================
 
 void Player::castMagic() {
@@ -196,9 +154,6 @@ void Player::castMagic() {
 
     magicAnim.reset();
 
-    // mouseX/Y — экранные координаты (виртуальные 1280x720).
-    // Игрок x/y — мировые. Переводим игрока в экранные через камеру,
-    // чтобы посчитать вектор к курсору в одном пространстве координат.
     const float screenX = g_camera ? g_camera->worldToScreenX(x) : x;
     const float screenY = g_camera ? g_camera->worldToScreenY(y) : y;
 
@@ -210,7 +165,6 @@ void Player::castMagic() {
     const float speed = MOVE_SPEED * MAGIC_SPEED_MULT;
 
     MagicProjectile proj;
-    // Снаряд спавнится и летит в мировых координатах
     proj.x      = x + (facingRight ? width / 2.0f : -width / 2.0f);
     proj.y      = y;
     proj.velX   = (dx / len) * speed;
@@ -219,9 +173,8 @@ void Player::castMagic() {
 
     magicProjectiles.push_back(proj);
 }
-
 // ============================================================
-//  UPDATE
+// UPDATE
 // ============================================================
 
 void Player::update(float deltaTime) {
@@ -304,9 +257,6 @@ void Player::update(float deltaTime) {
         proj.x += proj.velX * deltaTime;
         proj.y += proj.velY * deltaTime;
 
-        // Граница по размеру карты (мировые координаты) + запас.
-        // mapW/mapH устанавливается из GameScene через setMapSize().
-        // Без этого снаряды убиваются мгновенно на картах больше экрана.
         if (proj.x < -PROJ_OUT_OF_BOUNDS_MARGIN ||
             proj.x >  mapW + PROJ_OUT_OF_BOUNDS_MARGIN ||
             proj.y < -PROJ_OUT_OF_BOUNDS_MARGIN ||
@@ -351,7 +301,7 @@ void Player::update(float deltaTime) {
 }
 
 // ============================================================
-//  ПОЛУЧЕНИЕ УРОНА
+// ПОЛУЧЕНИЕ УРОНА
 // ============================================================
 
 void Player::takeDamage(float damage) {
@@ -383,19 +333,80 @@ void Player::takeDamage(float damage) {
 }
 
 // ============================================================
-//  ХИТБОКС БЛИЖНЕЙ АТАКИ
+// DEBUG ХИТБОКСЫ
+// ============================================================
+
+void Player::renderHitboxes(SDL_Renderer* renderer) {
+    if (!showHitboxes) return;
+
+    const int cx = g_camera ? (int)g_camera->getOffsetX() : 0;
+    const int cy = g_camera ? (int)g_camera->getOffsetY() : 0;
+
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
+    // Границы спрайта (синий)
+    SDL_SetRenderDrawColor(renderer, 0, 100, 255, 255);
+    SDL_Rect spriteBounds = {
+        (int)(x - RENDER_W / 2) - cx,
+        (int)(y - RENDER_H / 2) - cy,
+        (int)RENDER_W,
+        (int)RENDER_H
+    };
+    SDL_RenderDrawRect(renderer, &spriteBounds);
+
+    // Физический хитбокс (зелёный)
+    SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+    SDL_Rect hitbox = getHitbox();
+    SDL_Rect hitboxScreen = {hitbox.x - cx, hitbox.y - cy, hitbox.w, hitbox.h};
+    SDL_RenderDrawRect(renderer, &hitboxScreen);
+
+    // Центр (белая точка)
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderDrawPoint(renderer, (int)x - cx, (int)y - cy);
+
+    // Направление (жёлтая линия)
+    SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+    constexpr int lineLen = 40;
+    int endX = facingRight ? (int)(x + lineLen) : (int)(x - lineLen);
+    SDL_RenderDrawLine(renderer, (int)x - cx, (int)y - cy, endX - cx, (int)y - cy);
+
+    // Хитбокс атаки (красный)
+    if (isAttacking && attackHitActive) {
+        SDL_Rect attackBox = getAttackHitbox();
+        if (attackBox.w > 0 && attackBox.h > 0) {
+            SDL_Rect attackScreen = {attackBox.x - cx, attackBox.y - cy,
+                                     attackBox.w, attackBox.h};
+            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+            SDL_RenderDrawRect(renderer, &attackScreen);
+        }
+    }
+
+    // Снаряды (фиолетовый)
+    for (const auto& proj : magicProjectiles) {
+        if (!proj.active) continue;
+        SDL_Rect projBox = {
+            (int)(proj.x - PROJ_RENDER_SIZE / 2) - cx,
+            (int)(proj.y - PROJ_RENDER_SIZE / 2) - cy,
+            PROJ_RENDER_SIZE, PROJ_RENDER_SIZE
+        };
+        SDL_SetRenderDrawColor(renderer, 200, 0, 255, 255);
+        SDL_RenderDrawRect(renderer, &projBox);
+    }
+}
+
+// ============================================================
+// ХИТБОКС БЛИЖНЕЙ АТАКИ
 // ============================================================
 
 SDL_Rect Player::getAttackHitbox() const {
     if (!isAttacking) return {0, 0, 0, 0};
 
-    constexpr int HIT_W = 60;
-    constexpr int HIT_H = 50;
+    // ← было магическое 60 и 50
     int hx = facingRight
                  ? (int)(x + width / 2)
-                 : (int)(x - width / 2 - HIT_W);
+                 : (int)(x - width / 2 - ATTACK_HIT_W);
     int hy = (int)(y - height / 4);
-    return {hx, hy, HIT_W, HIT_H};
+    return {hx, hy, ATTACK_HIT_W, ATTACK_HIT_H};
 }
 
 float Player::consumeAttackDamage() {
@@ -405,22 +416,21 @@ float Player::consumeAttackDamage() {
 }
 
 // ============================================================
-//  ОТРИСОВКА
+// ОТРИСОВКА
 // ============================================================
 
 void Player::render(SDL_Renderer* renderer) {
-
     const int cx = g_camera ? (int)g_camera->getOffsetX() : 0;
     const int cy = g_camera ? (int)g_camera->getOffsetY() : 0;
 
-    // Магические снаряды — мировые координаты → вычитаем камеру для отрисовки
+    // Магические снаряды
     for (const auto& proj : magicProjectiles) {
         if (!proj.active) continue;
-        constexpr int PROJ_RENDER = 32;
         SDL_Rect dst = {
-            (int)(proj.x - PROJ_RENDER / 2) - cx,
-            (int)(proj.y - PROJ_RENDER / 2) - cy,
-            PROJ_RENDER, PROJ_RENDER
+            (int)(proj.x - PROJ_RENDER_SIZE / 2) - cx,  // ← константа вместо 32
+            (int)(proj.y - PROJ_RENDER_SIZE / 2) - cy,
+            PROJ_RENDER_SIZE,
+            PROJ_RENDER_SIZE
         };
         if (texMagic) {
             SDL_RenderCopy(renderer, texMagic, nullptr, &dst);
@@ -430,7 +440,6 @@ void Player::render(SDL_Renderer* renderer) {
         }
     }
 
-    // Определяем текущую текстуру и кадр анимации
     SDL_Texture* tex = nullptr;
     SDL_Rect     src = {0, 0, 0, 0};
 
@@ -455,7 +464,6 @@ void Player::render(SDL_Renderer* renderer) {
         tex = texIdle;   src = idleAnim.getCurrentFrame();
     }
 
-    // Позиция спрайта — мировые координаты → вычитаем камеру
     SDL_Rect dst = {
         (int)(x - RENDER_W / 2) - cx,
         (int)(y - RENDER_H / 2) - cy,
@@ -464,9 +472,7 @@ void Player::render(SDL_Renderer* renderer) {
     };
     SDL_RendererFlip flip = facingRight ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL;
 
-    if (showHitboxes) {
-        renderDebugBounds(renderer, RENDER_W, RENDER_H);
-    }
+    if (showHitboxes) renderDebugBounds(renderer, RENDER_W, RENDER_H);
 
     if (tex) {
         SDL_RenderCopyEx(renderer, tex, &src, &dst, 0, nullptr, flip);
@@ -475,94 +481,27 @@ void Player::render(SDL_Renderer* renderer) {
         SDL_RenderFillRect(renderer, &dst);
     }
 
-    // Кулдауны над игроком
-    constexpr int BAR_W   = 40;
-    constexpr int BAR_H   = 5;
-    constexpr int BAR_GAP = 3;
-    const int barX = (int)(x - BAR_W / 2) - cx;
-    const int barY = (int)(y - RENDER_H / 2) - cy - 18;
+    // Кулдаун бары над игроком
+    const int barX = (int)(x - HUD_BAR_W / 2) - cx;        // ← константы
+    const int barY = (int)(y - RENDER_H / 2) - cy - HUD_BAR_OFFSET_Y;
 
     if (dashCooldown > 0.0f) {
         float pct = dashCooldown / DASH_COOLDOWN_MAX;
         SDL_SetRenderDrawColor(renderer, 60, 20, 20, 200);
-        SDL_Rect bg = {barX, barY, BAR_W, BAR_H};
+        SDL_Rect bg   = {barX, barY, HUD_BAR_W, HUD_BAR_H};
         SDL_RenderFillRect(renderer, &bg);
         SDL_SetRenderDrawColor(renderer, 220, 50, 50, 255);
-        SDL_Rect fill = {barX, barY, (int)(BAR_W * pct), BAR_H};
+        SDL_Rect fill = {barX, barY, (int)(HUD_BAR_W * pct), HUD_BAR_H};
         SDL_RenderFillRect(renderer, &fill);
     }
 
     if (defendCooldown > 0.0f) {
         float pct = defendCooldown / DEFEND_COOLDOWN_MAX;
         SDL_SetRenderDrawColor(renderer, 60, 60, 20, 200);
-        SDL_Rect bg = {barX, barY + BAR_H + BAR_GAP, BAR_W, BAR_H};
+        SDL_Rect bg   = {barX, barY + HUD_BAR_H + HUD_BAR_GAP, HUD_BAR_W, HUD_BAR_H};
         SDL_RenderFillRect(renderer, &bg);
         SDL_SetRenderDrawColor(renderer, 220, 200, 50, 255);
-        SDL_Rect fill = {barX, barY + BAR_H + BAR_GAP, (int)(BAR_W * pct), BAR_H};
+        SDL_Rect fill = {barX, barY + HUD_BAR_H + HUD_BAR_GAP, (int)(HUD_BAR_W * pct), HUD_BAR_H};
         SDL_RenderFillRect(renderer, &fill);
-    }
-
-    renderHitboxes(renderer);
-}
-
-// ============================================================
-//  DEBUG: ХИТБОКСЫ ИГРОКА
-// ============================================================
-
-void Player::renderHitboxes(SDL_Renderer* renderer) {
-    if (!showHitboxes) return;
-
-    const int cx = g_camera ? (int)g_camera->getOffsetX() : 0;
-    const int cy = g_camera ? (int)g_camera->getOffsetY() : 0;
-
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-
-    // Границы спрайта (синий)
-    SDL_SetRenderDrawColor(renderer, 0, 100, 255, 255);
-    SDL_Rect spriteBounds = {
-        (int)(x - RENDER_W / 2) - cx,
-        (int)(y - RENDER_H / 2) - cy,
-        (int)RENDER_W,
-        (int)RENDER_H
-    };
-    SDL_RenderDrawRect(renderer, &spriteBounds);
-
-    // Физический хитбокс (зелёный) — меньше спрайта
-    SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
-    SDL_Rect hitbox = getHitbox();
-    SDL_Rect hitboxScreen = {hitbox.x - cx, hitbox.y - cy, hitbox.w, hitbox.h};
-    SDL_RenderDrawRect(renderer, &hitboxScreen);
-
-    // Центр (белая точка)
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    SDL_RenderDrawPoint(renderer, (int)x - cx, (int)y - cy);
-
-    // Направление (жёлтая линия)
-    SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
-    constexpr int lineLen = 40;
-    int endX = facingRight ? (int)(x + lineLen) : (int)(x - lineLen);
-    SDL_RenderDrawLine(renderer, (int)x - cx, (int)y - cy, endX - cx, (int)y - cy);
-
-    // Хитбокс ближней атаки (красный)
-    if (isAttacking && attackHitActive) {
-        SDL_Rect attackBox = getAttackHitbox();
-        if (attackBox.w > 0 && attackBox.h > 0) {
-            SDL_Rect attackScreen = {attackBox.x - cx, attackBox.y - cy, attackBox.w, attackBox.h};
-            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-            SDL_RenderDrawRect(renderer, &attackScreen);
-        }
-    }
-
-    // Магические снаряды (фиолетовый)
-    for (const auto& proj : magicProjectiles) {
-        if (!proj.active) continue;
-        constexpr int PROJ_SIZE = 32;
-        SDL_Rect projBox = {
-            (int)(proj.x - PROJ_SIZE / 2) - cx,
-            (int)(proj.y - PROJ_SIZE / 2) - cy,
-            PROJ_SIZE, PROJ_SIZE
-        };
-        SDL_SetRenderDrawColor(renderer, 200, 0, 255, 255);
-        SDL_RenderDrawRect(renderer, &projBox);
     }
 }

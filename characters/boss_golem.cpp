@@ -14,62 +14,19 @@
 // ============================================================
 
 BossGolem::BossGolem(float spawnX, float spawnY, float attackSpeedMult)
-    : Character(spawnX, spawnY, 100, 100, 1000),
-    currentState(BossState::IDLE),
-    previousState(BossState::IDLE),
-    phase(BossPhase::PHASE_1),
-    phaseTimer(0.0f),
-    phase2Triggered(false),
-    currentMeleePattern(MeleePattern::NONE),
-    meleePatternStep(0),
-    meleePatternTimer(0.0f),
-    meleeTeleportDone(false),
-    meleeAttackDirX(1.0f),
-    patternFacingRight(true),
-    isJumping(false),
-    jumpVelocityY(0.0f),
-    jumpLanded(false),
-    isTeleporting(false),
-    teleportTargetX(0.0f),
-    teleportTargetY(0.0f),
-    reviveAnim(false, false),
-    defense(0.0f),
-    moveSpeed(0),
-    cellSize(32),
-    attackCooldown(2.2f / attackSpeedMult),
-    attackTimer(0),
-    blockCooldown(BLOCK_COOLDOWN_P1),
-    blockTimer(0),
-    blockDuration(3.0f),
-    blockActiveTimer(0),
-    stateTimer(0),
-    lastStateChangeTime(0.0f),
-    meleeHitDealt(false),
-    meleeSecondHitDealt(false),
-    meleeHitTime(0.5f),
-    attackSpawned(false),
-    projectileQueue(0),
-    projectileQueueTimer(0.0f),
-    lastPlayerX(spawnX),
-    lastPlayerY(spawnY),
-    attackSpeedMult(attackSpeedMult),
-    armTexture(nullptr),
-    laserTexture(nullptr),
-    laser({false, 0, 0, true, DAMAGE_LASER_SEC, 80.0f}),
-    laserFullyCharged(false),
-    mapW(Config::getWindowWidth()),
-    mapH(Config::getWindowHeight()),
-    rng(std::random_device{}()) {
-
-    cellSize  = Config::getWindowWidth() / 40;
-    moveSpeed = 1.3f * cellSize;
-
+    : Character(spawnX, spawnY, HITBOX_W, HITBOX_H, BASE_HP)
+{
+    this->lastPlayerX     = spawnX;
+    this->lastPlayerY     = spawnY;
+    this->attackSpeedMult = attackSpeedMult;
+    this->attackCooldown  = ATTACK_COOLDOWN / attackSpeedMult;
+    moveSpeed = MOVE_SPEED_MULT * cellSize;
     loadAnimations();
     loadAttackTextures();
 }
 
 // ============================================================
-// ЗАГРУЗКА АНИМАЦИЙ - ИСПРАВЛЕННЫЕ РАЗМЕРЫ И ОТСТУПЫ
+// ЗАГРУЗКА АНИМАЦИЙ
 // ============================================================
 
 void BossGolem::loadAnimations() {
@@ -79,43 +36,43 @@ void BossGolem::loadAnimations() {
     if (!spritesheet) return;
 
     animations[BossState::IDLE] = Animation(true, false);
-    for (int i = 0; i < 4; i++)
-        animations[BossState::IDLE].addFrame(i*100, 0, 100, 100, 0.2f);
+    for (int i = 0; i < FRAMES_IDLE; i++)
+        animations[BossState::IDLE].addFrame(i * SPRITE_FRAME_W, ANIM_ROW_IDLE, SPRITE_FRAME_W, SPRITE_FRAME_H, ANIM_SPEED_IDLE);
 
     animations[BossState::WALK] = Animation(true, false);
-    for (int i = 0; i < 10; i++)
-        animations[BossState::WALK].addFrame(i*100, 600, 100, 100, 0.08f);
+    for (int i = 0; i < FRAMES_WALK; i++)
+        animations[BossState::WALK].addFrame(i * SPRITE_FRAME_W, ANIM_ROW_WALK, SPRITE_FRAME_W, SPRITE_FRAME_H, ANIM_SPEED_WALK);
 
     animations[BossState::ATTACK_MELEE] = Animation(false, false);
-    for (int i = 0; i < 7; i++)
-        animations[BossState::ATTACK_MELEE].addFrame(i*100, 400, 100, 100, 0.1f);
+    for (int i = 0; i < FRAMES_MELEE; i++)
+        animations[BossState::ATTACK_MELEE].addFrame(i * SPRITE_FRAME_W, ANIM_ROW_MELEE, SPRITE_FRAME_W, SPRITE_FRAME_H, ANIM_SPEED_MELEE);
 
     animations[BossState::ATTACK_RANGE] = Animation(false, false);
-    for (int i = 0; i < 7; i++)
-        animations[BossState::ATTACK_RANGE].addFrame(i*100, 200, 100, 100, 0.09f);
+    for (int i = 0; i < FRAMES_RANGE; i++)
+        animations[BossState::ATTACK_RANGE].addFrame(i * SPRITE_FRAME_W, ANIM_ROW_RANGE, SPRITE_FRAME_W, SPRITE_FRAME_H, ANIM_SPEED_RANGE);
 
     animations[BossState::LASER] = Animation(false, false);
-    for (int i = 0; i < 7; i++)
-        animations[BossState::LASER].addFrame(i*100, 500, 100, 100, 0.13f);
+    for (int i = 0; i < FRAMES_LASER; i++)
+        animations[BossState::LASER].addFrame(i * SPRITE_FRAME_W, ANIM_ROW_LASER, SPRITE_FRAME_W, SPRITE_FRAME_H, ANIM_SPEED_LASER);
 
     animations[BossState::BLOCK] = Animation(false, true);
-    for (int i = 0; i < 8; i++)
-        animations[BossState::BLOCK].addFrame(i*100, 300, 100, 100, 0.1f);
+    for (int i = 0; i < FRAMES_BLOCK; i++)
+        animations[BossState::BLOCK].addFrame(i * SPRITE_FRAME_W, ANIM_ROW_BLOCK, SPRITE_FRAME_W, SPRITE_FRAME_H, ANIM_SPEED_BLOCK);
 
     animations[BossState::HURT] = Animation(false, false);
-    for (int i = 0; i < 8; i++)
-        animations[BossState::HURT].addFrame(i*100, 100, 100, 100, 0.07f);
+    for (int i = 0; i < FRAMES_HURT; i++)
+        animations[BossState::HURT].addFrame(i * SPRITE_FRAME_W, ANIM_ROW_HURT, SPRITE_FRAME_W, SPRITE_FRAME_H, ANIM_SPEED_HURT);
 
     animations[BossState::DEATH] = Animation(false, false);
-    for (int i = 0; i < 10; i++)
-        animations[BossState::DEATH].addFrame(i*100, 700, 100, 100, 0.1f);
-    for (int i = 0; i < 4; i++)
-        animations[BossState::DEATH].addFrame(i*100, 800, 100, 100, 0.15f);
+    for (int i = 0; i < FRAMES_DEATH1; i++)
+        animations[BossState::DEATH].addFrame(i * SPRITE_FRAME_W, ANIM_ROW_DEATH1, SPRITE_FRAME_W, SPRITE_FRAME_H, ANIM_SPEED_DEATH1);
+    for (int i = 0; i < FRAMES_DEATH2; i++)
+        animations[BossState::DEATH].addFrame(i * SPRITE_FRAME_W, ANIM_ROW_DEATH2, SPRITE_FRAME_W, SPRITE_FRAME_H, ANIM_SPEED_DEATH2);
 
-    for (int i = 3; i >= 0; i--)
-        reviveAnim.addFrame(i*100, 800, 100, 100, 0.12f);
-    for (int i = 9; i >= 0; i--)
-        reviveAnim.addFrame(i*100, 700, 100, 100, 0.08f);
+    for (int i = FRAMES_REVIVE1 - 1; i >= 0; i--)
+        reviveAnim.addFrame(i * SPRITE_FRAME_W, ANIM_ROW_DEATH2, SPRITE_FRAME_W, SPRITE_FRAME_H, ANIM_SPEED_REVIVE1);
+    for (int i = FRAMES_REVIVE2 - 1; i >= 0; i--)
+        reviveAnim.addFrame(i * SPRITE_FRAME_W, ANIM_ROW_DEATH1, SPRITE_FRAME_W, SPRITE_FRAME_H, ANIM_SPEED_REVIVE2);
 }
 
 void BossGolem::loadAttackTextures() {
@@ -126,17 +83,17 @@ void BossGolem::loadAttackTextures() {
     if (!laserTexture) laserTexture = TextureManager::getTexture("Laser.png");
 
     projectileAnim = Animation(true, false);
-    for (int row = 0; row < 2; row++)
-        for (int col = 0; col < 3; col++)
-            projectileAnim.addFrame(col * 102, row * 102, 102, 102, 0.18f);
+    for (int row = 0; row < PROJ_FRAME_ROWS; row++)
+        for (int col = 0; col < PROJ_FRAME_COLS; col++)
+            projectileAnim.addFrame(col * PROJ_FRAME_W, row * PROJ_FRAME_H, PROJ_FRAME_W, PROJ_FRAME_H, PROJ_ANIM_SPEED);
 
     laserChargeAnim = Animation(false, false);
-    for (int i = 0; i < 8; i++)
-        laserChargeAnim.addFrame(0, i * 108, 308, 108, 0.07f);
+    for (int i = 0; i < LASER_CHARGE_FRAMES; i++)
+        laserChargeAnim.addFrame(0, i * LASER_FRAME_H, LASER_FRAME_W, LASER_FRAME_H, LASER_CHARGE_SPEED);
 
     laserBeamAnim = Animation(true, false);
-    for (int i = 0; i < 6; i++)
-        laserBeamAnim.addFrame(0, (8 + i) * 108, 308, 108, 0.08f);
+    for (int i = 0; i < LASER_BEAM_FRAMES; i++)
+        laserBeamAnim.addFrame(0, (LASER_BEAM_ROW_START + i) * LASER_FRAME_H, LASER_FRAME_W, LASER_FRAME_H, LASER_BEAM_SPEED);
 
     laserFullyCharged = false;
 }
@@ -197,7 +154,7 @@ void BossGolem::update(float deltaTime, float playerX, float playerY) {
 
         if (currentState == BossState::BLOCK) {
             blockActiveTimer += deltaTime;
-            hp = std::min(hp + 50.0f * deltaTime, maxHP);
+            hp = std::min(hp + BLOCK_HP_REGEN * deltaTime, maxHP);
 
             auto& blockAnim = animations[BossState::BLOCK];
             if (!blockAnim.isFinished()) {
@@ -212,7 +169,7 @@ void BossGolem::update(float deltaTime, float playerX, float playerY) {
         } else if (blockTimer >= BLOCK_COOLDOWN_P1 && hpPct < BLOCK_HP_THRESHOLD) {
             laser.active = false;
             forceState(BossState::BLOCK);
-            defense          = 0.5f;
+            defense          = BLOCK_DEFENSE_VALUE;
             blockActiveTimer = 0;
             blockTimer       = 0;
         }
@@ -224,18 +181,12 @@ void BossGolem::update(float deltaTime, float playerX, float playerY) {
             animations[BossState::IDLE].update(deltaTime);
     }
 
-    if (isJumping) {
-        updateJump(deltaTime);
-    }
+    if (isJumping) updateJump(deltaTime);
 
     updateSpikes(deltaTime);
-
-    // AI — TELEPORT_LASER полностью замораживает AI (обрабатывается внутри updateAI_Phase2)
     updateAI(deltaTime, playerX, playerY);
 
-    if (!isJumping) {
-        applyGravityAndCollisions(deltaTime);
-    }
+    if (!isJumping) applyGravityAndCollisions(deltaTime);
 
     // Снаряды
     for (auto& proj : projectiles) {
@@ -258,9 +209,6 @@ void BossGolem::update(float deltaTime, float playerX, float playerY) {
         proj.x += proj.velX * deltaTime;
         proj.y += proj.velY * deltaTime;
 
-        // Граница по размеру карты (мировые координаты) + запас PROJ_MARGIN.
-        // mapW/mapH устанавливается из GameScene через setMapSize().
-        // Без этого снаряды убиваются мгновенно на картах больше экрана.
         if (proj.x < -PROJ_MARGIN ||
             proj.x >  mapW + PROJ_MARGIN ||
             proj.y < -PROJ_MARGIN ||
@@ -274,7 +222,7 @@ void BossGolem::update(float deltaTime, float playerX, float playerY) {
             bool tracking = (phase == BossPhase::PHASE_1);
             spawnProjectile(lastPlayerX, lastPlayerY, tracking);
             projectileQueue--;
-            projectileQueueTimer = 0.35f;
+            projectileQueueTimer = PROJ_QUEUE_DELAY;
         }
     }
 
@@ -287,15 +235,11 @@ void BossGolem::update(float deltaTime, float playerX, float playerY) {
 
     if (laser.active) {
         laserTimer -= deltaTime;
-
-        if (laserTimer <= 0.0f) {
-            laser.active = false;
-        }
+        if (laserTimer <= 0.0f) laser.active = false;
 
         if (!laserFullyCharged) {
             laserChargeAnim.update(deltaTime);
-            if (laserChargeAnim.isFinished())
-                laserFullyCharged = true;
+            if (laserChargeAnim.isFinished()) laserFullyCharged = true;
         } else {
             laserBeamAnim.update(deltaTime);
         }
@@ -309,8 +253,7 @@ void BossGolem::update(float deltaTime, float playerX, float playerY) {
     if (!attackSpawned) {
         if (currentState == BossState::ATTACK_RANGE &&
             animations[BossState::ATTACK_RANGE].getCurrentFrameIndex() >= 3) {
-            spawnTwoProjectiles(playerX, playerY,
-                                phase == BossPhase::PHASE_1);
+            spawnTwoProjectiles(playerX, playerY, phase == BossPhase::PHASE_1);
             attackSpawned = true;
         }
         if (phase == BossPhase::PHASE_1 &&
@@ -331,9 +274,7 @@ void BossGolem::update(float deltaTime, float playerX, float playerY) {
         animations[currentState].isFinished()) {
 
         if (currentState == BossState::LASER) {
-            if (!laser.active) {
-                setState(BossState::IDLE);
-            }
+            if (!laser.active) setState(BossState::IDLE);
         } else {
             setState(BossState::IDLE);
         }
@@ -417,20 +358,9 @@ void BossGolem::updateAI_Phase1(float deltaTime, float playerX, float playerY) {
 
         const bool playerAbove = (dy < -cellSize * 0.5f);
 
-        if (playerAbove) {
-            setState(BossState::ATTACK_RANGE);
-            return;
-        }
-
-        if (distCells <= RANGE_MELEE) {
-            setState(BossState::ATTACK_MELEE);
-            return;
-        }
-
-        if (distCells <= RANGE_LASER && !playerAbove) {
-            setState(BossState::LASER);
-            return;
-        }
+        if (playerAbove) { setState(BossState::ATTACK_RANGE); return; }
+        if (distCells <= RANGE_MELEE) { setState(BossState::ATTACK_MELEE); return; }
+        if (distCells <= RANGE_LASER && !playerAbove) { setState(BossState::LASER); return; }
     }
 
     if (distCells > RANGE_MELEE + 0.5f) {
@@ -448,7 +378,6 @@ void BossGolem::updateAI_Phase1(float deltaTime, float playerX, float playerY) {
 }
 
 void BossGolem::updateAI_Phase2(float deltaTime, float playerX, float playerY) {
-    // TELEPORT_LASER: AI полностью заморожен — ни движения, ни атак, ни решений
     if (currentMeleePattern == MeleePattern::TELEPORT_LASER) {
         updateMeleePattern(deltaTime);
         return;
@@ -473,10 +402,7 @@ void BossGolem::updateAI_Phase2(float deltaTime, float playerX, float playerY) {
         meleeHitDealt       = false;
         meleeSecondHitDealt = false;
 
-        if (distCells <= RANGE_MELEE) {
-            startMeleePattern(playerX, playerY);
-            return;
-        }
+        if (distCells <= RANGE_MELEE) { startMeleePattern(playerX, playerY); return; }
         setState(BossState::ATTACK_RANGE);
         return;
     }
@@ -522,7 +448,6 @@ void BossGolem::startMeleePattern(float /*playerX*/, float /*playerY*/) {
 
 void BossGolem::updateMeleePattern(float deltaTime) {
     meleePatternTimer -= deltaTime;
-
     facingRight = patternFacingRight;
 
     if (currentMeleePattern != MeleePattern::JUMP_SLAM &&
@@ -538,9 +463,7 @@ void BossGolem::updateMeleePattern(float deltaTime) {
 
     if (isTeleporting) return;
 
-    // ----------------------------------------------------------------
-    // ПАТТЕРН 1: DASH_STRIKE
-    // ----------------------------------------------------------------
+    // --- ПАТТЕРН 1: DASH_STRIKE ---
     if (currentMeleePattern == MeleePattern::DASH_STRIKE) {
         if (meleePatternStep == 0) {
             meleePatternTimer = 0.2f;
@@ -590,9 +513,7 @@ void BossGolem::updateMeleePattern(float deltaTime) {
         }
     }
 
-    // ----------------------------------------------------------------
-    // ПАТТЕРН 2: JUMP_SLAM
-    // ----------------------------------------------------------------
+    // --- ПАТТЕРН 2: JUMP_SLAM ---
     else if (currentMeleePattern == MeleePattern::JUMP_SLAM) {
         if (meleePatternStep == 0) {
             meleeHitDealt = true;
@@ -622,12 +543,9 @@ void BossGolem::updateMeleePattern(float deltaTime) {
         }
     }
 
-    // ----------------------------------------------------------------
-    // ПАТТЕРН 3: TELEPORT_LASER
-    // ----------------------------------------------------------------
+    // --- ПАТТЕРН 3: TELEPORT_LASER ---
     else if (currentMeleePattern == MeleePattern::TELEPORT_LASER) {
         if (meleePatternStep == 0) {
-            // Ждём завершения анимации удара
             if (currentState == BossState::ATTACK_MELEE &&
                 !animations[BossState::ATTACK_MELEE].isFinished()) {
                 animations[BossState::ATTACK_MELEE].update(deltaTime);
@@ -638,7 +556,6 @@ void BossGolem::updateMeleePattern(float deltaTime) {
             startTeleport(targetX, y);
 
         } else if (meleePatternStep == 1 && !isTeleporting) {
-            // Телепорт завершён — стреляем лазером
             attackSpawned      = false;
             facingRight        = (meleeAttackDirX > 0);
             patternFacingRight = facingRight;
@@ -647,16 +564,13 @@ void BossGolem::updateMeleePattern(float deltaTime) {
             meleePatternStep = 2;
 
         } else if (meleePatternStep == 2) {
-            // Ждём конца лазера — AI заморожен всё это время
-            // Обновляем только анимацию персонажа
             if (animations.count(BossState::LASER))
                 animations[BossState::LASER].update(deltaTime);
 
             if (!laser.active) {
-                velocityX           = 0;          // сброс скорости
+                velocityX           = 0;
                 currentMeleePattern = MeleePattern::NONE;
                 setState(BossState::IDLE);
-                // AI разморозится автоматически — паттерн NONE, TELEPORT_LASER больше не активен
             }
         }
     }
@@ -667,8 +581,6 @@ void BossGolem::updateMeleePattern(float deltaTime) {
 // ============================================================
 
 void BossGolem::updateJump(float deltaTime) {
-    const float GRAVITY_JUMP = 1200.0f;
-
     jumpVelocityY += GRAVITY_JUMP * deltaTime;
     y += jumpVelocityY * deltaTime;
 
@@ -742,7 +654,6 @@ void BossGolem::startTeleport(float targetX, float targetY) {
     teleportTargetX = std::clamp(targetX,
                                  (float)(ox + cellSize * 2),
                                  (float)(ox + LEVEL1_WIDTH * TILE_SIZE - cellSize * 2));
-
     forceState(BossState::IDLE);
 }
 
@@ -750,7 +661,7 @@ void BossGolem::updateTeleport(float deltaTime) {
     float dx   = teleportTargetX - x;
     float step = TELEPORT_SPEED * deltaTime;
 
-    if (std::abs(dx) <= step) {  // не перелетит за этот кадр
+    if (std::abs(dx) <= step) {
         x             = teleportTargetX;
         isTeleporting = false;
     } else {
@@ -794,12 +705,12 @@ void BossGolem::spawnProjectile(float playerX, float playerY, bool predictive) {
 void BossGolem::spawnLaser(bool megaLaser) {
     laser.active       = true;
     laser.x            = x + (facingRight ? width/2.0f : -width/2.0f);
-    laser.y            = y + height * 0.3f;
+    laser.y            = y + height * LASER_BODY_Y_OFFSET;
     laser.facingRight  = facingRight;
     laser.damagePerSec = megaLaser ? DAMAGE_MEGA_LASER_SEC : DAMAGE_LASER_SEC;
-    laser.height       = megaLaser ? 120.0f : 80.0f;
+    laser.height       = megaLaser ? LASER_MEGA_HEIGHT : LASER_HEIGHT_DEFAULT;
 
-    laserDuration = megaLaser ? 3.5f : 2.0f;
+    laserDuration = megaLaser ? LASER_MEGA_DURATION : LASER_NORMAL_DURATION;
     laserTimer    = laserDuration;
 
     laserChargeAnim.reset();
@@ -837,11 +748,11 @@ float BossGolem::checkPlayerDamage(SDL_Rect playerBox, float deltaTime) {
         animations.count(BossState::ATTACK_MELEE) &&
         animations.at(BossState::ATTACK_MELEE).getCurrentFrameIndex() >= 6) {
 
-        int meleeW = (int)(cellSize * 1.0f);
-        int meleeH = (int)(height * 0.85f);
+        int meleeW = (int)(cellSize * MELEE_WIDTH_MULT);
+        int meleeH = (int)(height   * MELEE_HEIGHT_MULT);
         int meleeX = facingRight
-                         ? (int)(x + width * 0.1f)
-                         : (int)(x - width * 0.1f - meleeW);
+                         ? (int)(x + width * MELEE_OFFSET_X)
+                         : (int)(x - width * MELEE_OFFSET_X - meleeW);
         int meleeY = (int)(y - meleeH / 2);
 
         SDL_Rect meleeBox = {meleeX, meleeY, meleeW, meleeH};
@@ -853,11 +764,10 @@ float BossGolem::checkPlayerDamage(SDL_Rect playerBox, float deltaTime) {
 
     for (auto& proj : projectiles) {
         if (!proj.active) continue;
-        constexpr int PROJ_SIZE = 36;
         SDL_Rect projBox = {
-            (int)(proj.x - PROJ_SIZE/2),
-            (int)(proj.y - PROJ_SIZE/2),
-            PROJ_SIZE, PROJ_SIZE
+            (int)(proj.x - PROJ_HIT_SIZE/2),
+            (int)(proj.y - PROJ_HIT_SIZE/2),
+            PROJ_HIT_SIZE, PROJ_HIT_SIZE
         };
         if (rectsOverlap(playerBox, projBox)) {
             proj.active = false;
@@ -866,11 +776,11 @@ float BossGolem::checkPlayerDamage(SDL_Rect playerBox, float deltaTime) {
     }
 
     if (laser.active && laserFullyCharged) {
-        const int W = Config::getWindowWidth();
-        int laserH  = (int)laser.height;
-        int laserX  = laser.facingRight ? (int)laser.x : 0;
-        int laserW  = laser.facingRight ? W - (int)laser.x : (int)laser.x;
-        int laserY  = (int)(laser.y - laserH / 2);
+        const int W    = Config::getWindowWidth();
+        int laserH     = (int)laser.height;
+        int laserX     = laser.facingRight ? (int)laser.x : 0;
+        int laserW     = laser.facingRight ? W - (int)laser.x : (int)laser.x;
+        int laserY     = (int)(laser.y - laserH / 2);
 
         SDL_Rect laserBox = {laserX, laserY, laserW, laserH};
         if (rectsOverlap(playerBox, laserBox))
@@ -889,10 +799,8 @@ float BossGolem::checkPlayerDamage(SDL_Rect playerBox, float deltaTime) {
         (meleePatternStep == 2 || meleePatternStep == 4) &&
         !dashStrikeHitDealt) {
 
-        constexpr int DASH_HIT_W = 80;
-        constexpr int DASH_HIT_H = 80;
-        int hx = facingRight ? (int)(x + width * 0.1f)
-                             : (int)(x - width * 0.1f - DASH_HIT_W);
+        int hx = facingRight ? (int)(x + width * MELEE_OFFSET_X)
+                             : (int)(x - width * MELEE_OFFSET_X - DASH_HIT_W);
         int hy = (int)(y - DASH_HIT_H / 2);
         SDL_Rect dashBox = {hx, hy, DASH_HIT_W, DASH_HIT_H};
 
@@ -960,8 +868,6 @@ void BossGolem::takeDamage(float damage) {
 // ============================================================
 
 void BossGolem::render(SDL_Renderer* renderer) {
-
-
     renderSpikes(renderer);
     renderProjectiles(renderer);
     renderLaser(renderer);
@@ -970,24 +876,21 @@ void BossGolem::render(SDL_Renderer* renderer) {
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
         SDL_Rect rect = {(int)(x - width/2), (int)(y - height/2), (int)width, (int)height};
         SDL_RenderFillRect(renderer, &rect);
-        // Для случая без спрайта используем упрощенную версию
         renderHitboxes(renderer, (int)(x - width/2), (int)(y - height/2), (int)width, (int)height);
         return;
     }
 
-    // Получаем текущий кадр анимации
     SDL_Rect src = getCurrentFrame();
     if (src.w == 0 || src.h == 0) return;
 
-    // ДИНАМИЧЕСКИЕ размеры спрайта на основе текущего кадра
     int dstW = (int)(src.w * SPRITE_SCALE);
     int dstH = (int)(src.h * SPRITE_SCALE);
-    int cx = g_camera ? (int)g_camera->getOffsetX() : 0;
-    int cy = g_camera ? (int)g_camera->getOffsetY() : 0;
+    int cx   = g_camera ? (int)g_camera->getOffsetX() : 0;
+    int cy   = g_camera ? (int)g_camera->getOffsetY() : 0;
     int dstX = (int)(x - dstW / 2) - cx;
     int dstY = (int)(y - dstH / 2) + SPRITE_OFFSET_Y - cy;
 
-    SDL_Rect dst = {dstX, dstY, dstW, dstH};
+    SDL_Rect dst  = {dstX, dstY, dstW, dstH};
     SDL_RendererFlip flip = facingRight ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL;
 
     if (phase == BossPhase::PHASE_2)
@@ -998,14 +901,12 @@ void BossGolem::render(SDL_Renderer* renderer) {
     SDL_RenderCopyEx(renderer, spritesheet, &src, &dst, 0, nullptr, flip);
     SDL_SetTextureColorMod(spritesheet, 255, 255, 255);
 
-    // ИСПРАВЛЕНО: передаем динамические размеры спрайта для отрисовки хитбоксов
     renderHitboxes(renderer, dstX, dstY, dstW, dstH);
 }
 
 void BossGolem::renderSpikes(SDL_Renderer* renderer) {
     if (groundSpikes.empty()) return;
 
-    // Получаем смещение камеры
     const int cx = g_camera ? (int)g_camera->getOffsetX() : 0;
     const int cy = g_camera ? (int)g_camera->getOffsetY() : 0;
 
@@ -1019,7 +920,6 @@ void BossGolem::renderSpikes(SDL_Renderer* renderer) {
         int       numTiles = spike.rect.w / tileW + 1;
 
         for (int i = 0; i < numTiles; i++) {
-            // spike.rect хранит мировые координаты → вычитаем камеру
             int dstX  = spike.rect.x + i * tileW - cx;
             int drawW = std::min(tileW, spike.rect.x + spike.rect.w - (spike.rect.x + i * tileW));
             if (drawW <= 0) break;
@@ -1033,8 +933,7 @@ void BossGolem::renderSpikes(SDL_Renderer* renderer) {
                 } else {
                     SDL_SetTextureColorMod(tileset, 255, 255, 255);
                 }
-                SDL_RenderCopyEx(renderer, tileset, &src, &dst,
-                                 0.0, nullptr, SDL_FLIP_NONE);
+                SDL_RenderCopyEx(renderer, tileset, &src, &dst, 0.0, nullptr, SDL_FLIP_NONE);
                 SDL_SetTextureColorMod(tileset, 255, 255, 255);
             } else {
                 SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
@@ -1048,8 +947,7 @@ void BossGolem::renderSpikes(SDL_Renderer* renderer) {
 void BossGolem::renderProjectiles(SDL_Renderer* renderer) {
     if (!armTexture) return;
 
-    SDL_Rect src       = projectileAnim.getCurrentFrame();
-    constexpr int SIZE = 80;
+    SDL_Rect src = projectileAnim.getCurrentFrame();
 
     for (const auto& proj : projectiles) {
         if (!proj.active) continue;
@@ -1058,15 +956,14 @@ void BossGolem::renderProjectiles(SDL_Renderer* renderer) {
 
         const int px = g_camera ? (int)g_camera->worldToScreenX(proj.x) : (int)proj.x;
         const int py = g_camera ? (int)g_camera->worldToScreenY(proj.y) : (int)proj.y;
-        SDL_Rect dst = { px - SIZE/2, py - SIZE/2, SIZE, SIZE };
+        SDL_Rect dst = { px - PROJ_RENDER_SIZE/2, py - PROJ_RENDER_SIZE/2, PROJ_RENDER_SIZE, PROJ_RENDER_SIZE };
 
         if (proj.predictive)
             SDL_SetTextureColorMod(armTexture, 255, 180, 80);
         else
             SDL_SetTextureColorMod(armTexture, 255, 255, 255);
 
-        SDL_RenderCopyEx(renderer, armTexture, &src, &dst,
-                         angle, nullptr, SDL_FLIP_NONE);
+        SDL_RenderCopyEx(renderer, armTexture, &src, &dst, angle, nullptr, SDL_FLIP_NONE);
     }
 
     SDL_SetTextureColorMod(armTexture, 255, 255, 255);
@@ -1078,7 +975,6 @@ void BossGolem::renderLaser(SDL_Renderer* renderer) {
     const int W      = Config::getWindowWidth();
     const int laserH = (int)laser.height;
 
-    // Переводим мировые координаты лазера в экранные
     const float screenLaserX = g_camera ? g_camera->worldToScreenX(laser.x) : laser.x;
     const float screenLaserY = g_camera ? g_camera->worldToScreenY(laser.y) : laser.y;
 
@@ -1091,15 +987,12 @@ void BossGolem::renderLaser(SDL_Renderer* renderer) {
     if (laserTexture) {
         if (!laserFullyCharged) {
             SDL_Rect src = laserChargeAnim.getCurrentFrame();
-            constexpr int CHARGE_SIZE = 96;
-            // ИСПРАВЛЕНО: зарядка тоже использует экранные координаты
             SDL_Rect dst = {
-                (int)screenLaserX - CHARGE_SIZE / 2,
-                (int)screenLaserY - CHARGE_SIZE / 2,
-                CHARGE_SIZE, CHARGE_SIZE
+                (int)screenLaserX - CHARGE_RENDER_SIZE / 2,
+                (int)screenLaserY - CHARGE_RENDER_SIZE / 2,
+                CHARGE_RENDER_SIZE, CHARGE_RENDER_SIZE
             };
-            SDL_RenderCopyEx(renderer, laserTexture, &src, &dst,
-                             0, nullptr, SDL_FLIP_NONE);
+            SDL_RenderCopyEx(renderer, laserTexture, &src, &dst, 0, nullptr, SDL_FLIP_NONE);
         } else {
             SDL_Rect src = laserBeamAnim.getCurrentFrame();
             SDL_Rect dst = {laserX, laserY, laserW, laserH};
@@ -1109,8 +1002,7 @@ void BossGolem::renderLaser(SDL_Renderer* renderer) {
             else
                 SDL_SetTextureColorMod(laserTexture, 255, 255, 255);
 
-            SDL_RenderCopyEx(renderer, laserTexture, &src, &dst,
-                             0, nullptr, flip);
+            SDL_RenderCopyEx(renderer, laserTexture, &src, &dst, 0, nullptr, flip);
             SDL_SetTextureColorMod(laserTexture, 255, 255, 255);
         }
     } else {
@@ -1125,7 +1017,6 @@ void BossGolem::renderLaser(SDL_Renderer* renderer) {
     }
 }
 
-// Вспомогательный метод для получения текущего кадра
 SDL_Rect BossGolem::getCurrentFrame() const {
     if (phase == BossPhase::TRANSITIONING) {
         return reviveAnim.getCurrentFrame();
@@ -1146,36 +1037,35 @@ SDL_Rect BossGolem::getCurrentFrame() const {
 }
 
 // ============================================================
-// RENDER HITBOXES - динамическая отрисовка
+// RENDER HITBOXES
 // ============================================================
 
 void BossGolem::renderHitboxes(SDL_Renderer* renderer, int spriteX, int spriteY, int spriteW, int spriteH) {
-    if (!showHitboxes) return;  // ВАЖНО: рисуем только если включён режим отладки
+    if (!showHitboxes) return;
 
-    // Получаем смещение камеры для перевода мировых координат в экранные
     const int cx = g_camera ? (int)g_camera->getOffsetX() : 0;
     const int cy = g_camera ? (int)g_camera->getOffsetY() : 0;
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-    // Границы СПРАЙТА (синий) — spriteX/Y уже экранные (вычислены в render())
+    // Спрайт (синий)
     SDL_SetRenderDrawColor(renderer, 0, 100, 255, 255);
     SDL_Rect spriteBounds = {spriteX, spriteY, spriteW, spriteH};
     SDL_RenderDrawRect(renderer, &spriteBounds);
 
-    // ФИЗИЧЕСКИЙ ХИТБОКС (зелёный) — getHitbox() возвращает мировые → вычитаем камеру
+    // Физический хитбокс (зелёный)
     SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
     SDL_Rect hitbox = getHitbox();
     SDL_Rect hitboxScreen = {hitbox.x - cx, hitbox.y - cy, hitbox.w, hitbox.h};
     SDL_RenderDrawRect(renderer, &hitboxScreen);
 
-    // Хитбокс ближней атаки (красный) — x, y мировые → вычитаем камеру
+    // Хитбокс ближней атаки (красный)
     if (currentState == BossState::ATTACK_MELEE && !meleeHitDealt) {
-        int meleeW = (int)(cellSize * 1.0f);
-        int meleeH = (int)(height * 0.85f);
+        int meleeW = (int)(cellSize * MELEE_WIDTH_MULT);
+        int meleeH = (int)(height   * MELEE_HEIGHT_MULT);
         int meleeX = facingRight
-                         ? (int)(x + width * 0.1f)
-                         : (int)(x - width * 0.1f - meleeW);
+                         ? (int)(x + width * MELEE_OFFSET_X)
+                         : (int)(x - width * MELEE_OFFSET_X - meleeW);
         int meleeY = (int)(y - meleeH / 2);
 
         SDL_Rect meleeBox = {meleeX - cx, meleeY - cy, meleeW, meleeH};
@@ -1183,21 +1073,20 @@ void BossGolem::renderHitboxes(SDL_Renderer* renderer, int spriteX, int spriteY,
         SDL_RenderDrawRect(renderer, &meleeBox);
     }
 
-    // DASH_STRIKE хитбокс (оранжевый)
+    // DASH_STRIKE (оранжевый)
     if (currentMeleePattern == MeleePattern::DASH_STRIKE &&
         (meleePatternStep == 2 || meleePatternStep == 4) &&
         !dashStrikeHitDealt) {
-        constexpr int DASH_HIT_W = 80;
-        constexpr int DASH_HIT_H = 80;
-        int hx = facingRight ? (int)(x + width * 0.1f)
-                             : (int)(x - width * 0.1f - DASH_HIT_W);
+
+        int hx = facingRight ? (int)(x + width * MELEE_OFFSET_X)
+                             : (int)(x - width * MELEE_OFFSET_X - DASH_HIT_W);
         int hy = (int)(y - DASH_HIT_H / 2);
         SDL_Rect dashBox = {hx - cx, hy - cy, DASH_HIT_W, DASH_HIT_H};
         SDL_SetRenderDrawColor(renderer, 255, 150, 0, 255);
         SDL_RenderDrawRect(renderer, &dashBox);
     }
 
-    // Лазер (жёлтый) — используем те же экранные координаты что и renderLaser()
+    // Лазер (жёлтый)
     if (laser.active && laserFullyCharged) {
         const int W = Config::getWindowWidth();
         const float screenLaserX = g_camera ? g_camera->worldToScreenX(laser.x) : laser.x;
@@ -1213,13 +1102,12 @@ void BossGolem::renderHitboxes(SDL_Renderer* renderer, int spriteX, int spriteY,
         SDL_RenderDrawRect(renderer, &laserBox);
     }
 
-    // Центр босса (белая точка) — мировые → экранные
+    // Центр (белая точка)
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDL_RenderDrawPoint(renderer, (int)x - cx, (int)y - cy);
 
     // Направление (фиолетовая линия)
     SDL_SetRenderDrawColor(renderer, 200, 0, 255, 255);
-    constexpr int lineLen = 40;
-    int endX = facingRight ? (int)(x + lineLen) : (int)(x - lineLen);
+    int endX = facingRight ? (int)(x + HITBOX_LINE_LEN) : (int)(x - HITBOX_LINE_LEN);
     SDL_RenderDrawLine(renderer, (int)x - cx, (int)y - cy, endX - cx, (int)y - cy);
 }
