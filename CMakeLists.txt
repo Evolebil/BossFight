@@ -20,7 +20,6 @@ add_executable(BossFight main.cpp
     assets/boss1/Character.png
     assets/boss1/Laser.png
     assets/map1/map1.png
-    assets/player/player.png
     assets/sound/attak_golem.mp3
     assets/sound/button.mp3
     assets/sound/gomage_to_golem.mp3
