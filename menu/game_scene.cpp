@@ -16,11 +16,11 @@ extern ILevel* g_currentLevel;
 
 GameScene::GameScene()
     // Кнопки инициализируем через список — они не имеют дефолтного конструктора
-    : continueBtn(0, BTN_CONTINUE_Y,   BTN_W, BTN_H, "Продолжить")
-    , saveBtn(0, BTN_SAVE_Y,        BTN_W, BTN_H, "Сохранить")
-    , exitBtn(0, BTN_EXIT_PAUSE_Y,  BTN_W, BTN_H, "Выйти в меню")
-    , nextBtn(0, BTN_NEXT_Y,        BTN_W, BTN_H, "В меню уровней")
-    , retryBtn(0, BTN_RETRY_Y,       BTN_W, BTN_H, "Заново")
+    : continueBtn(0, BTN_CONTINUE_Y,   BTN_W, BTN_H, "Продолжить"),
+    saveBtn(0, BTN_SAVE_Y,        BTN_W, BTN_H, "Сохранить"),
+    exitBtn(0, BTN_EXIT_PAUSE_Y,  BTN_W, BTN_H, "Выйти в меню"),
+    nextBtn(0, BTN_NEXT_Y,        BTN_W, BTN_H, "В меню уровней"),
+    retryBtn(0, BTN_RETRY_Y,       BTN_W, BTN_H, "Заново")
 {
     soundMgr = getSoundManager();
 

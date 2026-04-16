@@ -11,6 +11,7 @@ private:
     Button playBtn;
     Button settingsBtn;
     Button creditsBtn;
+    Button savesBtn;
     Button quitBtn;
 public:
     MainMenuScene();

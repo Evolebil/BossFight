@@ -17,12 +17,14 @@ MainMenuScene::MainMenuScene()
     playBtn    (0, 250, 300, 60, "Играть"),
     settingsBtn(0, 330, 300, 60, "Настройки"),
     creditsBtn (0, 410, 300, 60, "Разработчики"),
-    quitBtn    (0, 490, 300, 60, "Выход") {
+    savesBtn   (0, 490, 300, 60, "Сохранения"),
+    quitBtn    (0, 570, 300, 60, "Выход") {
 
     const int W = Config::getWindowWidth();
     playBtn.centerX(W);
     settingsBtn.centerX(W);
     creditsBtn.centerX(W);
+    savesBtn.centerX(W);
     quitBtn.centerX(W);
 }
 
@@ -32,6 +34,7 @@ void MainMenuScene::handleInput(SDL_Event& /*event*/, int mx, int my,
     if (updateButton(playBtn,     mx, my, clicked, soundMgr)) nextScene = SceneType::LEVEL_SELECT;
     if (updateButton(settingsBtn, mx, my, clicked, soundMgr)) nextScene = SceneType::SETTINGS;
     if (updateButton(creditsBtn,  mx, my, clicked, soundMgr)) nextScene = SceneType::CREDITS;
+    if (updateButton(savesBtn, mx, my, clicked, soundMgr)) nextScene = SceneType::SAVES;
     if (updateButton(quitBtn,     mx, my, clicked, soundMgr)) nextScene = SceneType::QUIT;
 }
 
@@ -45,6 +48,7 @@ void MainMenuScene::render(SDL_Renderer* renderer) {
     drawButton(renderer, Config::getFont(), playBtn);
     drawButton(renderer, Config::getFont(), settingsBtn);
     drawButton(renderer, Config::getFont(), creditsBtn);
+    drawButton(renderer, Config::getFont(), savesBtn);
     drawButton(renderer, Config::getFont(), quitBtn);
 }
 

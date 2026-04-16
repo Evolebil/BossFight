@@ -7,6 +7,12 @@
 #pragma once
 #include "../config/common.h"
 
+struct SaveData {
+    int levelStars[3];
+    int selectedLevel;
+    int currentDifficulty;
+};
+
 class Config {
 private:
     static int windowWidth;
@@ -60,6 +66,8 @@ public:
     static void setLevelStars(int level, int stars);
     static void resetProgress();
 
+
+
     static TTF_Font* getFont()      { return font; }
     static TTF_Font* getTitleFont() { return titleFont; }
 
@@ -94,4 +102,7 @@ public:
 
     static void setSelectedLevel(int level);
     static int  getSelectedLevel();
+
+    static bool saveProgress();
+    static bool loadProgress();
 };

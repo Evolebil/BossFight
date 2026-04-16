@@ -51,6 +51,8 @@ int main(int /*argc*/, char* /*argv*/[]) {
         return 1;
     }
 
+    Config::loadProgress();   // загружаем сохранённый прогресс при запуске
+
     // === ОКНО И РЕНДЕРЕР ===
     SDL_Window* window = SDL_CreateWindow(
         "Boss Fight",

@@ -233,7 +233,7 @@ private:
 
     // --- Анимации ---
     std::map<BossState, Animation> animations;
-    Animation reviveAnim;
+    Animation reviveAnim{false, true};
 
     // --- Боевые параметры ---
     float defense   = 0.0f;

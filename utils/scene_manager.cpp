@@ -6,7 +6,7 @@
 #include "../menu/credits_scene.h"
 #include "../menu/game_scene.h"
 #include "../config/common.h"
-
+#include "../menu/saves_scene.h"
 
 SceneManager::SceneManager(SDL_Renderer* rend)
     : currentScene(nullptr), currentSceneType(SceneType::SPLASH), renderer(rend) {}
@@ -40,6 +40,9 @@ void SceneManager::loadScene(SceneType type) {
 
     case SceneType::CREDITS:
         currentScene = new CreditsScene();
+        break;
+    case SceneType::SAVES:
+        currentScene = new SavesScene();
         break;
 
     case SceneType::GAME:

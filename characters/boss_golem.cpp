@@ -312,16 +312,31 @@ void BossGolem::updatePhaseTransition(float deltaTime) {
 
     if (phase == BossPhase::TRANSITIONING) {
         reviveAnim.update(deltaTime);
+
+        // Если анимация дошла до последнего кадра в прямом направлении – запускаем обратный ход
+        if (reviveAnim.isGoingForward() && reviveAnim.isAtLastFrame()) {
+            reviveAnim.playReverse();
+        }
+
         if (reviveAnim.isFinished()) {
-            phase               = BossPhase::PHASE_2;
-            currentState        = BossState::IDLE;
+            phase = BossPhase::PHASE_2;
+            currentState = BossState::IDLE;
             lastStateChangeTime = stateTimer;
             if (animations.count(BossState::IDLE))
                 animations[BossState::IDLE].reset();
             attackTimer = 0.0f;
-            blockTimer  = 0.0f;
+            blockTimer = 0.0f;
+
+            // Сброс флагов (важно!)
+            isJumping = false;
+            isTeleporting = false;
+            laser.active = false;
+            projectiles.clear();
+            groundSpikes.clear();
+            meleeHitDealt = false;
+            attackSpawned = false;
+            defense = 0.0f;
         }
-        return;
     }
 }
 

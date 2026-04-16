@@ -83,6 +83,8 @@ add_executable(BossFight main.cpp
     utils/camera.cpp
     levels/level2.h
     levels/level2.cpp
+    menu/saves_scene.h
+    menu/saves_scene.cpp
 
 )
 

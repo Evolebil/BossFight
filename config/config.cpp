@@ -113,3 +113,32 @@ void Config::updateScale(SDL_Window* window) {
     scaleX = (float)realW  / (float)windowWidth;
     scaleY = (float)realH / (float)windowHeight;
 }
+
+bool Config::saveProgress() {
+    SaveData data;
+    for (int i = 0; i < 3; ++i)
+        data.levelStars[i] = levelStars[i];
+    data.selectedLevel = selectedLevel;
+    data.currentDifficulty = currentDifficulty;
+
+    std::ofstream ofs("save.bin", std::ios::binary);
+    if (!ofs.is_open()) return false;
+    ofs.write(reinterpret_cast<const char*>(&data), sizeof(SaveData));
+    return true;
+}
+
+bool Config::loadProgress() {
+    std::ifstream ifs("save.bin", std::ios::binary);
+    if (!ifs.is_open()) return false;
+    SaveData data;
+    ifs.read(reinterpret_cast<char*>(&data), sizeof(SaveData));
+    if (!ifs) return false;
+    for (int i = 0; i < 3; ++i)
+        levelStars[i] = data.levelStars[i];
+    selectedLevel = data.selectedLevel;
+    currentDifficulty = data.currentDifficulty;
+    // валидация
+    selectedLevel = std::clamp(selectedLevel, 0, 2);
+    currentDifficulty = std::clamp(currentDifficulty, 0, 5);
+    return true;
+}

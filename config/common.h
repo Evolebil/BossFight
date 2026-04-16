@@ -24,6 +24,7 @@
 #include <cstring>
 #include <array>
 #include <unordered_map>
+#include <fstream>
 // ===== НАШИ КЛАССЫ (только объявления) =====
 class Config;
 class Scene;
@@ -42,6 +43,7 @@ enum class SceneType {
     CREDITS,
     GAME,
     RESTART_GAME,  // Перезапуск игровой сцены (scene_manager обрабатывает как GAME)
+    SAVES,
     QUIT
 };
 
