@@ -1,7 +1,6 @@
 #pragma once
 #include "../utils/scene_manager.h"
 #include "../ui/ui.h"
-#include <string>
 
 class SoundManager;
 
@@ -26,12 +25,23 @@ private:
     static constexpr int MESSAGE_Y     = 250;
 
     static constexpr int MAX_NAME_LENGTH = 16;   // лимит символов в имени
+    static constexpr int PLUS_BTN_COLUMNS = 3;
+    static constexpr int PLUS_BTN_GAP_X = 20;        // расстояние между кнопками по X
+    static constexpr int PLUS_BTN_ROW_GAP_Y = 20;    // зазор между рядами по Y
+
+    // Константы для меню действий
+    static constexpr int MENU_BTN_W = 300;
+    static constexpr int MENU_BTN_H = 60;
+    static constexpr int MENU_BTN_GAP = 20;        // расстояние между кнопками по вертикали
+    static constexpr int MENU_START_Y = 200;       // Y первой кнопки
 
     // ========== ПОЛЯ С ДЕФОЛТАМИ ==========
     SceneType nextScene = SceneType::SAVES;
     SoundManager* soundMgr = nullptr;
     Button backBtn{BACK_BTN_X, BACK_BTN_Y, BACK_BTN_W, BACK_BTN_H, "Назад"};
-    Button plusBtn{0, PLUS_BTN_Y, PLUS_BTN_W, PLUS_BTN_H, "+"};
+    std::vector<Button> slotButtons; // заполненные имена + активный "+" (всегда последняя)
+    std::vector<bool> slotIsNew;   // true = кнопка-плюс (ещё не переименована)
+    int activePlusIndex = -1;         // индекс кнопки "+" для текущего инпута
 
     bool isInputVisible = false;
     bool isInputFocused = false;
@@ -48,5 +58,12 @@ public:
 
 private:
     void closeInput(bool accept);
+    void openInputForButton(int index);
+    void rebuildButtonsLayout();
     bool isPointInRect(int x, int y, const SDL_Rect& rect) const;
+
+    // Меню для именованных кнопок
+    bool isMenuVisible = false;
+    int menuTargetIndex = -1;                // индекс кнопки, для которой открыто меню
+    std::vector<Button> menuButtons;         // 4 кнопки: Сохранить, Загрузить, Удалить, Переименовать
 };

@@ -67,8 +67,31 @@ static bool popLastUTF8Char(std::string& str) {
 SavesScene::SavesScene() {
     soundMgr = getSoundManager();
     const int W = Config::getWindowWidth();
-    plusBtn.centerX(W);
+
+    slotButtons.clear();
+    slotIsNew.clear();
+
+    // Одна кнопка "+" в начале
+    slotButtons.emplace_back(0, PLUS_BTN_Y, PLUS_BTN_W, PLUS_BTN_H, "+");
+    slotIsNew.push_back(true);   // это новая (ещё не переименованная) кнопка
+
+    rebuildButtonsLayout();      // расставить одну кнопку по центру
+
     inputRect.x = (W - INPUT_W) / 2;
+
+    // Создаём кнопки меню (пока без позиций, заполним позже при отрисовке)
+    menuButtons.emplace_back(0, 0, MENU_BTN_W, MENU_BTN_H, "СОХРАНИТЬ");
+    menuButtons.emplace_back(0, 0, MENU_BTN_W, MENU_BTN_H, "ЗАГРУЗИТЬ");
+    menuButtons.emplace_back(0, 0, MENU_BTN_W, MENU_BTN_H, "УДАЛИТЬ СОХРАНЕНИЕ");
+    menuButtons.emplace_back(0, 0, MENU_BTN_W, MENU_BTN_H, "ПЕРЕИМЕНОВАТЬ");
+    // Центрируем каждую по горизонтали
+    for (auto& btn : menuButtons) {
+        btn.centerX(W);
+    }
+    // Вертикальные позиции зададим при отрисовке или здесь:
+    for (size_t i = 0; i < menuButtons.size(); ++i) {
+        menuButtons[i].rect.y = MENU_START_Y + i * (MENU_BTN_H + MENU_BTN_GAP);
+    }
 }
 
 // ============================================================
@@ -80,11 +103,66 @@ bool SavesScene::isPointInRect(int x, int y, const SDL_Rect& rect) const {
            y >= rect.y && y <= rect.y + rect.h;
 }
 
-void SavesScene::closeInput(bool /*accept*/) {
+void SavesScene::closeInput(bool accept) {
+    if (accept && activePlusIndex >= 0 && !inputText.empty()) {
+        const int idx = activePlusIndex;
+        if (idx >= 0 && idx < (int)slotButtons.size()) {
+            // Меняем текст кнопки на введённый
+            slotButtons[idx].text = inputText;
+
+            // Если это была НОВАЯ кнопка (isNewSlot == true)
+            if (slotIsNew[idx]) {
+                // Теперь она уже не новая
+                slotIsNew[idx] = false;
+
+                // Создаём новую кнопку "+" (новая, isNewSlot = true)
+                slotButtons.emplace_back(0, PLUS_BTN_Y, PLUS_BTN_W, PLUS_BTN_H, "+");
+                slotIsNew.push_back(true);
+
+                // Перестраиваем расположение ВСЕХ кнопок (они сместятся)
+                rebuildButtonsLayout();
+            }
+            // Если кнопка была уже именованной (isNewSlot == false):
+            //   - ничего не создаём, не перестраиваем
+            //   - кнопка остаётся на том же месте
+        }
+    }
+
+    activePlusIndex = -1;
     isInputVisible = false;
     isInputFocused = false;
     inputText.clear();
     SDL_StopTextInput();
+}
+
+void SavesScene::openInputForButton(int index) {
+    if (index < 0 || index >= (int)slotButtons.size()) return;
+    // Разрешаем открывать для любой кнопки (и новой, и именованной)
+    activePlusIndex = index;
+    isInputVisible = true;
+    isInputFocused = false;
+    inputText.clear();
+}
+
+void SavesScene::rebuildButtonsLayout() {
+    const int windowWidth = Config::getWindowWidth();
+    const size_t total = slotButtons.size();
+    const int rowStepY = PLUS_BTN_H + PLUS_BTN_ROW_GAP_Y;
+
+    for (size_t row = 0; row * PLUS_BTN_COLUMNS < total; ++row) {
+        const size_t rowStart = row * PLUS_BTN_COLUMNS;
+        const size_t rowCount = std::min<size_t>(PLUS_BTN_COLUMNS, total - rowStart);
+
+        const int rowWidth =
+            static_cast<int>(rowCount * PLUS_BTN_W + (rowCount > 1 ? (rowCount - 1) * PLUS_BTN_GAP_X : 0));
+        const int startX = (windowWidth - rowWidth) / 2;
+
+        for (size_t col = 0; col < rowCount; ++col) {
+            const size_t idx = rowStart + col;
+            slotButtons[idx].rect.x = startX + static_cast<int>(col * (PLUS_BTN_W + PLUS_BTN_GAP_X));
+            slotButtons[idx].rect.y = PLUS_BTN_Y + static_cast<int>(row * rowStepY);
+        }
+    }
 }
 
 // ============================================================
@@ -93,77 +171,110 @@ void SavesScene::closeInput(bool /*accept*/) {
 
 void SavesScene::handleInput(SDL_Event& event, int mx, int my,
                              bool mouseClicked, bool /*mouseDown*/) {
-    // При сворачивании окна закрываем поле
-    if (event.type == SDL_APP_WILLENTERBACKGROUND && isInputVisible) {
-        closeInput(false);
+    // При сворачивании окна закрываем поле и меню
+    if (event.type == SDL_APP_WILLENTERBACKGROUND) {
+        if (isInputVisible) closeInput(false);
+        if (isMenuVisible) isMenuVisible = false;
         return;
     }
 
-    // Если поле видимо, но не в фокусе — проверяем клик по полю
-    if (isInputVisible && !isInputFocused && mouseClicked) {
-        if (isPointInRect(mx, my, inputRect)) {
-            isInputFocused = true;
-            SDL_StartTextInput();
-            return;
-        }
-    }
-
-    // Если поле в фокусе
-    if (isInputFocused) {
-        // Обработка клавиатуры
-        if (event.type == SDL_KEYDOWN) {
-            switch (event.key.keysym.scancode) {
-            case SDL_SCANCODE_RETURN:
-            case SDL_SCANCODE_KP_ENTER:
-                closeInput(true);
+    // ---- Режим ввода текста (приоритет) ----
+    if (isInputVisible) {
+        // Если поле видимо, но не в фокусе — проверяем клик по полю
+        if (!isInputFocused && mouseClicked) {
+            if (isPointInRect(mx, my, inputRect)) {
+                isInputFocused = true;
+                SDL_StartTextInput();
                 return;
-            case SDL_SCANCODE_ESCAPE:
+            }
+        }
+
+        // Если поле в фокусе
+        if (isInputFocused) {
+            // Обработка клавиатуры
+            if (event.type == SDL_KEYDOWN) {
+                switch (event.key.keysym.scancode) {
+                case SDL_SCANCODE_RETURN:
+                case SDL_SCANCODE_KP_ENTER:
+                    closeInput(true);
+                    return;
+                case SDL_SCANCODE_ESCAPE:
+                    closeInput(false);
+                    return;
+                case SDL_SCANCODE_BACKSPACE:
+                    popLastUTF8Char(inputText);
+                    return;
+                default:
+                    break;
+                }
+            }
+
+            // Обработка текстового ввода
+            if (event.type == SDL_TEXTINPUT) {
+                std::string newText = inputText + event.text.text;
+                if (countUTF8Chars(newText) <= MAX_NAME_LENGTH) {
+                    inputText = newText;
+                } else {
+                    size_t currentLen = countUTF8Chars(inputText);
+                    size_t available = MAX_NAME_LENGTH - currentLen;
+                    if (available > 0) {
+                        std::string toAdd = truncateUTF8(event.text.text, available);
+                        inputText += toAdd;
+                    }
+                }
+                return;
+            }
+
+            // Клик вне поля — закрываем
+            if (mouseClicked && !isPointInRect(mx, my, inputRect)) {
                 closeInput(false);
                 return;
-            case SDL_SCANCODE_BACKSPACE:
-                popLastUTF8Char(inputText);
-                return;
-            default:
+            }
+        }
+        return;
+    }
+
+    // ---- Режим меню действий ----
+    if (isMenuVisible) {
+        // Обработка кликов по кнопкам меню
+        bool anyClicked = false;
+        for (auto& btn : menuButtons) {
+            if (updateButton(btn, mx, my, mouseClicked, soundMgr)) {
+                anyClicked = true;
+                if (btn.text == "ПЕРЕИМЕНОВАТЬ") {
+                    // Закрываем меню и открываем поле ввода для этой кнопки
+                    isMenuVisible = false;
+                    openInputForButton(menuTargetIndex);
+                } else {
+                    // Для других кнопок пока просто закрываем меню
+                    isMenuVisible = false;
+                }
                 break;
             }
         }
-
-        // Обработка текстового ввода с лимитом 16 символов
-        if (event.type == SDL_TEXTINPUT) {
-            std::string newText = inputText + event.text.text;
-            if (countUTF8Chars(newText) <= MAX_NAME_LENGTH) {
-                inputText = newText;
-            } else {
-                // Если превышает, пробуем добавить только часть (для вставки)
-                size_t currentLen = countUTF8Chars(inputText);
-                size_t available = MAX_NAME_LENGTH - currentLen;
-                if (available > 0) {
-                    std::string toAdd = truncateUTF8(event.text.text, available);
-                    inputText += toAdd;
-                }
-            }
-            return;
+        // Клик вне меню или Escape закрывают меню
+        if (!anyClicked && mouseClicked) {
+            isMenuVisible = false;
         }
-
-        // Клик вне поля — закрываем
-        if (mouseClicked && !isPointInRect(mx, my, inputRect)) {
-            closeInput(false);
-            return;
+        if (event.type == SDL_KEYDOWN && event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
+            isMenuVisible = false;
         }
-
-        // Блокируем остальные кнопки
         return;
     }
 
-    // Обычная обработка (поле не видимо)
-    if (!isInputVisible) {
-        if (updateButton(backBtn, mx, my, mouseClicked, soundMgr))
-            nextScene = SceneType::MAIN_MENU;
+    // ---- Обычный режим (нет ни ввода, ни меню) ----
+    if (updateButton(backBtn, mx, my, mouseClicked, soundMgr))
+        nextScene = SceneType::MAIN_MENU;
 
-        if (updateButton(plusBtn, mx, my, mouseClicked, soundMgr)) {
-            isInputVisible = true;
-            isInputFocused = false;
-            inputText.clear();
+    for (size_t i = 0; i < slotButtons.size(); ++i) {
+        if (updateButton(slotButtons[i], mx, my, mouseClicked, soundMgr)) {
+            if (slotIsNew[i]) {
+                openInputForButton(static_cast<int>(i));
+            } else {
+                // Открываем меню для именованной кнопки
+                menuTargetIndex = static_cast<int>(i);
+                isMenuVisible = true;
+            }
         }
     }
 }
@@ -192,7 +303,9 @@ void SavesScene::render(SDL_Renderer* renderer) {
              {200, 200, 200, 255}, true);
 
     drawButton(renderer, Config::getFont(), backBtn);
-    drawButton(renderer, Config::getFont(), plusBtn);
+    for (auto& btn : slotButtons) {
+        drawButton(renderer, Config::getFont(), btn);
+    }
 
     if (isInputVisible) {
         // Затемняющий оверлей
@@ -225,10 +338,24 @@ void SavesScene::render(SDL_Renderer* renderer) {
 
         // Подсказка
         const char* hint = isInputFocused
-                               ? "Введите имя (Enter - создать, Esc - отмена)"
+                               ? "Введите имя (Enter - применить, Esc - отмена)"
                                : "Кликните для ввода";
         drawText(renderer, Config::getFont(), hint,
                  0, inputRect.y + INPUT_H + 20, {200, 200, 200, 255}, true);
+    }
+    // Если меню активно – рисуем оверлей и кнопки меню
+    if (isMenuVisible) {
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 180);
+        SDL_Rect fullOverlay = {0, 0, Config::getWindowWidth(), Config::getWindowHeight()};
+        SDL_RenderFillRect(renderer, &fullOverlay);
+
+        for (auto& btn : menuButtons) {
+            drawButton(renderer, Config::getFont(), btn);
+        }
+
+        drawText(renderer, Config::getFont(), "Esc - отмена",
+                 0, Config::getWindowHeight() - 50, {200, 200, 200, 255}, true);
     }
 }
 
