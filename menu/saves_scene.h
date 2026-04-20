@@ -14,7 +14,7 @@ class SoundManager;
 class SavesScene : public Scene {
 private:
     // ========== КОНСТАНТЫ ==========
-    static constexpr int BACK_BTN_X = 20;
+    static constexpr int BACK_BTN_X = 20;//это один из размеров кнопки
     static constexpr int BACK_BTN_Y = 20;
     static constexpr int BACK_BTN_W = 100;
     static constexpr int BACK_BTN_H = 50;
