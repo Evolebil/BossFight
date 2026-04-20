@@ -1,0 +1,16 @@
+player_x 683.2
+player_y 564
+player_facing 1
+player_hp 65.2
+boss_x 334.089
+boss_y 534
+boss_facing 1
+boss_hp 550
+boss_phase 1
+level_timer 214.888
+current_level 0
+lives_left -1
+best_stars_0 0
+best_stars_1 0
+best_stars_2 0
+difficulty 2

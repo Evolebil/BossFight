@@ -14,6 +14,7 @@
 #include "../utils/sound_manager.h"
 #include "../utils/camera.h"      // ← Camera объявлен здесь
 #include "../levels/level1_assets.h"
+#include "../utils/save_manager.h"
 
 // Forward declarations
 class Player;
@@ -148,11 +149,15 @@ private:
 
     bool playerTookDamage = false;
     bool bossDefeated     = false;
+    bool loadFromSave = false;   // true = загрузить autosave, false = новая игра
 
     ResultState resultState     = ResultState::PLAYING;
     int         earnedStars     = 0;
     float       starRevealTimer = 0.0f;
     int         starsRevealed   = 0;
+
+    // --- Автосохранение ---
+    float autosaveTimer = 0.0f;    // счётчик для тика SaveManager
 
 public:
     GameScene();
@@ -177,4 +182,8 @@ private:
     void renderVictoryScreen(SDL_Renderer* renderer);
     void renderDefeatScreen(SDL_Renderer* renderer);
     void drawStar(SDL_Renderer* renderer, int cx, int cy, int size, bool filled);
+
+
+    // Вспомогательный метод
+    GameSaveState buildSaveState() const;
 };

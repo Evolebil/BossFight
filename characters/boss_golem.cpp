@@ -1126,3 +1126,18 @@ void BossGolem::renderHitboxes(SDL_Renderer* renderer, int spriteX, int spriteY,
     int endX = facingRight ? (int)(x + HITBOX_LINE_LEN) : (int)(x - HITBOX_LINE_LEN);
     SDL_RenderDrawLine(renderer, (int)x - cx, (int)y - cy, endX - cx, (int)y - cy);
 }
+
+void BossGolem::forcePhase2() {
+    // Переводим босса сразу во вторую фазу без анимации смерти/возрождения
+    phase           = BossPhase::PHASE_2;
+    phase2Triggered = true;
+    hp              = std::min(hp, maxHP * 0.75f);  // фаза 2 начинается с 75% HP максимум
+    currentState    = BossState::IDLE;
+    laser.active    = false;
+    projectiles.clear();
+    groundSpikes.clear();
+    attackTimer     = 0.0f;
+    blockTimer      = 0.0f;
+    if (animations.count(BossState::IDLE))
+        animations[BossState::IDLE].reset();
+}

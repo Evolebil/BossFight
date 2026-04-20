@@ -12,6 +12,7 @@
 #include "utils/input_manager.h"
 #include "utils/sound_manager.h"
 #include "config/common.h"
+#include "utils/save_manager.h"
 
 // Глобальный SoundManager — передаётся в сцены через getSoundManager()
 SoundManager* g_soundMgr = nullptr;
@@ -52,6 +53,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
     }
 
     Config::loadProgress();   // загружаем сохранённый прогресс при запуске
+    SaveManager::get().loadIndex();  // загружаем индекс сохранений при старте
 
     // === ОКНО И РЕНДЕРЕР ===
     SDL_Window* window = SDL_CreateWindow(

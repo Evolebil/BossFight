@@ -79,6 +79,12 @@ public:
     [[nodiscard]] float getMaxHP() const { return maxHP; }
     [[nodiscard]] bool  isAlive()  const { return hp > 0; }
 
+    // Нужны для сохранений — SaveManager читает направление и HP
+    [[nodiscard]] bool  getFacingRight() const { return facingRight; }
+
+    // Восстановление HP из сохранения (не лечение — прямая установка)
+    void setHP(float val) { hp = std::clamp(val, 0.0f, maxHP); }
+
     // --- Взаимодействие ---
     // NOTE: virtual — босс переопределяет (учитывает defense)
     virtual void takeDamage(float damage);

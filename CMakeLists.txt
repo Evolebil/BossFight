@@ -85,6 +85,8 @@ add_executable(BossFight main.cpp
     levels/level2.cpp
     menu/saves_scene.h
     menu/saves_scene.cpp
+    utils/save_manager.h
+    utils/save_manager.cpp
 
 )
 

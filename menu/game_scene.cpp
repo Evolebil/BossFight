@@ -15,30 +15,31 @@ extern ILevel* g_currentLevel;
 // ============================================================
 
 GameScene::GameScene()
-    // Кнопки инициализируем через список — они не имеют дефолтного конструктора
     : continueBtn(0, BTN_CONTINUE_Y,   BTN_W, BTN_H, "Продолжить"),
-    saveBtn(0, BTN_SAVE_Y,        BTN_W, BTN_H, "Сохранить"),
-    exitBtn(0, BTN_EXIT_PAUSE_Y,  BTN_W, BTN_H, "Выйти в меню"),
-    nextBtn(0, BTN_NEXT_Y,        BTN_W, BTN_H, "В меню уровней"),
-    retryBtn(0, BTN_RETRY_Y,       BTN_W, BTN_H, "Заново")
+    saveBtn    (0, BTN_SAVE_Y,        BTN_W, BTN_H, "Сохранить"),
+    exitBtn    (0, BTN_EXIT_PAUSE_Y,  BTN_W, BTN_H, "Выйти в меню"),
+    nextBtn    (0, BTN_NEXT_Y,        BTN_W, BTN_H, "В меню уровней"),
+    retryBtn   (0, BTN_RETRY_Y,       BTN_W, BTN_H, "Заново")
 {
     soundMgr = getSoundManager();
 
     const int W = Config::getWindowWidth();
     continueBtn.centerX(W);
-    // ... остальные centerX если есть
+    saveBtn    .centerX(W);
+    exitBtn    .centerX(W);
+    nextBtn    .centerX(W);
+    retryBtn   .centerX(W);
 
     currentLevel = Config::getSelectedLevel();
+    loadFromSave = Config::getLoadFromSave();
+    Config::setLoadFromSave(false);  // сбрасываем чтобы RESTART_GAME не грузил сохранение
     initPositions();
 }
 
 // ============================================================
 //  ИНИЦИАЛИЗАЦИЯ ПОЗИЦИЙ
 // ============================================================
-
 void GameScene::initPositions() {
-    // Создаём уровень по индексу и выставляем глобальный указатель,
-    // чтобы CollisionSystem знал с каким уровнем работать
     level          = createLevel(currentLevel);
     g_currentLevel = level.get();
 
@@ -48,24 +49,46 @@ void GameScene::initPositions() {
     const Config::Difficulty& diff = Config::getDifficulties()[Config::getCurrentDifficulty()];
     livesLeft = diff.respawns;
 
-    // Получаем размер карты в пикселях — нужен для границ снарядов и камеры
+    // Загружаем autosave ТОЛЬКО если флаг выставлен (пользователь выбрал "Загрузить")
+    if (loadFromSave) {
+        GameSaveState saved;
+        const bool ok = SaveManager::get().loadAutosave(saved)
+                        && saved.currentLevel == currentLevel;
+        if (ok) {
+            px = saved.player.x;
+            py = saved.player.y;
+            bx = saved.boss.x;
+            by = saved.boss.y;
+            livesLeft  = saved.livesLeft;
+            levelTimer = saved.levelTimer;
+            std::cout << "[GameScene] Загружено autosave\n";
+        }
+    }
+
     const int mapW = level->getMapWidth();
     const int mapH = level->getMapHeight();
 
     player = std::make_unique<Player>(px, py);
-    // Передаём размер карты игроку — иначе снаряды магии убиваются
-    // мгновенно на картах больше экрана (проверка границ по мировым координатам)
     player->setMapSize(mapW, mapH);
 
     boss = level->createBoss(bx, by, diff.projectileSpeed);
-    // Передаём размер карты боссу — та же причина что и для игрока
     if (auto* golem = dynamic_cast<BossGolem*>(boss.get()))
         golem->setMapSize(mapW, mapH);
 
-    gameStarted = true;
+    // Восстанавливаем HP только при загрузке
+    if (loadFromSave) {
+        GameSaveState saved;
+        if (SaveManager::get().loadAutosave(saved)) {
+            if (saved.player.hp > 0.0f) player->setHP(saved.player.hp);
+            if (auto* golem = dynamic_cast<BossGolem*>(boss.get())) {
+                if (saved.boss.hp > 0.0f) golem->setHP(saved.boss.hp);
+                if (saved.bossPhase == 1) golem->forcePhase2();   // ← новый метод
+            }
 
-    // Создаём камеру по размеру карты и сразу центрируем на игроке,
-    // чтобы не было телепорта камеры в первый кадр
+        }
+    }
+
+    gameStarted = true;
     camera   = std::make_unique<Camera>(mapW, mapH);
     g_camera = camera.get();
     g_camera->snapTo(px, py);
@@ -83,7 +106,6 @@ std::pair<float, float> GameScene::getPlayerSpawnPos() {
 // ============================================================
 //  ВВОД
 // ============================================================
-
 void GameScene::handleInput(SDL_Event& event, int mx, int my,
                             bool clicked, bool /*mouseDown*/) {
     if (resultState == ResultState::PLAYING) {
@@ -93,18 +115,14 @@ void GameScene::handleInput(SDL_Event& event, int mx, int my,
                 isPaused = !isPaused;
                 if (soundMgr) soundMgr->playClick();
                 break;
-
-            // H — toggle хитбоксов у игрока и босса одновременно
             case SDL_SCANCODE_H:
                 if (player && boss) {
-                    // NOTE: если появятся другие боссы — добавить аналогично
                     bool next = !player->showHitboxes;
                     player->showHitboxes = next;
                     if (auto* golem = dynamic_cast<BossGolem*>(boss.get()))
                         golem->showHitboxes = next;
                 }
                 break;
-
             default:
                 break;
             }
@@ -114,17 +132,25 @@ void GameScene::handleInput(SDL_Event& event, int mx, int my,
     if (isPaused && resultState == ResultState::PLAYING) {
         if (updateButton(continueBtn, mx, my, clicked, soundMgr)) isPaused = false;
         if (updateButton(saveBtn,     mx, my, clicked, soundMgr)) saveGame();
-        if (updateButton(exitBtn,     mx, my, clicked, soundMgr)) nextScene = SceneType::LEVEL_SELECT;
+        if (updateButton(exitBtn,     mx, my, clicked, soundMgr)) {
+            SaveManager::get().saveOnExit(buildSaveState());
+            nextScene = SceneType::LEVEL_SELECT;
+        }
         return;
     }
 
+    // ПОБЕДА — убрали условие PLAYING (оно блокировало кнопку)
     if (resultState == ResultState::VICTORY && starsRevealed >= earnedStars) {
-        if (updateButton(nextBtn, mx, my, clicked, soundMgr)) nextScene = SceneType::LEVEL_SELECT;
+        if (updateButton(nextBtn, mx, my, clicked, soundMgr))
+            nextScene = SceneType::LEVEL_SELECT;
     }
 
+    // ПОРАЖЕНИЕ — аналогично
     if (resultState == ResultState::DEFEAT) {
-        if (updateButton(retryBtn, mx, my, clicked, soundMgr)) nextScene = SceneType::RESTART_GAME;
-        if (updateButton(exitBtn,  mx, my, clicked, soundMgr)) nextScene = SceneType::LEVEL_SELECT;
+        if (updateButton(retryBtn, mx, my, clicked, soundMgr))
+            nextScene = SceneType::RESTART_GAME;
+        if (updateButton(exitBtn,  mx, my, clicked, soundMgr))
+            nextScene = SceneType::LEVEL_SELECT;
     }
 }
 
@@ -134,6 +160,11 @@ void GameScene::handleInput(SDL_Event& event, int mx, int my,
 
 void GameScene::update(float deltaTime) {
     if (isPaused) return;
+
+    // --- АВТОСОХРАНЕНИЕ (только во время игры) ---
+    if (resultState == ResultState::PLAYING && gameStarted) {
+        SaveManager::get().tickAutosave(deltaTime, buildSaveState());
+    }
 
     if (resultState == ResultState::VICTORY && starsRevealed < earnedStars) {
         starRevealTimer += deltaTime;
@@ -478,4 +509,46 @@ void GameScene::saveGame() {}
 
 SceneType GameScene::getNextScene() {
     return nextScene;
+}
+
+GameSaveState GameScene::buildSaveState() const {
+    GameSaveState s;
+
+    // Позиции и HP игрока
+    if (player) {
+        s.player.x           = player->getX();
+        s.player.y           = player->getY();
+        s.player.hp          = player->getHP();
+        s.player.facingRight = player->getFacingRight();
+    }
+
+    // Позиции и HP босса
+    if (boss) {
+        s.boss.x           = boss->getX();
+        s.boss.y           = boss->getY();
+        s.boss.hp          = boss->getHP();
+        s.boss.facingRight = boss->getFacingRight();
+    }
+
+    if (auto* golem = dynamic_cast<BossGolem*>(boss.get())) {
+        // Сохраняем фазу — только 1 или 2, переходные состояния округляем до ближайшей
+        BossPhase phase = golem->getPhase();
+        s.bossPhase = (phase == BossPhase::PHASE_2) ? 1 : 0;
+    }
+
+
+    // Прогресс
+    s.levelTimer   = levelTimer;
+    s.currentLevel = currentLevel;
+    s.livesLeft    = livesLeft;
+    s.difficulty   = Config::getCurrentDifficulty();
+
+    // Лучшие звёзды
+    for (int i = 0; i < 3; i++)
+        s.bestStars[i] = Config::getLevelStars(i);
+
+    // Управление
+    SaveManager::fillControlsFromConfig(s);
+
+    return s;
 }

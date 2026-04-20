@@ -257,10 +257,10 @@ void Player::update(float deltaTime) {
         proj.x += proj.velX * deltaTime;
         proj.y += proj.velY * deltaTime;
 
-        if (proj.x < -PROJ_OUT_OF_BOUNDS_MARGIN ||
-            proj.x >  mapW + PROJ_OUT_OF_BOUNDS_MARGIN ||
-            proj.y < -PROJ_OUT_OF_BOUNDS_MARGIN ||
-            proj.y >  mapH + PROJ_OUT_OF_BOUNDS_MARGIN)
+        static constexpr float PROJ_MAX_DIST = 2000.0f;
+        float distX = proj.x - x;
+        float distY = proj.y - y;
+        if (distX * distX + distY * distY > PROJ_MAX_DIST * PROJ_MAX_DIST)
             proj.active = false;
     }
 

@@ -302,6 +302,7 @@ public:
     void render(SDL_Renderer* renderer) override;
     void takeDamage(float damage) override;
     void setMapSize(int w, int h) { mapW = w; mapH = h; }
+    void forcePhase2();
 
     [[nodiscard]] float     getDefense() const { return defense; }
     [[nodiscard]] BossState getState()   const { return currentState; }

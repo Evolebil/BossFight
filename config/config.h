@@ -105,4 +105,8 @@ public:
 
     static bool saveProgress();
     static bool loadProgress();
+
+    static bool loadFromSave;
+    static bool getLoadFromSave()          { return loadFromSave; }
+    static void setLoadFromSave(bool val)  { loadFromSave = val; }
 };

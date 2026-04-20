@@ -18,6 +18,7 @@ float Config::sensitivity = 1.0f;
 bool  Config::isFullscreen = false;
 float Config::scaleX       = 1.0f;
 float Config::scaleY       = 1.0f;
+bool  Config::loadFromSave = false;
 
 int Config::currentDifficulty = 2;
 int Config::levelStars[3]     = {0, 0, 0};
