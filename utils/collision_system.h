@@ -50,7 +50,8 @@ public:
      * @param isGrounded Флаг "на земле" (выставляется этим методом)
      */
     static void resolveY(float x, float& y, float& velocityY,
-                         float width, float height, bool& isGrounded);
+                         float width, float height, bool& isGrounded,
+                         bool ignorePlatforms = false);
 
 private:
     // Конструктор закрыт — класс полностью статический, создавать объекты не нужно

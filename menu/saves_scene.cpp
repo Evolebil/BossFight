@@ -197,6 +197,41 @@ void SavesScene::handleInput(SDL_Event& event, int mx, int my,
                 case SDL_SCANCODE_BACKSPACE:
                     popLastUTF8Char(inputText);
                     return;
+                case SDL_SCANCODE_V:
+                    if (SDL_GetModState() & KMOD_CTRL) {
+                        char* clip = SDL_GetClipboardText();
+                        if (clip) {
+                            std::string pasted = clip;
+                            SDL_free(clip);
+                            // Убираем переносы строк
+                            pasted.erase(std::remove_if(pasted.begin(), pasted.end(),
+                                                        [](char c){ return c == '\n' || c == '\r'; }), pasted.end());
+
+                            std::string combined = inputText + pasted;
+                            if (countUTF8Chars(combined) <= static_cast<size_t>(MAX_NAME_LENGTH)) {
+                                inputText = combined;
+                            } else {
+                                size_t available = MAX_NAME_LENGTH - countUTF8Chars(inputText);
+                                inputText += truncateUTF8(pasted, available);
+                            }
+                        }
+                        return;
+                    }
+                    break;
+
+                case SDL_SCANCODE_C:
+                    if (SDL_GetModState() & KMOD_CTRL) {
+                        SDL_SetClipboardText(inputText.c_str());
+                        return;
+                    }
+                    break;
+
+                case SDL_SCANCODE_A:
+                    if (SDL_GetModState() & KMOD_CTRL) {
+                        // Ctrl+A — выделить всё (у нас нет выделения, просто игнорируем)
+                        return;
+                    }
+                    break;
                 default:
                     break;
                 }

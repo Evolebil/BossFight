@@ -52,14 +52,47 @@ static Config::Controls controls = {
     3                      // magicMouseButton  — ПКМ
 };
 
+// Приоритетный список шрифтов с полным Unicode
+static const char* fontPaths[] = {
+    "/usr/share/fonts/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/TTF/DejaVuSans.ttf",
+    nullptr
+};
+
+static const char* boldFontPaths[] = {
+    "/usr/share/fonts/noto/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/noto-cjk/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
+    nullptr
+};
+
 bool Config::init() {
     if (TTF_Init() < 0) {
         std::cout << "SDL_ttf ошибка: " << TTF_GetError() << std::endl;
         return false;
     }
 
-    font      = TTF_OpenFont("/usr/share/fonts/TTF/DejaVuSans.ttf", 24);
-    titleFont = TTF_OpenFont("/usr/share/fonts/TTF/DejaVuSans-Bold.ttf", 48);
+    // Ищем первый доступный шрифт
+    for (int i = 0; fontPaths[i] != nullptr; i++) {
+        font = TTF_OpenFont(fontPaths[i], 24);
+        if (font) {
+            std::cout << "Шрифт загружен: " << fontPaths[i] << std::endl;
+            break;
+        }
+    }
+
+    for (int i = 0; boldFontPaths[i] != nullptr; i++) {
+        titleFont = TTF_OpenFont(boldFontPaths[i], 48);
+        if (titleFont) {
+            std::cout << "Заголовочный шрифт загружен: " << boldFontPaths[i] << std::endl;
+            break;
+        }
+    }
 
     if (!font || !titleFont) {
         std::cout << "Ошибка загрузки шрифтов: " << TTF_GetError() << std::endl;

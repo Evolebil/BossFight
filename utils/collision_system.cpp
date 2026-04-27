@@ -53,7 +53,8 @@ void CollisionSystem::resolveX(float& x, float y, float& velocityX, float width,
 // ============================================================
 
 void CollisionSystem::resolveY(float x, float& y, float& velocityY,
-                               float width, float height, bool& isGrounded) {
+                               float width, float height, bool& isGrounded,
+                               bool ignorePlatforms) {
     if (!g_currentLevel) return;
 
     const float hw = width  / 2.0f;
@@ -78,7 +79,7 @@ void CollisionSystem::resolveY(float x, float& y, float& velocityY,
             isGrounded = true;
         }
 
-        if (!isGrounded) {
+        if (!isGrounded && !ignorePlatforms) {
             bool platLeft  = g_currentLevel->isPlatform(checkLeft,  bottomY);
             bool platRight = g_currentLevel->isPlatform(checkRight, bottomY);
 

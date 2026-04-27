@@ -115,6 +115,11 @@ void Player::processInput() {
         dashCooldown <= 0.0f && !isDashing && !isHurt) {
         wantsToDash = true;
     }
+
+    // Провал через платформу по приседу
+    if (InputManager::isKeyPressed(controls.crouch) && isGrounded) {
+        platformDropTimer = PLATFORM_DROP_DURATION;
+    }
 }
 
 // ============================================================
@@ -186,9 +191,8 @@ void Player::update(float deltaTime) {
     }
 
     if (wantsToJump && isGrounded && !isDefending) {
-        velocityY  = JUMP_VELOCITY;
+        velocityY = JUMP_VELOCITY;  // ← перезаписывает 50.0f если wantsToJump=true
         isGrounded = false;
-        jumpAnim.reset();
     }
 
     if (wantsToAttack)    startAttack();
@@ -245,9 +249,13 @@ void Player::update(float deltaTime) {
         }
     }
 
+    if (platformDropTimer > 0.0f) {
+        platformDropTimer -= deltaTime;
+        y += PLATFORM_DROP_PUSH;// ← форсируем выход из тайла платформы каждый кадр пока таймер идёт
+    }
     x += velocityX * deltaTime;
     applyCollisionsX();
-    applyGravityAndCollisions(deltaTime);
+    applyGravityAndCollisions(deltaTime, platformDropTimer > 0.0f);
 
     mana += MANA_REGEN * deltaTime;
     if (mana > maxMana) mana = maxMana;

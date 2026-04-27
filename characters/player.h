@@ -26,7 +26,7 @@ private:
     // КОНСТАНТЫ ФИЗИКИ
     // ============================================================
 
-    static constexpr float JUMP_VELOCITY    = -600.0f;
+    static constexpr float JUMP_VELOCITY    = -650.0f;
     static constexpr float MOVE_SPEED       = 200.0f;
     static constexpr float HITBOX_W         = 35.0f;   // ← было в конструкторе
     static constexpr float HITBOX_H         = 40.0f;   // ← было в конструкторе
@@ -70,6 +70,10 @@ private:
     static constexpr float DASH_DURATION        = 0.22f;
     static constexpr float DASH_COOLDOWN_MAX    = 2.0f;
 
+
+    static constexpr float PLATFORM_DROP_PUSH = 2.0f;   // пикселей вниз за кадр при провале
+    static constexpr float PLATFORM_DROP_DURATION = 0.08f; // секунд игнорируем платформы
+
     // ============================================================
     // КОНСТАНТЫ МАНЫ
     // ============================================================
@@ -101,6 +105,7 @@ private:
     static constexpr int   HUD_BAR_H            = 5;    // ← было магическое 5
     static constexpr int   HUD_BAR_GAP          = 3;    // ← было магическое 3
     static constexpr int   HUD_BAR_OFFSET_Y     = 18;   // ← было магическое 18
+
 
     // ============================================================
     // СОСТОЯНИЕ БОЯ
@@ -153,6 +158,9 @@ private:
     float dashTimer    = 0.0f;
     float dashCooldown = 0.0f;
     bool  wantsToDash  = false;
+
+
+    float platformDropTimer = 0.0f;  // > 0 = игнорируем платформы (провал)
 
     // ============================================================
     // РАЗМЕР КАРТЫ
@@ -226,6 +234,8 @@ public:
     [[nodiscard]] float getDashCooldownMax()   const { return DASH_COOLDOWN_MAX; }
     [[nodiscard]] bool  getIsDefending()       const { return isDefending; }
     [[nodiscard]] bool  getIsDead()            const { return isDead; }
+    [[nodiscard]] bool isDropping() const { return platformDropTimer > 0.0f; }
+
 
 private:
     void loadAnimations();

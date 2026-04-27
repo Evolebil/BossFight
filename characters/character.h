@@ -51,8 +51,8 @@ protected:
 
     // --- Физические константы ---
     // NOTE: дочерний класс может переопределить через свои constexpr
-    static constexpr float GRAVITY        = 980.0f;
-    static constexpr float MAX_FALL_SPEED = 600.0f;
+    static constexpr float GRAVITY        = 1200.0f;
+    static constexpr float MAX_FALL_SPEED = 1000.0f;
 
 public:
     /**
@@ -101,7 +101,7 @@ protected:
      *
      * @param deltaTime Время кадра в секундах
      */
-    void applyGravityAndCollisions(float deltaTime);
+    void applyGravityAndCollisions(float deltaTime, bool ignorePlatforms = false);
 
     /**
      * @brief Разрешает коллизии по X после движения.

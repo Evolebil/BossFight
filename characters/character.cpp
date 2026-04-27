@@ -27,7 +27,7 @@ void Character::heal(float amount) {
     if (hp > maxHP) hp = maxHP;
 }
 
-void Character::applyGravityAndCollisions(float deltaTime) {
+void Character::applyGravityAndCollisions(float deltaTime, bool ignorePlatforms) {
     // Гравитация — только если в воздухе
     if (!isGrounded) {
         velocityY += GRAVITY * deltaTime;
@@ -36,7 +36,7 @@ void Character::applyGravityAndCollisions(float deltaTime) {
 
     // Двигаем по Y → разрешаем коллизии
     y += velocityY * deltaTime;
-    CollisionSystem::resolveY(x, y, velocityY, width, height, isGrounded);
+    CollisionSystem::resolveY(x, y, velocityY, width, height, isGrounded, ignorePlatforms);
 }
 
 void Character::applyCollisionsX() {

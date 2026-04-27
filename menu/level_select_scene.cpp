@@ -43,9 +43,12 @@ void LevelSelectScene::handleInput(SDL_Event& event, int mx, int my,
                                    bool clicked, bool mouseDown) {
     // ---- ДИАЛОГ "Загрузить / Новая игра" ----
     if (showLoadDialog) {
-        if (updateButton(loadBtn,    mx, my, clicked, soundMgr)) {
+        if (updateButton(loadBtn, mx, my, clicked, soundMgr)) {
+            GameSaveState s;
+            bool hasCompatibleSave = SaveManager::get().loadAutosave(s)
+                                     && s.currentLevel == dialogLevel;
             Config::setSelectedLevel(dialogLevel);
-            Config::setLoadFromSave(true);   // ← флаг для GameScene
+            Config::setLoadFromSave(hasCompatibleSave);
             nextScene = SceneType::GAME;
             showLoadDialog = false;
         }
@@ -74,15 +77,7 @@ void LevelSelectScene::handleInput(SDL_Event& event, int mx, int my,
     for (size_t i = 0; i < levelBtns.size(); i++) {
         if (updateButton(levelBtns[i], mx, my, clicked, soundMgr)) {
             dialogLevel    = static_cast<int>(i);
-            // Показываем диалог только если есть autosave для этого уровня
-            if (hasSaveForLevel(static_cast<int>(i))) {
-                showLoadDialog = true;
-            } else {
-                // Сохранения нет — сразу новая игра
-                Config::setSelectedLevel(static_cast<int>(i));
-                Config::setLoadFromSave(false);
-                nextScene = SceneType::GAME;
-            }
+            showLoadDialog = true;  // всегда показываем панель
         }
     }
 }
@@ -119,9 +114,4 @@ void LevelSelectScene::render(SDL_Renderer* renderer) {
 
 SceneType LevelSelectScene::getNextScene() {
     return nextScene;
-}
-
-bool LevelSelectScene::hasSaveForLevel(int levelIndex) const {
-    GameSaveState s;
-    return SaveManager::get().loadAutosave(s) && s.currentLevel == levelIndex;
 }

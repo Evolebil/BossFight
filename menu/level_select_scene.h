@@ -19,7 +19,6 @@ private:
     Button            loadBtn;
     Button            newGameBtn;
     Button            cancelBtn;
-    [[nodiscard]] bool hasSaveForLevel(int levelIndex) const;
 public:
     LevelSelectScene();
     void handleInput(SDL_Event& event, int mouseX, int mouseY, bool mouseClicked, bool mouseDown) override;
