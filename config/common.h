@@ -61,12 +61,19 @@ enum class BossState {
 enum class SamuraiState {
     IDLE,
     WALK,
+    JUMP,
     TELEPORT,
     SWORD_ATTACK,
+    POWER_ATTACK,
     STANCE,
     STUNNED,
     THROW_BOMBS,
     DEATH
+};
+
+enum class SamuraiPhase {
+    PHASE_1,
+    DYING
 };
 
 enum class TileType {

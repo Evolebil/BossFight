@@ -6,9 +6,7 @@
  */
 #pragma once
 #include "../config/common.h"
-#include "../characters/boss_golem.h"
 #include "../levels/level1_assets.h"
-#include "../characters/player.h"
 
 class Camera {
 private:

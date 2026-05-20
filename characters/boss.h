@@ -48,6 +48,6 @@ public:
 
     virtual void render(SDL_Renderer* renderer) override = 0;
 
-    [[nodiscard]] virtual SDL_Rect getHitbox() const override = 0;
+    [[nodiscard]] virtual SDL_Rect getHitbox() const = 0;
 
 };

@@ -247,7 +247,3 @@ std::pair<float,float> Level2::getBossSpawn() {
     return { ox+L2_BOSS_COL*TILE_SIZE+TILE_SIZE/2.0f,
             oy+L2_BOSS_ROW*TILE_SIZE+TILE_SIZE/2.0f };
 }
-
-std::unique_ptr<Character> Level2::createBoss(float x, float y, float attackSpeedMult) {
-    return std::make_unique<BossGolem>(x, y, attackSpeedMult);
-}

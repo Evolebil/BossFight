@@ -236,7 +236,6 @@ private:
     Animation reviveAnim{false, true};
 
     // --- Боевые параметры ---
-    float defense   = 0.0f;
     float moveSpeed = 0.0f;
     int   cellSize  = CELL_SIZE;
 
@@ -279,9 +278,6 @@ private:
     float laserTimer        = 0.0f;
     float laserDuration     = 0.0f;
 
-    // --- RNG ---
-    std::mt19937 rng = std::mt19937(std::random_device{}());
-
 public:
 
     BossGolem(float spawnX, float spawnY, float attackSpeedMult = 1.0f);
@@ -297,7 +293,9 @@ public:
     [[nodiscard]] float     getDefense() const { return defense; }
     [[nodiscard]] BossState getState()   const { return currentState; }
     [[nodiscard]] BossPhase getPhase()   const { return phase; }
-
+    [[nodiscard]] SDL_Rect getHitbox() const override {
+        return { (int)(x - width/2), (int)(y - height/2), (int)width, (int)height };
+    }
     [[nodiscard]] float checkPlayerDamage(SDL_Rect playerHitbox, float deltaTime);
 
 private:

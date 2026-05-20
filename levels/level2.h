@@ -7,7 +7,7 @@
 #pragma once
 #include "ilevel.h"
 #include "../levels/level1_assets.h"
-#include "../characters/boss_golem.h"
+#include "../characters/boss_samurai.h"
 #include "../utils/camera.h"
 
 class Level2 : public ILevel {
@@ -31,7 +31,9 @@ public:
     std::pair<float, float> getPlayerSpawn() override;
     std::pair<float, float> getBossSpawn() override;
 
-    std::unique_ptr<Character> createBoss(float x, float y, float attackSpeedMult) override;
+    std::unique_ptr<Character> createBoss(float x, float y, float attackSpeedMult) override {
+        return std::make_unique<BossSamurai>(x, y, attackSpeedMult);
+    }
 
     // Проверка шипа — вызывать из GameScene каждый кадр
     bool isSpike(int worldX, int worldY);
