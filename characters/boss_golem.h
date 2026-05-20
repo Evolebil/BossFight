@@ -10,7 +10,7 @@
 #include "../utils/animation.h"
 #include "../utils/texture_manager.h"
 #include "../config/config.h"
-#include "character.h"
+#include "boss.h"
 #include "../utils/camera.h"
 
 // --- Снаряд ---
@@ -63,7 +63,7 @@ enum class MeleePattern {
  * @class BossGolem
  * @brief Первый босс игры. Две фазы, три паттерна ближней атаки в фазе 2.
  */
-class BossGolem : public Character {
+class BossGolem : public Boss {
 private:
     // ============================================================
     // КОНСТАНТЫ — все магические числа здесь
@@ -261,11 +261,6 @@ private:
     // --- Очередь снарядов ---
     int   projectileQueue      = 0;
     float projectileQueueTimer = 0.0f;
-    float lastPlayerX          = 0.0f;
-    float lastPlayerY          = 0.0f;
-
-    // --- Сложность ---
-    float attackSpeedMult = 1.0f;
 
     // --- Текстуры ---
     SDL_Texture* armTexture   = nullptr;
@@ -284,15 +279,10 @@ private:
     float laserTimer        = 0.0f;
     float laserDuration     = 0.0f;
 
-    // --- Размер карты ---
-    int mapW = Config::getWindowWidth();
-    int mapH = Config::getWindowHeight();
-
     // --- RNG ---
     std::mt19937 rng = std::mt19937(std::random_device{}());
 
 public:
-    bool showHitboxes = false;
 
     BossGolem(float spawnX, float spawnY, float attackSpeedMult = 1.0f);
     ~BossGolem() override = default;
@@ -307,10 +297,6 @@ public:
     [[nodiscard]] float     getDefense() const { return defense; }
     [[nodiscard]] BossState getState()   const { return currentState; }
     [[nodiscard]] BossPhase getPhase()   const { return phase; }
-
-    [[nodiscard]] SDL_Rect getHitbox() const {
-        return { (int)(x - width/2), (int)(y - height/2), (int)width, (int)height };
-    }
 
     [[nodiscard]] float checkPlayerDamage(SDL_Rect playerHitbox, float deltaTime);
 

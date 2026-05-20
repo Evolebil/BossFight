@@ -87,6 +87,12 @@ add_executable(BossFight main.cpp
     menu/saves_scene.cpp
     utils/save_manager.h
     utils/save_manager.cpp
+    characters/boss.cpp
+    characters/boss.h
+    characters/boss_samurai.h
+    characters/boss_samurai.cpp
+    characters/boss_archer.h
+    characters/boss_archer.cpp
 
 )
 

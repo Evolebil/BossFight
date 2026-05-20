@@ -14,7 +14,7 @@
 // ============================================================
 
 BossGolem::BossGolem(float spawnX, float spawnY, float attackSpeedMult)
-    : Character(spawnX, spawnY, HITBOX_W, HITBOX_H, BASE_HP)
+    : Boss(spawnX, spawnY, HITBOX_W, HITBOX_H, BASE_HP, attackSpeedMult)
 {
     this->lastPlayerX     = spawnX;
     this->lastPlayerY     = spawnY;
