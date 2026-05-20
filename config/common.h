@@ -58,6 +58,17 @@ enum class BossState {
     DEATH
 };
 
+enum class SamuraiState {
+    IDLE,
+    WALK,
+    TELEPORT,
+    SWORD_ATTACK,
+    STANCE,
+    STUNNED,
+    THROW_BOMBS,
+    DEATH
+};
+
 enum class TileType {
     EMPTY      = 0,
     WALL       = 1,
