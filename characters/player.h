@@ -55,6 +55,9 @@ private:
     static constexpr float ATTACK2_HIT_DELAY    = 0.25f;
     static constexpr float ATTACK3_HIT_DELAY    = 0.30f;
 
+    static constexpr float STUN_DURATION_MAX = 2.0f;
+
+
     // ============================================================
     // КОНСТАНТЫ ЗАЩИТЫ
     // ============================================================
@@ -126,6 +129,8 @@ private:
 
     float defendCooldown  = 0.0f;
 
+    float stunTimer = 0.0f;
+    bool  isStunned = false;
     // ============================================================
     // МАНА
     // ============================================================
@@ -209,6 +214,7 @@ public:
     void update(float deltaTime) override;
     void render(SDL_Renderer* renderer) override;
     void takeDamage(float damage) override;
+    void applyStun(float duration) { isStunned = true; stunTimer = duration; }
 
     void setMapSize(int w, int h) { mapW = w; mapH = h; }
 
@@ -235,7 +241,7 @@ public:
     [[nodiscard]] bool  getIsDefending()       const { return isDefending; }
     [[nodiscard]] bool  getIsDead()            const { return isDead; }
     [[nodiscard]] bool isDropping() const { return platformDropTimer > 0.0f; }
-
+    [[nodiscard]] bool getIsStunned() const { return isStunned; }
 
 private:
     void loadAnimations();

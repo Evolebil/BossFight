@@ -189,6 +189,8 @@ void GameScene::update(float deltaTime) {
         // Для боссов с расширенным update (BossGolem) используем dynamic_cast
         if (auto* golem = dynamic_cast<BossGolem*>(boss.get()))
             golem->update(deltaTime, player->getX(), player->getY());
+        else if (auto* samurai = dynamic_cast<BossSamurai*>(boss.get()))
+            samurai->update(deltaTime, player->getX(), player->getY());
         else
             boss->update(deltaTime);
 
@@ -203,6 +205,14 @@ void GameScene::update(float deltaTime) {
             }
         }
 
+        if (auto* samurai = dynamic_cast<BossSamurai*>(boss.get())) {
+            float dmgToPlayer = samurai->checkPlayerDamage(pb, deltaTime);
+            if (dmgToPlayer > 0.0f) {
+                player->takeDamage(dmgToPlayer);
+                playerTookDamage = true;
+            }
+        }
+
         // Урон по боссу от игрока
         float dmgToBoss = player->consumeAttackDamage();
         if (dmgToBoss > 0.0f) {
@@ -210,6 +220,15 @@ void GameScene::update(float deltaTime) {
             if (auto* golem = dynamic_cast<BossGolem*>(boss.get())) {
                 if (rectsOverlap(atk, golem->getHitbox()))
                     golem->takeDamage(dmgToBoss);
+            } else if (auto* samurai = dynamic_cast<BossSamurai*>(boss.get())) {
+                if (rectsOverlap(atk, samurai->getHitbox())) {
+                    if (samurai->checkParry()) {
+                        // Парирование — стан игрока
+                        player->applyStun(PLAYER_STUN_DURATION);
+                    } else {
+                        samurai->takeDamage(dmgToBoss);
+                    }
+                }
             }
         }
     }
@@ -234,9 +253,12 @@ void GameScene::update(float deltaTime) {
 
     // Победа — проверяем через BossGolem (у него две фазы)
     if (boss && !boss->isAlive() && !bossDefeated) {
-        bool finalDead = true;
+        bool finalDead = false;
+
         if (auto* golem = dynamic_cast<BossGolem*>(boss.get()))
             finalDead = (golem->getPhase() == BossPhase::PHASE_2);
+        else if (auto* samurai = dynamic_cast<BossSamurai*>(boss.get()))
+            finalDead = samurai->isDeathAnimFinished();
 
         if (finalDead) {
             bossDefeated = true;

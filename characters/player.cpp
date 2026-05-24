@@ -183,6 +183,19 @@ void Player::castMagic() {
 // ============================================================
 
 void Player::update(float deltaTime) {
+    // Стан — игрок не может ничего делать
+    if (isStunned) {
+        stunTimer -= deltaTime;
+        velocityX = 0.0f;
+        if (stunTimer <= 0.0f) {
+            isStunned = false;
+            stunTimer = 0.0f;
+        }
+        applyGravityAndCollisions(deltaTime);
+        hurtAnim.update(deltaTime);
+        return;
+    }
+
     processInput();
 
     if (isDead) {

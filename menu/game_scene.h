@@ -15,6 +15,7 @@
 #include "../utils/camera.h"      // ← Camera объявлен здесь
 #include "../levels/level1_assets.h"
 #include "../utils/save_manager.h"
+#include "../characters/boss_samurai.h"
 
 // Forward declarations
 class Player;
@@ -50,6 +51,7 @@ private:
     static constexpr int BTN_RETRY_Y       = 320;
     static constexpr int BTN_EXIT_RESULT_Y = 400;
 
+    static constexpr float PLAYER_STUN_DURATION = 2.0f;
     // ============================================================
     // КОНСТАНТЫ HUD (полоски HP/мана, жизни)
     // ============================================================
