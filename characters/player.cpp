@@ -365,44 +365,33 @@ void Player::renderHitboxes(SDL_Renderer* renderer) {
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-    // Границы спрайта (синий)
-    SDL_SetRenderDrawColor(renderer, 0, 100, 255, 255);
+    // ЗЕЛЁНЫЙ — границы спрайта
+    SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
     SDL_Rect spriteBounds = {
         (int)(x - RENDER_W / 2) - cx,
         (int)(y - RENDER_H / 2) - cy,
-        (int)RENDER_W,
-        (int)RENDER_H
+        (int)RENDER_W, (int)RENDER_H
     };
     SDL_RenderDrawRect(renderer, &spriteBounds);
 
-    // Физический хитбокс (зелёный)
-    SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
-    SDL_Rect hitbox = getHitbox();
-    SDL_Rect hitboxScreen = {hitbox.x - cx, hitbox.y - cy, hitbox.w, hitbox.h};
-    SDL_RenderDrawRect(renderer, &hitboxScreen);
+    // СИНИЙ — физический хитбокс
+    SDL_SetRenderDrawColor(renderer, 0, 100, 255, 255);
+    SDL_Rect hb = getHitbox();
+    SDL_Rect hbScreen = {hb.x - cx, hb.y - cy, hb.w, hb.h};
+    SDL_RenderDrawRect(renderer, &hbScreen);
 
-    // Центр (белая точка)
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    SDL_RenderDrawPoint(renderer, (int)x - cx, (int)y - cy);
-
-    // Направление (жёлтая линия)
-    SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
-    constexpr int lineLen = 40;
-    int endX = facingRight ? (int)(x + lineLen) : (int)(x - lineLen);
-    SDL_RenderDrawLine(renderer, (int)x - cx, (int)y - cy, endX - cx, (int)y - cy);
-
-    // Хитбокс атаки (красный)
-    if (isAttacking && attackHitActive) {
-        SDL_Rect attackBox = getAttackHitbox();
-        if (attackBox.w > 0 && attackBox.h > 0) {
-            SDL_Rect attackScreen = {attackBox.x - cx, attackBox.y - cy,
-                                     attackBox.w, attackBox.h};
+    // КРАСНЫЙ — хитбокс атаки (только когда активен)
+    if (isAttacking) {
+        SDL_Rect atk = getAttackHitbox();
+        if (atk.w > 0 && atk.h > 0) {
             SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-            SDL_RenderDrawRect(renderer, &attackScreen);
+            SDL_Rect atkScreen = {atk.x - cx, atk.y - cy, atk.w, atk.h};
+            SDL_RenderDrawRect(renderer, &atkScreen);
         }
     }
 
-    // Снаряды (фиолетовый)
+    // КРАСНЫЙ — снаряды (магия)
+    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
     for (const auto& proj : magicProjectiles) {
         if (!proj.active) continue;
         SDL_Rect projBox = {
@@ -410,7 +399,6 @@ void Player::renderHitboxes(SDL_Renderer* renderer) {
             (int)(proj.y - PROJ_RENDER_SIZE / 2) - cy,
             PROJ_RENDER_SIZE, PROJ_RENDER_SIZE
         };
-        SDL_SetRenderDrawColor(renderer, 200, 0, 255, 255);
         SDL_RenderDrawRect(renderer, &projBox);
     }
 }
@@ -493,7 +481,7 @@ void Player::render(SDL_Renderer* renderer) {
     };
     SDL_RendererFlip flip = facingRight ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL;
 
-    if (showHitboxes) renderDebugBounds(renderer, RENDER_W, RENDER_H);
+    renderHitboxes(renderer);  // внутри уже есть проверка showHitboxes
 
     if (tex) {
         SDL_RenderCopyEx(renderer, tex, &src, &dst, 0, nullptr, flip);
