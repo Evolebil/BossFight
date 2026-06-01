@@ -121,6 +121,8 @@ void GameScene::handleInput(SDL_Event& event, int mx, int my,
                     player->showHitboxes = next;
                     if (auto* golem = dynamic_cast<BossGolem*>(boss.get()))
                         golem->showHitboxes = next;
+                    if (auto* samurai = dynamic_cast<BossSamurai*>(boss.get()))
+                        samurai->showHitboxes = next;
                 }
                 break;
             default:
@@ -211,6 +213,20 @@ void GameScene::update(float deltaTime) {
                 player->takeDamage(dmgToPlayer);
                 playerTookDamage = true;
             }
+        }
+
+        // Урон от шипов уровня 2 (Level2::isSpike)
+        if (auto* lv2 = dynamic_cast<Level2*>(level.get())) {
+            SDL_Rect pb = player->getHitbox();
+            // Проверяем 4 угла хитбокса игрока
+            bool onSpike =
+                lv2->isSpike(pb.x,          pb.y + pb.h - 1) ||
+                lv2->isSpike(pb.x + pb.w-1, pb.y + pb.h - 1) ||
+                lv2->isSpike(pb.x,          pb.y) ||
+                lv2->isSpike(pb.x + pb.w-1, pb.y);
+
+            if (onSpike)
+                player->takeDamage(Level2::SPIKE_DAMAGE_PER_SEC * deltaTime);
         }
 
         // Урон по боссу от игрока

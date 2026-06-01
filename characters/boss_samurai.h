@@ -53,6 +53,7 @@ struct Bomb {
     bool  active;      ///< false = убрать из вектора
     bool  exploded;    ///< true = показывать анимацию взрыва, наносить урон
 
+    Animation explodeAnim { false };  // ← своя анимация у каждой бомбы
     // --- Константы бомбы ---
     static constexpr float FUSE_TIME      = 2.0f;   ///< Секунд до взрыва
     static constexpr float SPEED          = 300.0f; ///< Начальная скорость (px/s)
@@ -95,7 +96,7 @@ private:
     // ============================================================
 
     static constexpr float HITBOX_W = 50.0f;   ///< Ширина хитбокса (px)
-    static constexpr float HITBOX_H = 60.0f;   ///< Высота хитбокса (px)
+    static constexpr float HITBOX_H = 80.0f;   ///< Высота хитбокса (px)
     static constexpr float BASE_HP  = 800.0f;  ///< Начальное HP
 
     // ============================================================
@@ -103,7 +104,7 @@ private:
     // ============================================================
 
     static constexpr float MOVE_SPEED          = 200.0f;  ///< Скорость ходьбы (px/s)
-    static constexpr float PREFERRED_DISTANCE  = 200.0f;  ///< Комфортная дистанция до игрока (px)
+    static constexpr float PREFERRED_DISTANCE  = 120.0f;  ///< Комфортная дистанция до игрока (px)
     static constexpr float DISTANCE_THRESHOLD  = 30.0f;   ///< Мёртвая зона — меньше этого не двигаемся (px)
     static constexpr float JUMP_VELOCITY       = -580.0f; ///< Начальная скорость прыжка (px/s вверх)
     static constexpr float JUMP_COOLDOWN_MAX   = 1.5f;    ///< Кулдаун прыжка (сек)
@@ -121,7 +122,7 @@ private:
     // ============================================================
 
     static constexpr float TELEPORT_OFFSET   = 150.0f;  ///< Смещение за спиной игрока (px)
-    static constexpr float TELEPORT_COOLDOWN = 5.0f;    ///< Кулдаун телепорта (сек)
+    static constexpr float TELEPORT_COOLDOWN = 4.0f;    ///< Кулдаун телепорта (сек)
 
     // ============================================================
     // КОНСТАНТЫ — БОМБЫ
@@ -129,15 +130,14 @@ private:
 
     static constexpr int   BOMB_COUNT        = 5;      ///< Бомб в одном броске
     static constexpr float BOMB_SPREAD_ANGLE = 20.0f;  ///< Угол между бомбами в веере (градусы)
-    static constexpr float BOMB_BASE_ANGLE   = 45.0f;  ///< Базовый угол броска вниз-вперёд (градусы)
-    static constexpr float BOMB_COOLDOWN     = 4.0f;   ///< Кулдаун броска бомб (сек)
+    static constexpr float BOMB_COOLDOWN     = 3.0f;   ///< Кулдаун броска бомб (сек)
     static constexpr float DAMAGE_BOMB       = 25.0f;  ///< Урон взрыва бомбы
 
     // ============================================================
     // КОНСТАНТЫ — СТОЙКА И СТАН
     // ============================================================
 
-    static constexpr float STANCE_DURATION = 5.0f;  ///< Максимум стойки до автостана (сек)
+    static constexpr float STANCE_DURATION   = 1.5f;  ///< Максимум стойки до автостана (сек)
     static constexpr float STUN_DURATION   = 2.0f;  ///< Длительность стана (сек)
 
     // ============================================================
@@ -219,6 +219,7 @@ private:
     SamuraiState currentState      = SamuraiState::IDLE;   ///< Активное состояние
     SamuraiState previousState     = SamuraiState::IDLE;   ///< Предыдущее (для отладки)
     SamuraiPhase phase             = SamuraiPhase::PHASE_1;
+    SamuraiState queuedAttack = SamuraiState::IDLE;  // атака запланированная после телепорта
 
     float stateTimer               = 0.0f;  ///< Монотонно растущий таймер (сек от старта)
     float lastStateChangeTime      = 0.0f;  ///< stateTimer в момент последней смены состояния
@@ -264,7 +265,6 @@ private:
     SDL_Texture* explodeTexture = nullptr;  ///< Спрайтшит взрыва
 
     Animation bombAnim    { true };   ///< Анимация летящей бомбы (зацикленная)
-    Animation explodeAnim { false };  ///< Анимация взрыва (одноразовая)
 
     // ============================================================
     // ПОЛЯ — ОБЪЕКТЫ В МИРЕ
@@ -307,6 +307,9 @@ private:
      *   Белая точка          — центр (x, y)
      */
     void renderHitboxes(SDL_Renderer* renderer);
+
+    // В boss_samurai.h — приватный метод:
+    void initBombExplodeAnim(Animation& anim);
 
 public:
 

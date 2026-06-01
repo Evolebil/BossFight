@@ -14,6 +14,7 @@
 #include "../utils/sound_manager.h"
 #include "../utils/camera.h"      // ← Camera объявлен здесь
 #include "../levels/level1_assets.h"
+#include "../levels/level2.h"
 #include "../utils/save_manager.h"
 #include "../characters/boss_samurai.h"
 
