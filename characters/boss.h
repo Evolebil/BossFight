@@ -68,7 +68,8 @@ public:
     void takeDamage(float damage) override;
 
     // ---- Основной update с позицией игрока — реализуют дочерние классы ----
-    virtual void update(float deltaTime, float playerX, float playerY) = 0;
+    // Может быть с дополнительными параметрами (например, playerFacingRight для BossSamurai)
+    virtual void update(float deltaTime, float playerX, float playerY, bool playerFacingRight = true) = 0;
 
     // Character::update() — заглушка, боссы используют версию выше
     void update(float deltaTime) override { (void)deltaTime; }

@@ -283,7 +283,7 @@ public:
     BossGolem(float spawnX, float spawnY, float attackSpeedMult = 1.0f);
     ~BossGolem() override = default;
 
-    void update(float deltaTime, float playerX, float playerY);
+    void update(float deltaTime, float playerX, float playerY, bool playerFacingRight = false) override;
     void update(float deltaTime) override { (void)deltaTime; }
     void render(SDL_Renderer* renderer) override;
     void takeDamage(float damage) override;

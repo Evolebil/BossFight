@@ -2,14 +2,14 @@ player_x 144
 player_y 1548
 player_facing 1
 player_hp 100
-boss_x 210.2
+boss_x 196.599
 boss_y 1432
 boss_facing 0
 boss_hp 800
 boss_phase 0
-level_timer 2.605
+level_timer 7.55596
 current_level 1
-lives_left 5
+lives_left 4
 best_stars_0 0
 best_stars_1 0
 best_stars_2 0

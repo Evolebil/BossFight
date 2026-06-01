@@ -191,11 +191,11 @@ void GameScene::update(float deltaTime) {
         // Для боссов с расширенным update (BossGolem) используем dynamic_cast
         if (auto* golem = dynamic_cast<BossGolem*>(boss.get()))
             golem->update(deltaTime, player->getX(), player->getY());
-        else if (auto* samurai = dynamic_cast<BossSamurai*>(boss.get()))
-            samurai->update(deltaTime, player->getX(), player->getY());
-        else
+        else if (auto* samurai = dynamic_cast<BossSamurai*>(boss.get())) {
+            samurai->update(deltaTime, player->getX(), player->getY(), player->getFacingRight());
+        } else {
             boss->update(deltaTime);
-
+        }
         SDL_Rect pb = player->getHitbox();
 
         // Урон по игроку от босса

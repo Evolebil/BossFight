@@ -102,7 +102,7 @@ void BossGolem::loadAttackTextures() {
 // UPDATE
 // ============================================================
 
-void BossGolem::update(float deltaTime, float playerX, float playerY) {
+void BossGolem::update(float deltaTime, float playerX, float playerY, bool /*playerFacingRight*/) {
     lastPlayerX = playerX;
     lastPlayerY = playerY;
 

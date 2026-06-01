@@ -91,11 +91,11 @@ void BossSamurai::loadAnimations() {
 // ГЛАВНЫЙ UPDATE
 // ============================================================
 
-void BossSamurai::update(float deltaTime, float playerX, float playerY) {
-    // Сохраняем позицию игрока — нужна для атак (телепорт, бомбы)
+void BossSamurai::update(float deltaTime, float playerX, float playerY, bool playerFacingRight) {
+    // Сохраняем позицию и направление игрока — нужны для атак (телепорт, бомбы)
     lastPlayerX = playerX;
     lastPlayerY = playerY;
-
+    lastPlayerFacingRight = playerFacingRight;  // ← НОВОЕ
 
     // Задержка после спавна — самурай не действует первые 0.5 сек
     if (spawnDelay > 0.0f) {
@@ -103,7 +103,6 @@ void BossSamurai::update(float deltaTime, float playerX, float playerY) {
         applyGravityAndCollisions(deltaTime);
         return;
     }
-
 
     // ── СМЕРТЬ ──────────────────────────────────────────────
     // HP кончились — запускаем анимацию смерти, AI выключаем
@@ -267,10 +266,11 @@ void BossSamurai::updateMovement(float deltaTime, float playerX, float playerY) 
 }
 
 // ============================================================
-// AI — ВЫБОР АТАКИ
+// AI — ВЫБОР АТАКИ (ТОЛЬКО ПО ГОРИЗОНТАЛЬНОЙ ДИСТАНЦИИ)
 // ============================================================
 
 void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
+    // Тикаем кулдауны атак
     if (teleportTimer > 0.0f) teleportTimer -= deltaTime;
     if (bombTimer     > 0.0f) bombTimer     -= deltaTime;
 
@@ -282,7 +282,7 @@ void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
         currentState == SamuraiState::STANCE        ||
         currentState == SamuraiState::STUNNED       ||
         currentState == SamuraiState::DEATH         ||
-        isBreakingAway) return;  // ← добавить
+        isBreakingAway) return;
 
     // Выполнить запланированную атаку после телепорта
     if (queuedAttack != SamuraiState::IDLE) {
@@ -295,56 +295,84 @@ void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
         return;
     }
 
+    // ── ВЫЧИСЛЕНИЕ ДИСТАНЦИЙ ──────────────────────────────
     const float dx     = playerX - x;
     const float dy     = playerY - y;
-    const float dist   = std::sqrt(dx*dx + dy*dy);  // полная — для движения
-    const float distX  = std::abs(dx);              // горизонтальная — для выбора атаки
+
+    // ПОЛНАЯ дистанция — используется ТОЛЬКО для движения в updateMovement()
+    // const float dist   = std::sqrt(dx*dx + dy*dy);
+
+    // ГОРИЗОНТАЛЬНАЯ дистанция — используется ДЛЯ ВЫБОРА АТАК
+    // Это правильно, потому что босс может прыгать/телепортироваться на разные высоты
+    const float distX  = std::abs(dx);
+
+    std::cout << "[САМУРАЙ] ВЫБОР АТАКИ — distX=" << (int)distX
+              << " dy=" << (int)dy << " (dy игнорируется для атак)\n";
 
     // Генерируем случайное число 0-99 для выбора атаки
     std::uniform_int_distribution<int> roll(0, 99);
     const int r = roll(rng);
 
+    // ── ДАЛЬНЯЯ ДИСТАНЦИЯ (distX >= 500px) ────────────────
+    // Выбор: телепорт → прыжок/силовой удар ИЛИ веер бомб
     if (distX >= DIST_FAR) {
-        // Дальняя дистанция
+        std::cout << "[САМУРАЙ] ДАЛЬНЯЯ ЗОНА (distX=" << (int)distX << ")\n";
+
         if (teleportTimer <= 0.0f) {
+            // Телепорт готов — телепортируемся за спину игрока
             teleportBehindPlayer();
-            // После телепорта — 70% силовой удар, 30% бомбы
+            // После телепорта выбираем: 70% силовой удар, 30% бомбы
             queuedAttack = (r < 70)
                                ? SamuraiState::POWER_ATTACK
                                : SamuraiState::THROW_BOMBS;
         } else if (bombTimer <= 0.0f) {
+            // Телепорт на кулдауне, но бомбы готовы
             throwBombsFan();
         } else {
+            // Все спец-атаки на кулдауне — бьём мечом (фоллбэк)
             updateMeleeFallback(deltaTime, playerX, playerY);
         }
 
+        // ── СРЕДНЯЯ ДИСТАНЦИЯ (80px ≤ distX < 500px) ──────────
+        // Выбор: бомбы ИЛИ телепорт+меч ИЛИ меч
     } else if (distX >= DIST_CLOSE) {
-        // Средняя дистанция — выбор с вероятностью
+        std::cout << "[САМУРАЙ] СРЕДНЯЯ ЗОНА (distX=" << (int)distX << ")\n";
+
         if (r < 55 && bombTimer <= 0.0f) {
+            // 55% шанс: бросить бомбы
             throwBombsFan();
         } else if (r < 75 && teleportTimer <= 0.0f) {
+            // 20% шанс (75-55): телепорт + меч
             teleportBehindPlayer();
             queuedAttack = SamuraiState::SWORD_ATTACK;
         } else if (swordTimer <= 0.0f) {
+            // 25% шанс: просто меч
             updateMeleeFallback(deltaTime, playerX, playerY);
         }
 
+        // ── БЛИЖНЯЯ ДИСТАНЦИЯ (distX < 80px) ───────────────────
+        // Выбор: меч ИЛИ стойка парирования
     } else {
-        // Ближняя дистанция — меч или стойка
-        // Стойку активируем ТОЛЬКО если игрок примерно на одной высоте
+        std::cout << "[САМУРАЙ] БЛИЖНЯЯ ЗОНА (distX=" << (int)distX << ")\n";
+
+        // ВАЖНО: стойка срабатывает ТОЛЬКО если игрок на одной высоте
+        // (проверяем dy отдельно)
         const float dyAbs = std::abs(playerY - y);
         const bool playerOnSameLevel = (dyAbs < height * 1.5f);
 
         if (r < 50 && swordTimer <= 0.0f) {
+            // 50% шанс: бить мечом (независимо от высоты)
             updateMeleeFallback(deltaTime, playerX, playerY);
         } else if (r >= 50 && playerOnSameLevel) {
-            // Стойка парирования — только если игрок не сильно выше/ниже
+            // 50% шанс: стойка парирования (ТОЛЬКО если на одной высоте)
+            std::cout << "[САМУРАЙ] ВХОДИМ В СТОЙКУ (игрок на одной высоте)\n";
             stanceTimer  = 0.0f;
             stanceActive = true;
             spawnSmoke();
             forceState(SamuraiState::STANCE);
         } else if (swordTimer <= 0.0f) {
-            // Игрок на другой высоте — просто бьём мечом
+            // Игрок слишком выше/ниже для стойки → просто бьём мечом
+            std::cout << "[САМУРАЙ] ИГРОК НА ДРУГОЙ ВЫСОТЕ (dy=" << (int)dyAbs << ") → БЬЮ МЕЧОМ\n";
             updateMeleeFallback(deltaTime, playerX, playerY);
         }
     }
@@ -355,18 +383,23 @@ void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
 // ============================================================
 
 void BossSamurai::teleportBehindPlayer() {
-    // Определяем с какой стороны стоит самурай относительно игрока
-    // и встаём с противоположной стороны (за спину)
-    const float direction = (lastPlayerX > x) ? -1.0f : 1.0f;
+    // Смотрим: игрок смотрит вправо? Тогда телепортируемся справа (за спиной)
+    // Игрок смотрит влево? Телепортируемся слева (за спиной)
+    const float direction = lastPlayerFacingRight ? 1.0f : -1.0f;
     const float oldX = x;
+
+    // Идём за спину на 150px
     x = lastPlayerX + direction * TELEPORT_OFFSET;
     y = lastPlayerY;
 
-    // После телепорта смотрим на игрока
+    // Отступаем ещё на 120px, чтобы не быть слишком близко
+    x += direction * TELEPORT_BACKOFF;
+
+    // Смотрим на игрока
     facingRight = (lastPlayerX > x);
 
     std::cout << "[САМУРАЙ] ТЕЛЕПОРТ: " << (int)oldX << " → " << (int)x
-              << " (за спину игрока на x=" << (int)lastPlayerX << ")\n";
+              << " (ЗА СПИНУ, игрок смотрит " << (lastPlayerFacingRight ? "вправо" : "влево") << ")\n";
 
     teleportTimer = TELEPORT_COOLDOWN;
 
@@ -564,18 +597,22 @@ void BossSamurai::updateMeleeFallback(float deltaTime, float /*playerX*/, float 
     if (isBreakingAway) {
         breakAwayTimer -= deltaTime;
 
-        // Отскакиваем от игрока (направление противоположное facingRight)
-        const float dir = facingRight ? -1.0f : 1.0f;
+        // ── ИСПРАВЛЕНО: Отскок должен быть ПРОТИВОПОЛОЖЕН ИГРОКУ ──
+        // Если игрок справа → отскок влево
+        // Если игрок слева → отскок вправо
+        const float dir = (lastPlayerX > x) ? -1.0f : 1.0f;
+
         velocityX = dir * SWORD_BREAK_SPEED;
         x += velocityX * deltaTime;
         applyCollisionsX();
 
         if (breakAwayTimer <= 0.0f) {
-            std::cout << "[САМУРАЙ] ОТСКОК завершён — серия сброшена\n";
+            std::cout << "[САМУРАЙ] ОТСКОК завершён — переходим в IDLE\n";
             isBreakingAway  = false;
             swordComboCount = 0;
             velocityX       = 0.0f;
-            swordTimer      = SWORD_COOLDOWN;  // ← добавить
+            swordTimer      = SWORD_COOLDOWN;
+            forceState(SamuraiState::IDLE);
         }
         return;
     }
@@ -590,11 +627,11 @@ void BossSamurai::updateMeleeFallback(float deltaTime, float /*playerX*/, float 
         swordComboCount++;
 
         if (swordComboCount >= SWORD_COMBO_MAX) {
-            // Вся серия нанесена → отскок
-            std::cout << "[САМУРАЙ] СЕРИЯ УДАРОВ завершена (" << swordComboCount << "/" << SWORD_COMBO_MAX << ") → отскок\n";
+            // Вся серия нанесена → СРАЗУ переходим в отскок
+            std::cout << "[САМУРАЙ] СЕРИЯ УДАРОВ завершена (" << swordComboCount << "/" << SWORD_COMBO_MAX << ") → ОТСКОК\n";
             isBreakingAway = true;
             breakAwayTimer = BREAK_AWAY_DURATION;
-            forceState(SamuraiState::WALK);
+            forceState(SamuraiState::IDLE);  // ← ИЗМЕНЕНО: WALK → IDLE перед отскоком
         } else {
             // Ещё есть удары в серии → следующий удар
             std::cout << "[САМУРАЙ] УДАР " << swordComboCount << "/" << SWORD_COMBO_MAX << " — продолжаем серию\n";

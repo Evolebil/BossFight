@@ -123,6 +123,7 @@ private:
 
     static constexpr float TELEPORT_OFFSET   = 150.0f;  ///< Смещение за спиной игрока (px)
     static constexpr float TELEPORT_COOLDOWN = 4.0f;    ///< Кулдаун телепорта (сек)
+    static constexpr float TELEPORT_BACKOFF  = 120.0f;  ///< Отскок НАЗАД после телепорта для создания расстояния (px)
 
     // ============================================================
     // КОНСТАНТЫ — БОМБЫ
@@ -238,6 +239,12 @@ private:
     float spawnDelay = 0.5f;  ///< Задержка перед началом действий после спавна
     float platformDropTimer = 0.0f; ///< >0 = активно проваливаемся через платформу
 
+
+    // ── НОВЫЕ ПОЛЯ ──────────────────────────────────────────
+    float lastPlayerX           = 0.0f;   ///< X позиция игрока (сохранено в update)
+    float lastPlayerY           = 0.0f;   ///< Y позиция игрока (сохранено в update)
+    bool  lastPlayerFacingRight = true;   ///< Направление взгляда игрока (true=вправо)
+
     // ============================================================
     // ПОЛЯ — ФЛАГИ
     // ============================================================
@@ -330,11 +337,18 @@ public:
 
     /**
      * @brief Обновить логику самурая на один кадр.
-     * @param deltaTime  Время кадра (сек)
-     * @param playerX    Текущая X игрока (мировые координаты)
-     * @param playerY    Текущая Y игрока (мировые координаты)
+     * @param deltaTime           Время кадра (сек)
+     * @param playerX             Текущая X игрока (мировые координаты)
+     * @param playerY             Текущая Y игрока (мировые координаты)
+     * @param playerFacingRight   Направление взгляда игрока (true = вправо, false = влево)
      */
-    void update(float deltaTime, float playerX, float playerY) override;
+    void update(float deltaTime, float playerX, float playerY, bool playerFacingRight = false) override;
+
+    /// Сказать боссу: игрок сейчас смотрит вправо (true) или влево (false)
+    void setPlayerDirection(bool facingRight) {
+        lastPlayerFacingRight = facingRight;
+    }
+
 
     /// Заглушка — босс требует координаты игрока, используй версию выше
     void update(float deltaTime) override { (void)deltaTime; }
