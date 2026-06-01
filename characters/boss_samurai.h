@@ -146,8 +146,8 @@ private:
 
     static constexpr float DAMAGE_SWORD       = 20.0f;   ///< Урон одного удара меча
     static constexpr int   SWORD_HIT_FRAME    = 2;       ///< Кадр анимации когда засчитывается хит
-    static constexpr int   SWORD_HIT_W        = 80;      ///< Ширина хитбокса меча (px)
-    static constexpr int   SWORD_HIT_H        = 60;      ///< Высота хитбокса меча (px)
+    static constexpr int   SWORD_HIT_W        = 100;      ///< Ширина хитбокса меча (px)
+    static constexpr int   SWORD_HIT_H        = 150;      ///< Высота хитбокса меча (px)
     static constexpr float SWORD_COOLDOWN     = 2.0f;    ///< Кулдаун между ударами меча (сек)
     static constexpr int   SWORD_COMBO_MAX    = 3;       ///< Ударов подряд в серии
     static constexpr float SWORD_BREAK_SPEED  = 400.0f;  ///< Скорость отскока после серии (px/s)
@@ -235,6 +235,7 @@ private:
     float stanceTimer      = 0.0f;  ///< Сколько секунд стойка уже активна
     float stunTimer        = 0.0f;  ///< Сколько осталось оглушения (сек)
     float jumpCooldown     = 0.0f;  ///< Сколько осталось до следующего прыжка (сек)
+    float spawnDelay = 0.5f;  ///< Задержка перед началом действий после спавна
     float platformDropTimer = 0.0f; ///< >0 = активно проваливаемся через платформу
 
     // ============================================================

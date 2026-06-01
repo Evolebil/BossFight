@@ -96,6 +96,15 @@ void BossSamurai::update(float deltaTime, float playerX, float playerY) {
     lastPlayerX = playerX;
     lastPlayerY = playerY;
 
+
+    // Задержка после спавна — самурай не действует первые 0.5 сек
+    if (spawnDelay > 0.0f) {
+        spawnDelay -= deltaTime;
+        applyGravityAndCollisions(deltaTime);
+        return;
+    }
+
+
     // ── СМЕРТЬ ──────────────────────────────────────────────
     // HP кончились — запускаем анимацию смерти, AI выключаем
     if (hp <= 0 && phase == SamuraiPhase::PHASE_1) {
@@ -132,6 +141,13 @@ void BossSamurai::update(float deltaTime, float playerX, float playerY) {
 
     // Кулдаун удара меча тикает независимо от AI
     if (swordTimer > 0.0f) swordTimer -= deltaTime;
+
+    // Если закончили отскок и стоим в WALK — возвращаемся в IDLE
+    if (currentState == SamuraiState::WALK &&
+        !isBreakingAway &&
+        velocityX == 0.0f) {
+        setState(SamuraiState::IDLE);
+    }
 
     // Стойка — отслеживаем таймаут
     updateStance(deltaTime);
@@ -259,13 +275,14 @@ void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
     if (bombTimer     > 0.0f) bombTimer     -= deltaTime;
 
     // Не прерывать текущую атаку или спец-состояние
-    if (currentState == SamuraiState::THROW_BOMBS  ||
+    if (currentState == SamuraiState::THROW_BOMBS   ||
         currentState == SamuraiState::SWORD_ATTACK  ||
         currentState == SamuraiState::POWER_ATTACK  ||
         currentState == SamuraiState::TELEPORT      ||
         currentState == SamuraiState::STANCE        ||
         currentState == SamuraiState::STUNNED       ||
-        currentState == SamuraiState::DEATH) return;
+        currentState == SamuraiState::DEATH         ||
+        isBreakingAway) return;  // ← добавить
 
     // Выполнить запланированную атаку после телепорта
     if (queuedAttack != SamuraiState::IDLE) {
@@ -278,14 +295,16 @@ void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
         return;
     }
 
-    const float dx   = playerX - x;
-    const float dist = std::abs(dx);
+    const float dx     = playerX - x;
+    const float dy     = playerY - y;
+    const float dist   = std::sqrt(dx*dx + dy*dy);  // полная — для движения
+    const float distX  = std::abs(dx);              // горизонтальная — для выбора атаки
 
     // Генерируем случайное число 0-99 для выбора атаки
     std::uniform_int_distribution<int> roll(0, 99);
     const int r = roll(rng);
 
-    if (dist >= DIST_FAR) {
+    if (distX >= DIST_FAR) {
         // Дальняя дистанция
         if (teleportTimer <= 0.0f) {
             teleportBehindPlayer();
@@ -299,7 +318,7 @@ void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
             updateMeleeFallback(deltaTime, playerX, playerY);
         }
 
-    } else if (dist >= DIST_CLOSE) {
+    } else if (distX >= DIST_CLOSE) {
         // Средняя дистанция — выбор с вероятностью
         if (r < 55 && bombTimer <= 0.0f) {
             throwBombsFan();
@@ -312,15 +331,21 @@ void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
 
     } else {
         // Ближняя дистанция — меч или стойка
+        // Стойку активируем ТОЛЬКО если игрок примерно на одной высоте
+        const float dyAbs = std::abs(playerY - y);
+        const bool playerOnSameLevel = (dyAbs < height * 1.5f);
+
         if (r < 50 && swordTimer <= 0.0f) {
-            // Удар мечом
             updateMeleeFallback(deltaTime, playerX, playerY);
-        } else if (r >= 50) {
-            // Стойка парирования
+        } else if (r >= 50 && playerOnSameLevel) {
+            // Стойка парирования — только если игрок не сильно выше/ниже
             stanceTimer  = 0.0f;
             stanceActive = true;
             spawnSmoke();
             forceState(SamuraiState::STANCE);
+        } else if (swordTimer <= 0.0f) {
+            // Игрок на другой высоте — просто бьём мечом
+            updateMeleeFallback(deltaTime, playerX, playerY);
         }
     }
 }
@@ -416,6 +441,10 @@ bool BossSamurai::checkParry() {
     // Парирование возможно только пока стойка активна
     if (!stanceActive) return false;
 
+    // Магия снизу/сверху не парируется — только горизонтальные удары
+    const float dyAbs = std::abs(lastPlayerY - y);
+    if (dyAbs > height * 1.5f) return false;
+
     std::cout << "[САМУРАЙ] ПАРИРОВАНИЕ! Ответный удар: телепорт + веер бомб\n";
 
     // Сбрасываем стойку
@@ -488,7 +517,7 @@ void BossSamurai::spawnSmoke() {
     std::uniform_real_distribution<float> randVel (-20.0f,  20.0f);
     std::uniform_real_distribution<float> randLife(  0.8f,   1.8f);
 
-    for (int i = 0; i < 20; i++) {
+    for (int i = 0; i < 40; i++) {
         SmokeParticle p;
         p.x           = x + randX(rng);
         p.y           = y + randY(rng);
@@ -542,11 +571,11 @@ void BossSamurai::updateMeleeFallback(float deltaTime, float /*playerX*/, float 
         applyCollisionsX();
 
         if (breakAwayTimer <= 0.0f) {
-            // Отскок закончен — сбрасываем серию
             std::cout << "[САМУРАЙ] ОТСКОК завершён — серия сброшена\n";
             isBreakingAway  = false;
             swordComboCount = 0;
             velocityX       = 0.0f;
+            swordTimer      = SWORD_COOLDOWN;  // ← добавить
         }
         return;
     }
@@ -789,55 +818,32 @@ float BossSamurai::checkPlayerDamage(SDL_Rect playerBox, float /*deltaTime*/) {
 
     // ── ВЗРЫВЫ БОМБ ───────────────────────────────────────────
     for (auto& bomb : bombs) {
-        for (auto& bomb : bombs) {
-            if (!bomb.active) continue;
+        if (!bomb.active) continue;
 
-            if (!bomb.exploded) {
-                // Летящая бомба касается игрока → взрывается
-                SDL_Rect bombHitbox = {
-                    (int)(bomb.x - BOMB_FRAME_W / 2),
-                    (int)(bomb.y - BOMB_FRAME_H / 2),
-                    BOMB_FRAME_W, BOMB_FRAME_H
-                };
-                if (rectsOverlap(playerBox, bombHitbox)) {
-                    bomb.exploded = true;
-                    bomb.explodeAnim.reset();
-                }
-            } else {
-                // Взрыв — урон по радиусу, один раз
-                SDL_Rect explodeBox = {
-                    (int)(bomb.x - Bomb::EXPLODE_RADIUS),
-                    (int)(bomb.y - Bomb::EXPLODE_RADIUS),
-                    (int)(Bomb::EXPLODE_RADIUS * 2),
-                    (int)(Bomb::EXPLODE_RADIUS * 2)
-                };
-                if (rectsOverlap(playerBox, explodeBox)) {
-                    std::cout << "[САМУРАЙ] ВЗРЫВ БОМБЫ попал по игроку — урон=" << DAMAGE_BOMB << "\n";
-                    totalDamage += DAMAGE_BOMB;
-                    bomb.active = false;  // взрыв засчитан — убираем
-                }
-            }
-        }
-
-        // Хитбокс летящей бомбы = размер спрайта, центрирован
-        SDL_Rect bombHitbox = {
-            (int)(bomb.x - BOMB_FRAME_W / 2),
-            (int)(bomb.y - BOMB_FRAME_H / 2),
-            BOMB_FRAME_W, BOMB_FRAME_H
-        };
-
-        if (rectsOverlap(playerBox, bombHitbox)) {
-            // Взрыв — область поражения в 2 раза больше спрайта
-            SDL_Rect explodeBox = {
-                (int)(bomb.x - BOMB_FRAME_W),
-                (int)(bomb.y - BOMB_FRAME_H),
-                BOMB_FRAME_W * 2, BOMB_FRAME_H * 2
+        if (!bomb.exploded) {
+            // Летящая бомба касается игрока → взрывается
+            SDL_Rect bombHitbox = {
+                (int)(bomb.x - BOMB_FRAME_W / 2),
+                (int)(bomb.y - BOMB_FRAME_H / 2),
+                BOMB_FRAME_W, BOMB_FRAME_H
             };
-            if (rectsOverlap(playerBox, explodeBox))
+            if (rectsOverlap(playerBox, bombHitbox)) {
+                bomb.exploded = true;
+                bomb.explodeAnim.reset();
+            }
+        } else {
+            // Взрыв — урон по радиусу, один раз
+            SDL_Rect explodeBox = {
+                (int)(bomb.x - Bomb::EXPLODE_RADIUS),
+                (int)(bomb.y - Bomb::EXPLODE_RADIUS),
+                (int)(Bomb::EXPLODE_RADIUS * 2),
+                (int)(Bomb::EXPLODE_RADIUS * 2)
+            };
+            if (rectsOverlap(playerBox, explodeBox)) {
+                std::cout << "[САМУРАЙ] ВЗРЫВ БОМБЫ попал по игроку — урон=" << DAMAGE_BOMB << "\n";
                 totalDamage += DAMAGE_BOMB;
-
-            bomb.exploded = true;
-            bomb.explodeAnim.reset();
+                bomb.active = false;
+            }
         }
     }
 
