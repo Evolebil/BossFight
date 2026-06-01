@@ -18,6 +18,9 @@
  *  11. Обновить текущую анимацию
  */
 #include "boss_samurai.h"
+#include "../levels/ilevel.h"
+
+extern ILevel* g_currentLevel;
 
 // ============================================================
 // КОНСТРУКТОР
@@ -106,7 +109,7 @@ void BossSamurai::update(float deltaTime, float playerX, float playerY, bool pla
 
     // ── СМЕРТЬ ──────────────────────────────────────────────
     // HP кончились — запускаем анимацию смерти, AI выключаем
-    if (hp <= 0 && phase == SamuraiPhase::PHASE_1) {
+    if (hp <= 0) {
         if (currentState != SamuraiState::DEATH) {
             std::cout << "[САМУРАЙ] СМЕРТЬ — HP=" << hp << "\n";
             phase        = SamuraiPhase::DYING;
@@ -204,63 +207,76 @@ void BossSamurai::updateMovement(float deltaTime, float playerX, float playerY) 
         return;
     }
 
-    // Вектор до игрока и дистанция
-    const float dx   = playerX - x;
-    const float dy   = playerY - y;
-    const float dist = std::sqrt(dx*dx + dy*dy);
+    const float dx    = playerX - x;
+    const float dy    = playerY - y;
+    const float distX = std::abs(dx);  // только горизонталь для движения
 
-    // Самурай всегда смотрит на игрока
     facingRight = (dx > 0);
 
-    // ── ПРЫЖОК ───────────────────────────────────────────────
-    // Условие: игрок выше (dy < 0), самурай на земле, кулдаун прошёл
-    // Порог: -JUMP_VELOCITY * 0.05f ≈ 29px — минимальная высота цели чтобы прыгать
+    // ── ПРЫЖОК ВВЕРХ ─────────────────────────────────────────
+    // dy < 0 → игрок выше нас, порог ~29px
     if (dy < -JUMP_VELOCITY * 0.05f && isGrounded && jumpCooldown <= 0.0f) {
-        std::cout << "[САМУРАЙ] ПРЫЖОК — игрок выше на " << (int)(-dy) << "px, dist=" << (int)dist << "\n";
+        std::cout << "[САМУРАЙ] ПРЫЖОК — игрок выше на " << (int)(-dy) << "px\n";
         velocityY    = JUMP_VELOCITY;
         isGrounded   = false;
         jumpCooldown = JUMP_COOLDOWN_MAX;
         forceState(SamuraiState::JUMP);
     }
 
-    // ── ПРОВАЛ ЧЕРЕЗ ПЛАТФОРМУ ───────────────────────────────
-    // Активируется снаружи (когда игрок на нижней платформе)
-    if (platformDropTimer > 0.0f) {
-        platformDropTimer -= deltaTime;
-        y += 2.0f;  // небольшой толчок вниз чтобы пройти сквозь платформу
+    // ── КУЛДАУН ПРОВАЛА ───────────────────────────────────────
+    if (dropCooldown > 0.0f) dropCooldown -= deltaTime;
+
+    // ── АКТИВАЦИЯ ПРОВАЛА ─────────────────────────────────────
+    // Условия: игрок заметно ниже + примерно под нами +
+    //          стоим на земле + не проваливаемся + кулдаун прошёл
+    const bool playerBelow = (dy > DROP_THRESHOLD);
+    const bool playerNearX = (distX < DIST_CLOSE * 2.0f);
+    const bool canDrop     = (isGrounded && platformDropTimer <= 0.0f && dropCooldown <= 0.0f);
+
+    if (playerBelow && playerNearX && canDrop) {
+        std::cout << "[САМУРАЙ] ПРОВАЛ — игрок ниже на " << (int)dy
+                  << "px, distX=" << (int)distX << "\n";
+        platformDropTimer = DROP_DURATION;
+        dropCooldown      = DROP_COOLDOWN;
     }
 
-    // ── ГОРИЗОНТАЛЬНОЕ ДВИЖЕНИЕ ──────────────────────────────
-    if (dist > PREFERRED_DISTANCE + DISTANCE_THRESHOLD) {
-        // Слишком далеко → идём к игроку
+    // ── АКТИВНЫЙ ПРОВАЛ ───────────────────────────────────────
+    // Пока таймер идёт — стоим горизонтально, толкаем вниз
+    if (platformDropTimer > 0.0f) {
+        platformDropTimer -= deltaTime;
+        velocityX = 0.0f;
+        y += 2.0f;
+        applyCollisionsX();
+        return;  // пропускаем горизонтальное движение
+    }
+
+    // ── ГОРИЗОНТАЛЬНОЕ ДВИЖЕНИЕ (по distX, не dist) ──────────
+    if (distX > PREFERRED_DISTANCE + DISTANCE_THRESHOLD) {
         velocityX = (dx > 0) ? MOVE_SPEED : -MOVE_SPEED;
         if (isGrounded && currentState != SamuraiState::WALK) {
-            std::cout << "[САМУРАЙ] ДВИЖЕНИЕ → к игроку, dist=" << (int)dist << " (предпочт.=" << (int)PREFERRED_DISTANCE << ")\n";
+            std::cout << "[САМУРАЙ] ДВИЖЕНИЕ → distX=" << (int)distX << "\n";
             setState(SamuraiState::WALK);
         }
-    } else if (dist < PREFERRED_DISTANCE - DISTANCE_THRESHOLD) {
-        // Слишком близко → отступаем (60% скорости)
+    } else if (distX < PREFERRED_DISTANCE - DISTANCE_THRESHOLD) {
         velocityX = (dx > 0) ? -MOVE_SPEED * 0.6f : MOVE_SPEED * 0.6f;
         if (isGrounded && currentState != SamuraiState::WALK) {
-            std::cout << "[САМУРАЙ] ОТСТУПЛЕНИЕ ← от игрока, dist=" << (int)dist << "\n";
+            std::cout << "[САМУРАЙ] ОТСТУПЛЕНИЕ ← distX=" << (int)distX << "\n";
             setState(SamuraiState::WALK);
         }
     } else {
-        // Комфортная дистанция → стоим
         velocityX = 0.0f;
         if (isGrounded && currentState == SamuraiState::WALK) {
-            std::cout << "[САМУРАЙ] СТОИМ — комфортная дистанция dist=" << (int)dist << "\n";
+            std::cout << "[САМУРАЙ] СТОИМ — distX=" << (int)distX << "\n";
             setState(SamuraiState::IDLE);
         }
     }
 
-    // Приземлились → сбрасываем состояние прыжка
+    // Приземлились после прыжка
     if (isGrounded && currentState == SamuraiState::JUMP) {
-        std::cout << "[САМУРАЙ] ПРИЗЕМЛЕНИЕ на (" << (int)x << "," << (int)y << ")\n";
+        std::cout << "[САМУРАЙ] ПРИЗЕМЛЕНИЕ (" << (int)x << "," << (int)y << ")\n";
         setState(SamuraiState::IDLE);
     }
 
-    // Применяем горизонтальное движение + коллизии по X
     x += velocityX * deltaTime;
     applyCollisionsX();
 }
@@ -273,6 +289,7 @@ void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
     // Тикаем кулдауны атак
     if (teleportTimer > 0.0f) teleportTimer -= deltaTime;
     if (bombTimer     > 0.0f) bombTimer     -= deltaTime;
+    if (stanceCooldown > 0.0f) stanceCooldown -= deltaTime;
 
     // Не прерывать текущую атаку или спец-состояние
     if (currentState == SamuraiState::THROW_BOMBS   ||
@@ -283,6 +300,9 @@ void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
         currentState == SamuraiState::STUNNED       ||
         currentState == SamuraiState::DEATH         ||
         isBreakingAway) return;
+
+    // Не выбирать атаку пока проваливаемся через платформу
+    if (platformDropTimer > 0.0f) return;
 
     // Выполнить запланированную атаку после телепорта
     if (queuedAttack != SamuraiState::IDLE) {
@@ -363,11 +383,12 @@ void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
         if (r < 50 && swordTimer <= 0.0f) {
             // 50% шанс: бить мечом (независимо от высоты)
             updateMeleeFallback(deltaTime, playerX, playerY);
-        } else if (r >= 50 && playerOnSameLevel) {
+        } else if ((r >= 50 && playerOnSameLevel && stanceCooldown <= 0.0f)) {
             // 50% шанс: стойка парирования (ТОЛЬКО если на одной высоте)
             std::cout << "[САМУРАЙ] ВХОДИМ В СТОЙКУ (игрок на одной высоте)\n";
             stanceTimer  = 0.0f;
             stanceActive = true;
+            stanceCooldown = STANCE_COOLDOWN;
             spawnSmoke();
             forceState(SamuraiState::STANCE);
         } else if (swordTimer <= 0.0f) {
@@ -378,28 +399,43 @@ void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
     }
 }
 
-// ============================================================
-// ТЕЛЕПОРТ
-// ============================================================
-
 void BossSamurai::teleportBehindPlayer() {
-    // Смотрим: игрок смотрит вправо? Тогда телепортируемся справа (за спиной)
-    // Игрок смотрит влево? Телепортируемся слева (за спиной)
     const float direction = lastPlayerFacingRight ? 1.0f : -1.0f;
     const float oldX = x;
 
-    // Идём за спину на 150px
-    x = lastPlayerX + direction * TELEPORT_OFFSET;
-    y = lastPlayerY;
+    // Вычисляем целевую позицию (перед игроком)
+    float targetX = lastPlayerX + direction * TELEPORT_OFFSET;
+    targetX += direction * TELEPORT_BACKOFF;
+    const float targetY = lastPlayerY;
 
-    // Отступаем ещё на 120px, чтобы не быть слишком близко
-    x += direction * TELEPORT_BACKOFF;
+    // ── Проверяем что позиция внутри карты ───────────────────
+    if (g_currentLevel) {
+        int offsetX, offsetY;
+        g_currentLevel->getMapOffset(offsetX, offsetY);
+        const float minX = static_cast<float>(offsetX) + TELEPORT_MARGIN;
+        const float maxX = static_cast<float>(offsetX + g_currentLevel->getMapWidth()) - TELEPORT_MARGIN;
 
-    // Смотрим на игрока
+        if (targetX < minX || targetX > maxX) {
+            // Телепорт выйдет за карту — отменяем, выбираем другую атаку
+            std::cout << "[САМУРАЙ] ТЕЛЕПОРТ ОТМЕНЁН (у края карты, targetX=" << (int)targetX << ")\n";
+            teleportTimer = TELEPORT_COOLDOWN;  // всё равно ставим кулдаун
+            if (bombTimer <= 0.0f) {
+                throwBombsFan();
+            } else {
+                forceState(SamuraiState::IDLE);
+            }
+            return;
+        }
+    }
+
+    // Телепорт безопасен — применяем
+    x = targetX;
+    y = targetY;
+
     facingRight = (lastPlayerX > x);
 
     std::cout << "[САМУРАЙ] ТЕЛЕПОРТ: " << (int)oldX << " → " << (int)x
-              << " (ЗА СПИНУ, игрок смотрит " << (lastPlayerFacingRight ? "вправо" : "влево") << ")\n";
+              << " (игрок смотрит " << (lastPlayerFacingRight ? "вправо" : "влево") << ")\n";
 
     teleportTimer = TELEPORT_COOLDOWN;
 
@@ -483,6 +519,7 @@ bool BossSamurai::checkParry() {
     // Сбрасываем стойку
     stanceActive = false;
     stanceTimer  = 0.0f;
+    stanceCooldown = STANCE_COOLDOWN;
 
     // Анимация стойки — быстро назад
     auto it = animations.find(SamuraiState::STANCE);

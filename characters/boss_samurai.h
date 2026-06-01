@@ -108,6 +108,10 @@ private:
     static constexpr float DISTANCE_THRESHOLD  = 30.0f;   ///< Мёртвая зона — меньше этого не двигаемся (px)
     static constexpr float JUMP_VELOCITY       = -580.0f; ///< Начальная скорость прыжка (px/s вверх)
     static constexpr float JUMP_COOLDOWN_MAX   = 1.5f;    ///< Кулдаун прыжка (сек)
+    // ── ПРОВАЛ ЧЕРЕЗ ПЛАТФОРМУ ───────────────────────────────
+    static constexpr float DROP_THRESHOLD = 60.0f;   ///< px — игрок ниже на столько → провал
+    static constexpr float DROP_DURATION  = 0.18f;   ///< сек — длительность игнорирования платформ
+    static constexpr float DROP_COOLDOWN  = 0.8f;    ///< сек — защита от повторного провала
 
     // ============================================================
     // КОНСТАНТЫ — ЗОНЫ ДИСТАНЦИИ (определяют выбор атаки)
@@ -124,6 +128,7 @@ private:
     static constexpr float TELEPORT_OFFSET   = 150.0f;  ///< Смещение за спиной игрока (px)
     static constexpr float TELEPORT_COOLDOWN = 4.0f;    ///< Кулдаун телепорта (сек)
     static constexpr float TELEPORT_BACKOFF  = 120.0f;  ///< Отскок НАЗАД после телепорта для создания расстояния (px)
+    static constexpr float TELEPORT_MARGIN = 60.0f;  ///< Запас от края карты (px)
 
     // ============================================================
     // КОНСТАНТЫ — БОМБЫ
@@ -140,6 +145,7 @@ private:
 
     static constexpr float STANCE_DURATION   = 1.5f;  ///< Максимум стойки до автостана (сек)
     static constexpr float STUN_DURATION   = 2.0f;  ///< Длительность стана (сек)
+    static constexpr float STANCE_COOLDOWN = 5.0f;  ///< Кулдаун между стойками (сек)
 
     // ============================================================
     // КОНСТАНТЫ — УДАР МЕЧОМ
@@ -234,10 +240,12 @@ private:
     float smokeTimer       = 0.0f;  ///< Сколько осталось до следующей порции дыма (сек)
     float swordTimer       = 0.0f;  ///< Сколько осталось до следующего удара меча (сек)
     float stanceTimer      = 0.0f;  ///< Сколько секунд стойка уже активна
+    float stanceCooldown = 0.0f;  ///< Сколько осталось до следующей стойки
     float stunTimer        = 0.0f;  ///< Сколько осталось оглушения (сек)
     float jumpCooldown     = 0.0f;  ///< Сколько осталось до следующего прыжка (сек)
     float spawnDelay = 0.5f;  ///< Задержка перед началом действий после спавна
     float platformDropTimer = 0.0f; ///< >0 = активно проваливаемся через платформу
+    float dropCooldown = 0.0f;  ///< Кулдаун между провалами (защита от спама)
 
 
     // ── НОВЫЕ ПОЛЯ ──────────────────────────────────────────
