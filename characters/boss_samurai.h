@@ -52,6 +52,7 @@ struct Bomb {
     float fuseTimer;   ///< Секунд до взрыва (считается вниз)
     bool  active;      ///< false = убрать из вектора
     bool  exploded;    ///< true = показывать анимацию взрыва, наносить урон
+    bool  damageDealt = false;  // ← ДОБАВИТЬ
 
     Animation explodeAnim { false };  // ← своя анимация у каждой бомбы
     // --- Константы бомбы ---
@@ -146,6 +147,8 @@ private:
     static constexpr float STANCE_DURATION   = 1.5f;  ///< Максимум стойки до автостана (сек)
     static constexpr float STUN_DURATION   = 2.0f;  ///< Длительность стана (сек)
     static constexpr float STANCE_COOLDOWN = 5.0f;  ///< Кулдаун между стойками (сек)
+    static constexpr float PARRY_BREAK_SPEED    = 550.0f;
+    static constexpr float PARRY_BREAK_DURATION = 0.65f;
 
     // ============================================================
     // КОНСТАНТЫ — УДАР МЕЧОМ
@@ -262,6 +265,7 @@ private:
     bool attackSpawned  = false;  ///< true = атака этого состояния уже запущена
     bool isJumping      = false;  ///< true = персонаж в прыжке (физика прыжка активна)
     bool isBreakingAway = false;  ///< true = выполняется отскок после серии ударов
+    bool  isParryBreaking = false;
 
     // ============================================================
     // ПОЛЯ — СЕРИЯ УДАРОВ МЕЧОМ

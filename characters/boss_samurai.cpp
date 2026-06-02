@@ -138,11 +138,32 @@ void BossSamurai::update(float deltaTime, float playerX, float playerY, bool pla
     // Движение (горизонталь, прыжок, провал через платформу)
     updateMovement(deltaTime, playerX, playerY);
 
+    // Отскок тикает здесь — независимо от updateAI
+    if (isBreakingAway) {
+        breakAwayTimer -= deltaTime;
+        const float speed = isParryBreaking ? PARRY_BREAK_SPEED : SWORD_BREAK_SPEED;
+        const float dir   = (lastPlayerX > x) ? -1.0f : 1.0f;
+        velocityX = dir * speed;
+        x += velocityX * deltaTime;
+        applyCollisionsX();
+        if (breakAwayTimer <= 0.0f) {
+            std::cout << "[САМУРАЙ] ОТСКОК завершён\n";
+            isBreakingAway  = false;
+            isParryBreaking = false;
+            swordComboCount = 0;
+            velocityX       = 0.0f;
+            swordTimer      = 0.0f;
+            forceState(SamuraiState::IDLE);
+        }
+    }
+
     // AI — выбор атаки по дистанции (тикает кулдауны телепорта/бомб)
     updateAI(deltaTime, playerX, playerY);
 
     // Кулдаун удара меча тикает независимо от AI
     if (swordTimer > 0.0f) swordTimer -= deltaTime;
+
+    if (stanceCooldown > 0.0f) stanceCooldown -= deltaTime;
 
     // Если закончили отскок и стоим в WALK — возвращаемся в IDLE
     if (currentState == SamuraiState::WALK &&
@@ -201,8 +222,12 @@ void BossSamurai::updateMovement(float deltaTime, float playerX, float playerY) 
         velocityX  = 0.0f;
         stunTimer -= deltaTime;
         if (stunTimer <= 0.0f) {
-            std::cout << "[САМУРАЙ] СТАН завершён → IDLE\n";
-            forceState(SamuraiState::IDLE);
+            std::cout << "[САМУРАЙ] СТАН завершён → отскок\n";
+            isBreakingAway  = true;
+            isParryBreaking = false;
+            breakAwayTimer  = BREAK_AWAY_DURATION * 1.5f;
+            swordTimer      = 0.0f;
+            forceState(SamuraiState::WALK);
         }
         return;
     }
@@ -289,7 +314,6 @@ void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
     // Тикаем кулдауны атак
     if (teleportTimer > 0.0f) teleportTimer -= deltaTime;
     if (bombTimer     > 0.0f) bombTimer     -= deltaTime;
-    if (stanceCooldown > 0.0f) stanceCooldown -= deltaTime;
 
     // Не прерывать текущую атаку или спец-состояние
     if (currentState == SamuraiState::THROW_BOMBS   ||
@@ -375,25 +399,23 @@ void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
     } else {
         std::cout << "[САМУРАЙ] БЛИЖНЯЯ ЗОНА (distX=" << (int)distX << ")\n";
 
-        // ВАЖНО: стойка срабатывает ТОЛЬКО если игрок на одной высоте
-        // (проверяем dy отдельно)
-        const float dyAbs = std::abs(playerY - y);
-        const bool playerOnSameLevel = (dyAbs < height * 1.5f);
+        const float dyAbs             = std::abs(playerY - y);
+        const bool  playerOnSameLevel = (dyAbs < height * 1.5f);
 
         if (r < 50 && swordTimer <= 0.0f) {
-            // 50% шанс: бить мечом (независимо от высоты)
+            // 50% шанс: меч (независимо от высоты)
             updateMeleeFallback(deltaTime, playerX, playerY);
-        } else if ((r >= 50 && playerOnSameLevel && stanceCooldown <= 0.0f)) {
-            // 50% шанс: стойка парирования (ТОЛЬКО если на одной высоте)
-            std::cout << "[САМУРАЙ] ВХОДИМ В СТОЙКУ (игрок на одной высоте)\n";
-            stanceTimer  = 0.0f;
-            stanceActive = true;
-            stanceCooldown = STANCE_COOLDOWN;
+        } else if (r >= 50 && playerOnSameLevel && stanceCooldown <= 0.0f) {
+            // 50% шанс: стойка (только если на одной высоте и кулдаун прошёл)
+            std::cout << "[САМУРАЙ] ВХОДИМ В СТОЙКУ\n";
+            stanceTimer    = 0.0f;
+            stanceActive   = true;
+            stanceCooldown = STANCE_COOLDOWN;  // ← выставляем кулдаун здесь тоже
             spawnSmoke();
             forceState(SamuraiState::STANCE);
         } else if (swordTimer <= 0.0f) {
-            // Игрок слишком выше/ниже для стойки → просто бьём мечом
-            std::cout << "[САМУРАЙ] ИГРОК НА ДРУГОЙ ВЫСОТЕ (dy=" << (int)dyAbs << ") → БЬЮ МЕЧОМ\n";
+            // Стойка недоступна → меч
+            std::cout << "[САМУРАЙ] СТОЙКА НЕДОСТУПНА → БЬЮ МЕЧОМ\n";
             updateMeleeFallback(deltaTime, playerX, playerY);
         }
     }
@@ -507,29 +529,28 @@ void BossSamurai::updateStance(float deltaTime) {
 // ============================================================
 
 bool BossSamurai::checkParry() {
-    // Парирование возможно только пока стойка активна
     if (!stanceActive) return false;
 
-    // Магия снизу/сверху не парируется — только горизонтальные удары
     const float dyAbs = std::abs(lastPlayerY - y);
     if (dyAbs > height * 1.5f) return false;
 
-    std::cout << "[САМУРАЙ] ПАРИРОВАНИЕ! Ответный удар: телепорт + веер бомб\n";
+    std::cout << "[САМУРАЙ] ПАРИРОВАНИЕ!\n";
 
-    // Сбрасываем стойку
-    stanceActive = false;
-    stanceTimer  = 0.0f;
+    stanceActive   = false;
+    stanceTimer    = 0.0f;
     stanceCooldown = STANCE_COOLDOWN;
 
-    // Анимация стойки — быстро назад
     auto it = animations.find(SamuraiState::STANCE);
     if (it != animations.end()) it->second.playReverse();
 
-    // Ответный удар: телепорт за спину + веер бомб
     teleportBehindPlayer();
     throwBombsFan();
 
-    // Возвращаем true → GameScene должна наложить стан на игрока
+    isBreakingAway  = true;
+    isParryBreaking = true;
+    breakAwayTimer  = PARRY_BREAK_DURATION;
+    forceState(SamuraiState::IDLE);
+
     return true;
 }
 
@@ -581,21 +602,20 @@ void BossSamurai::updateBombs(float deltaTime) {
 // ============================================================
 
 void BossSamurai::spawnSmoke() {
-    // Распределения для случайного разброса частиц
-    std::uniform_real_distribution<float> randX   (-30.0f,  30.0f);
-    std::uniform_real_distribution<float> randY   (-40.0f,  10.0f);
-    std::uniform_real_distribution<float> randVel (-20.0f,  20.0f);
-    std::uniform_real_distribution<float> randLife(  0.8f,   1.8f);
+    std::uniform_real_distribution<float> randX   (-50.0f,  50.0f);
+    std::uniform_real_distribution<float> randY   (-15.0f,  35.0f); // ниже — не высоко
+    std::uniform_real_distribution<float> randVel (-15.0f,  15.0f);
+    std::uniform_real_distribution<float> randLife(  2.5f,   4.0f);
 
-    for (int i = 0; i < 40; i++) {
+    for (int i = 0; i < 55; i++) {
         SmokeParticle p;
         p.x           = x + randX(rng);
         p.y           = y + randY(rng);
         p.velX        = randVel(rng);
-        p.velY        = -30.0f + randVel(rng);  // дым поднимается вверх (velY отрицательный)
+        p.velY        = -12.0f + randVel(rng) * 0.3f; // медленно, висит низко
         p.maxLifetime = randLife(rng);
         p.lifetime    = p.maxLifetime;
-        p.alpha       = 180;
+        p.alpha       = static_cast<Uint8>(160 + (rng() % 60)); // 160-220
         smokeParticles.push_back(p);
     }
 
@@ -629,30 +649,6 @@ void BossSamurai::updateSmoke(float deltaTime) {
 // ============================================================
 
 void BossSamurai::updateMeleeFallback(float deltaTime, float /*playerX*/, float /*playerY*/) {
-
-    // ── ФАЗА ОТСКОКА после завершения серии ──────────────────
-    if (isBreakingAway) {
-        breakAwayTimer -= deltaTime;
-
-        // ── ИСПРАВЛЕНО: Отскок должен быть ПРОТИВОПОЛОЖЕН ИГРОКУ ──
-        // Если игрок справа → отскок влево
-        // Если игрок слева → отскок вправо
-        const float dir = (lastPlayerX > x) ? -1.0f : 1.0f;
-
-        velocityX = dir * SWORD_BREAK_SPEED;
-        x += velocityX * deltaTime;
-        applyCollisionsX();
-
-        if (breakAwayTimer <= 0.0f) {
-            std::cout << "[САМУРАЙ] ОТСКОК завершён — переходим в IDLE\n";
-            isBreakingAway  = false;
-            swordComboCount = 0;
-            velocityX       = 0.0f;
-            swordTimer      = SWORD_COOLDOWN;
-            forceState(SamuraiState::IDLE);
-        }
-        return;
-    }
 
     // ── ЖДЁМ КОНЦА ТЕКУЩЕГО УДАРА ────────────────────────────
     if (currentState == SamuraiState::SWORD_ATTACK) {
@@ -905,18 +901,15 @@ float BossSamurai::checkPlayerDamage(SDL_Rect playerBox, float /*deltaTime*/) {
                 bomb.exploded = true;
                 bomb.explodeAnim.reset();
             }
-        } else {
-            // Взрыв — урон по радиусу, один раз
-            SDL_Rect explodeBox = {
-                (int)(bomb.x - Bomb::EXPLODE_RADIUS),
-                (int)(bomb.y - Bomb::EXPLODE_RADIUS),
-                (int)(Bomb::EXPLODE_RADIUS * 2),
-                (int)(Bomb::EXPLODE_RADIUS * 2)
-            };
-            if (rectsOverlap(playerBox, explodeBox)) {
+        } else if (!bomb.damageDealt) {
+            // Взрыв — круглая проверка расстояния, урон один раз
+            const float dx = (playerBox.x + playerBox.w / 2.0f) - bomb.x;
+            const float dy = (playerBox.y + playerBox.h / 2.0f) - bomb.y;
+            if (dx*dx + dy*dy <= Bomb::EXPLODE_RADIUS * Bomb::EXPLODE_RADIUS) {
                 std::cout << "[САМУРАЙ] ВЗРЫВ БОМБЫ попал по игроку — урон=" << DAMAGE_BOMB << "\n";
-                totalDamage += DAMAGE_BOMB;
-                bomb.active = false;
+                totalDamage   += DAMAGE_BOMB;
+                bomb.damageDealt = true;
+                bomb.active   = false;
             }
         }
     }
