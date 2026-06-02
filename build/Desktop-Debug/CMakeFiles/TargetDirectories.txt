@@ -1,0 +1,7 @@
+/home/evol/Документы/BossFight/build/Desktop-Debug/CMakeFiles/BossFight.dir
+/home/evol/Документы/BossFight/build/Desktop-Debug/CMakeFiles/edit_cache.dir
+/home/evol/Документы/BossFight/build/Desktop-Debug/CMakeFiles/rebuild_cache.dir
+/home/evol/Документы/BossFight/build/Desktop-Debug/CMakeFiles/list_install_components.dir
+/home/evol/Документы/BossFight/build/Desktop-Debug/CMakeFiles/install.dir
+/home/evol/Документы/BossFight/build/Desktop-Debug/CMakeFiles/install/local.dir
+/home/evol/Документы/BossFight/build/Desktop-Debug/CMakeFiles/install/strip.dir
