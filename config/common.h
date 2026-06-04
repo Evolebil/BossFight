@@ -76,6 +76,17 @@ enum class SamuraiPhase {
     DYING
 };
 
+enum class ArcherState {
+    IDLE,
+    WALK,
+    SWORD_ATTACK,
+    SHOOT,
+    CLONE_VOLLEY,
+    DEATH
+};
+
+
+
 enum class TileType {
     EMPTY      = 0,
     WALL       = 1,
