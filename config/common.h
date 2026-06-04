@@ -25,6 +25,7 @@
 #include <array>
 #include <unordered_map>
 #include <fstream>
+
 // ===== НАШИ КЛАССЫ (только объявления) =====
 class Config;
 class Scene;
@@ -76,6 +77,10 @@ enum class SamuraiPhase {
     DYING
 };
 
+/**
+ * @enum ArcherState
+ * @brief Состояния босса-лучника (ТЗ п.32)
+ */
 enum class ArcherState {
     IDLE,
     WALK,
@@ -85,7 +90,15 @@ enum class ArcherState {
     DEATH
 };
 
-
+/**
+ * @enum ArcherPhase
+ * @brief Фазы жизненного цикла босса-лучника (ТЗ п.33)
+ */
+enum class ArcherPhase {
+    PHASE_1,  ///< HP > 50%: 4 клона, горизонтальные линии огня
+    PHASE_2,  ///< HP ≤ 50%: 6 клонов + диагональный + вертикальный
+    DYING     ///< HP = 0: анимация смерти, AI остановлен
+};
 
 enum class TileType {
     EMPTY      = 0,
