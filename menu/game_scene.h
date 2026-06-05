@@ -17,6 +17,7 @@
 #include "../levels/level2.h"
 #include "../utils/save_manager.h"
 #include "../characters/boss_samurai.h"
+#include "../characters/boss_archer.h"
 
 // Forward declarations
 class Player;
@@ -152,6 +153,8 @@ private:
 
     bool playerTookDamage = false;
     bool bossDefeated     = false;
+    bool samuraiDefeated = false;  // самурай умер → спавним лучника
+    std::string consoleInput;      // буфер команды /kill_boss
     bool loadFromSave = false;   // true = загрузить autosave, false = новая игра
 
     ResultState resultState     = ResultState::PLAYING;

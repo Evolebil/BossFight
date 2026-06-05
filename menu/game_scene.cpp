@@ -123,12 +123,26 @@ void GameScene::handleInput(SDL_Event& event, int mx, int my,
                         golem->showHitboxes = next;
                     if (auto* samurai = dynamic_cast<BossSamurai*>(boss.get()))
                         samurai->showHitboxes = next;
+                    if (auto* archer = dynamic_cast<BossArcher*>(boss.get()))
+                        archer->showHitboxes = next;
+                }
+                break;
+            // Консольная команда — набираем текст в любой момент игры
+            case SDL_SCANCODE_K:
+                if (boss && resultState == ResultState::PLAYING) {
+                    boss->takeDamage(9999999.0f);
+                    std::cout << "[DEBUG] /kill_boss\n";
                 }
                 break;
             default:
                 break;
             }
         }
+    }
+
+    if (event.type == SDL_TEXTINPUT && resultState == ResultState::PLAYING && !isPaused) {
+        consoleInput += event.text.text;
+        if (consoleInput.size() > 20) consoleInput.clear(); // защита от мусора
     }
 
     if (isPaused && resultState == ResultState::PLAYING) {
@@ -215,6 +229,15 @@ void GameScene::update(float deltaTime) {
             }
         }
 
+        if (auto* archer = dynamic_cast<BossArcher*>(boss.get())) {
+            archer->update(deltaTime, player->getX(), player->getY());
+            float dmg = archer->checkPlayerDamage(pb, deltaTime);
+            if (dmg > 0.0f) {
+                player->takeDamage(dmg);
+                playerTookDamage = true;
+            }
+        }
+
         // Урон от шипов уровня 2 (Level2::isSpike)
         if (auto* lv2 = dynamic_cast<Level2*>(level.get())) {
             SDL_Rect pb = player->getHitbox();
@@ -245,7 +268,11 @@ void GameScene::update(float deltaTime) {
                         samurai->takeDamage(dmgToBoss);
                     }
                 }
+            } else if (auto* archer = dynamic_cast<BossArcher*>(boss.get())) {
+                if (rectsOverlap(atk, archer->getHitbox()))
+                    archer->takeDamage(dmgToBoss);
             }
+
         }
     }
 
@@ -266,15 +293,28 @@ void GameScene::update(float deltaTime) {
             }
         }
     }
-
-    // Победа — проверяем через BossGolem (у него две фазы)
+    // Победа / смена боссов
     if (boss && !boss->isAlive() && !bossDefeated) {
         bool finalDead = false;
 
-        if (auto* golem = dynamic_cast<BossGolem*>(boss.get()))
+        if (auto* golem = dynamic_cast<BossGolem*>(boss.get())) {
+            // Голем — победа только во второй фазе
             finalDead = (golem->getPhase() == BossPhase::PHASE_2);
-        else if (auto* samurai = dynamic_cast<BossSamurai*>(boss.get()))
-            finalDead = samurai->isDeathAnimFinished();
+
+        } else if (auto* samurai = dynamic_cast<BossSamurai*>(boss.get())) {
+            // Самурай — после смерти спавним лучника, победы НЕТ
+            if (samurai->isDeathAnimFinished() && !samuraiDefeated) {
+                samuraiDefeated = true;
+                auto [bx, by]   = level->getBossSpawn();
+                const Config::Difficulty& diff =
+                    Config::getDifficulties()[Config::getCurrentDifficulty()];
+                boss = std::make_unique<BossArcher>(bx, by, diff.projectileSpeed);
+            }
+
+        } else if (auto* archer = dynamic_cast<BossArcher*>(boss.get())) {
+            // Лучник — настоящая победа
+            finalDead = archer->isDeathAnimFinished();
+        }
 
         if (finalDead) {
             bossDefeated = true;

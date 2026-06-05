@@ -111,7 +111,6 @@ void BossSamurai::update(float deltaTime, float playerX, float playerY, bool pla
     // HP кончились — запускаем анимацию смерти, AI выключаем
     if (hp <= 0) {
         if (currentState != SamuraiState::DEATH) {
-            std::cout << "[САМУРАЙ] СМЕРТЬ — HP=" << hp << "\n";
             phase        = SamuraiPhase::DYING;
             velocityX    = 0.0f;
             stanceActive = false;
@@ -147,7 +146,6 @@ void BossSamurai::update(float deltaTime, float playerX, float playerY, bool pla
         x += velocityX * deltaTime;
         applyCollisionsX();
         if (breakAwayTimer <= 0.0f) {
-            std::cout << "[САМУРАЙ] ОТСКОК завершён\n";
             isBreakingAway  = false;
             isParryBreaking = false;
             swordComboCount = 0;
@@ -179,7 +177,6 @@ void BossSamurai::update(float deltaTime, float playerX, float playerY, bool pla
     if (currentState == SamuraiState::STANCE) {
         auto it = animations.find(SamuraiState::STANCE);
         if (it != animations.end() && it->second.isFinished()) {
-            std::cout << "[САМУРАЙ] СТОЙКА → СТАН (анимация завершена, stunTimer=" << STUN_DURATION << "с)\n";
             stanceActive = false;
             stunTimer    = STUN_DURATION;
             forceState(SamuraiState::STUNNED);
@@ -222,7 +219,6 @@ void BossSamurai::updateMovement(float deltaTime, float playerX, float playerY) 
         velocityX  = 0.0f;
         stunTimer -= deltaTime;
         if (stunTimer <= 0.0f) {
-            std::cout << "[САМУРАЙ] СТАН завершён → отскок\n";
             isBreakingAway  = true;
             isParryBreaking = false;
             breakAwayTimer  = BREAK_AWAY_DURATION * 1.5f;
@@ -241,7 +237,6 @@ void BossSamurai::updateMovement(float deltaTime, float playerX, float playerY) 
     // ── ПРЫЖОК ВВЕРХ ─────────────────────────────────────────
     // dy < 0 → игрок выше нас, порог ~29px
     if (dy < -JUMP_VELOCITY * 0.05f && isGrounded && jumpCooldown <= 0.0f) {
-        std::cout << "[САМУРАЙ] ПРЫЖОК — игрок выше на " << (int)(-dy) << "px\n";
         velocityY    = JUMP_VELOCITY;
         isGrounded   = false;
         jumpCooldown = JUMP_COOLDOWN_MAX;
@@ -259,8 +254,6 @@ void BossSamurai::updateMovement(float deltaTime, float playerX, float playerY) 
     const bool canDrop     = (isGrounded && platformDropTimer <= 0.0f && dropCooldown <= 0.0f);
 
     if (playerBelow && playerNearX && canDrop) {
-        std::cout << "[САМУРАЙ] ПРОВАЛ — игрок ниже на " << (int)dy
-                  << "px, distX=" << (int)distX << "\n";
         platformDropTimer = DROP_DURATION;
         dropCooldown      = DROP_COOLDOWN;
     }
@@ -279,26 +272,22 @@ void BossSamurai::updateMovement(float deltaTime, float playerX, float playerY) 
     if (distX > PREFERRED_DISTANCE + DISTANCE_THRESHOLD) {
         velocityX = (dx > 0) ? MOVE_SPEED : -MOVE_SPEED;
         if (isGrounded && currentState != SamuraiState::WALK) {
-            std::cout << "[САМУРАЙ] ДВИЖЕНИЕ → distX=" << (int)distX << "\n";
             setState(SamuraiState::WALK);
         }
     } else if (distX < PREFERRED_DISTANCE - DISTANCE_THRESHOLD) {
         velocityX = (dx > 0) ? -MOVE_SPEED * 0.6f : MOVE_SPEED * 0.6f;
         if (isGrounded && currentState != SamuraiState::WALK) {
-            std::cout << "[САМУРАЙ] ОТСТУПЛЕНИЕ ← distX=" << (int)distX << "\n";
             setState(SamuraiState::WALK);
         }
     } else {
         velocityX = 0.0f;
         if (isGrounded && currentState == SamuraiState::WALK) {
-            std::cout << "[САМУРАЙ] СТОИМ — distX=" << (int)distX << "\n";
             setState(SamuraiState::IDLE);
         }
     }
 
     // Приземлились после прыжка
     if (isGrounded && currentState == SamuraiState::JUMP) {
-        std::cout << "[САМУРАЙ] ПРИЗЕМЛЕНИЕ (" << (int)x << "," << (int)y << ")\n";
         setState(SamuraiState::IDLE);
     }
 
@@ -350,9 +339,6 @@ void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
     // Это правильно, потому что босс может прыгать/телепортироваться на разные высоты
     const float distX  = std::abs(dx);
 
-    std::cout << "[САМУРАЙ] ВЫБОР АТАКИ — distX=" << (int)distX
-              << " dy=" << (int)dy << " (dy игнорируется для атак)\n";
-
     // Генерируем случайное число 0-99 для выбора атаки
     std::uniform_int_distribution<int> roll(0, 99);
     const int r = roll(rng);
@@ -360,7 +346,6 @@ void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
     // ── ДАЛЬНЯЯ ДИСТАНЦИЯ (distX >= 500px) ────────────────
     // Выбор: телепорт → прыжок/силовой удар ИЛИ веер бомб
     if (distX >= DIST_FAR) {
-        std::cout << "[САМУРАЙ] ДАЛЬНЯЯ ЗОНА (distX=" << (int)distX << ")\n";
 
         if (teleportTimer <= 0.0f) {
             // Телепорт готов — телепортируемся за спину игрока
@@ -380,7 +365,6 @@ void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
         // ── СРЕДНЯЯ ДИСТАНЦИЯ (80px ≤ distX < 500px) ──────────
         // Выбор: бомбы ИЛИ телепорт+меч ИЛИ меч
     } else if (distX >= DIST_CLOSE) {
-        std::cout << "[САМУРАЙ] СРЕДНЯЯ ЗОНА (distX=" << (int)distX << ")\n";
 
         if (r < 55 && bombTimer <= 0.0f) {
             // 55% шанс: бросить бомбы
@@ -397,7 +381,6 @@ void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
         // ── БЛИЖНЯЯ ДИСТАНЦИЯ (distX < 80px) ───────────────────
         // Выбор: меч ИЛИ стойка парирования
     } else {
-        std::cout << "[САМУРАЙ] БЛИЖНЯЯ ЗОНА (distX=" << (int)distX << ")\n";
 
         const float dyAbs             = std::abs(playerY - y);
         const bool  playerOnSameLevel = (dyAbs < height * 1.5f);
@@ -407,7 +390,6 @@ void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
             updateMeleeFallback(deltaTime, playerX, playerY);
         } else if (r >= 50 && playerOnSameLevel && stanceCooldown <= 0.0f) {
             // 50% шанс: стойка (только если на одной высоте и кулдаун прошёл)
-            std::cout << "[САМУРАЙ] ВХОДИМ В СТОЙКУ\n";
             stanceTimer    = 0.0f;
             stanceActive   = true;
             stanceCooldown = STANCE_COOLDOWN;  // ← выставляем кулдаун здесь тоже
@@ -415,7 +397,6 @@ void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
             forceState(SamuraiState::STANCE);
         } else if (swordTimer <= 0.0f) {
             // Стойка недоступна → меч
-            std::cout << "[САМУРАЙ] СТОЙКА НЕДОСТУПНА → БЬЮ МЕЧОМ\n";
             updateMeleeFallback(deltaTime, playerX, playerY);
         }
     }
@@ -439,7 +420,6 @@ void BossSamurai::teleportBehindPlayer() {
 
         if (targetX < minX || targetX > maxX) {
             // Телепорт выйдет за карту — отменяем, выбираем другую атаку
-            std::cout << "[САМУРАЙ] ТЕЛЕПОРТ ОТМЕНЁН (у края карты, targetX=" << (int)targetX << ")\n";
             teleportTimer = TELEPORT_COOLDOWN;  // всё равно ставим кулдаун
             if (bombTimer <= 0.0f) {
                 throwBombsFan();
@@ -455,9 +435,6 @@ void BossSamurai::teleportBehindPlayer() {
     y = targetY;
 
     facingRight = (lastPlayerX > x);
-
-    std::cout << "[САМУРАЙ] ТЕЛЕПОРТ: " << (int)oldX << " → " << (int)x
-              << " (игрок смотрит " << (lastPlayerFacingRight ? "вправо" : "влево") << ")\n";
 
     teleportTimer = TELEPORT_COOLDOWN;
 
@@ -476,10 +453,6 @@ void BossSamurai::throwBombsFan() {
     const float dx       = lastPlayerX - x;
     const float dy       = lastPlayerY - y;
     const float baseAngle = std::atan2(dy, dx) * 180.0f / static_cast<float>(M_PI);
-
-    std::cout << "[САМУРАЙ] ВЕЕР БОМБ x" << BOMB_COUNT
-              << " — угол=" << (int)baseAngle << "° к игроку ("
-              << (int)lastPlayerX << "," << (int)lastPlayerY << ")\n";
 
     // Веер: BOMB_COUNT бомб равномерно вокруг базового угла
     const float halfSpread = (BOMB_COUNT - 1) * BOMB_SPREAD_ANGLE / 2.0f;
@@ -514,7 +487,6 @@ void BossSamurai::updateStance(float deltaTime) {
     stanceTimer += deltaTime;
 
     if (stanceTimer >= STANCE_DURATION) {
-        std::cout << "[САМУРАЙ] СТОЙКА — таймаут (" << (int)STANCE_DURATION << "с), запускаем стан\n";
         stanceActive = false;
         stanceTimer  = 0.0f;
         // Запускаем обратную анимацию — стан будет ПОСЛЕ её завершения
@@ -533,8 +505,6 @@ bool BossSamurai::checkParry() {
 
     const float dyAbs = std::abs(lastPlayerY - y);
     if (dyAbs > height * 1.5f) return false;
-
-    std::cout << "[САМУРАЙ] ПАРИРОВАНИЕ!\n";
 
     stanceActive   = false;
     stanceTimer    = 0.0f;
@@ -576,7 +546,6 @@ void BossSamurai::updateBombs(float deltaTime) {
 
             // Таймер истёк → взрыв
             if (bomb.fuseTimer <= 0.0f) {
-                std::cout << "[САМУРАЙ] БОМБА взорвалась на (" << (int)bomb.x << "," << (int)bomb.y << ")\n";
                 bomb.exploded = true;
                 bomb.explodeAnim.reset(); // запускаем анимацию взрыва
             }
@@ -661,13 +630,11 @@ void BossSamurai::updateMeleeFallback(float deltaTime, float /*playerX*/, float 
 
         if (swordComboCount >= SWORD_COMBO_MAX) {
             // Вся серия нанесена → СРАЗУ переходим в отскок
-            std::cout << "[САМУРАЙ] СЕРИЯ УДАРОВ завершена (" << swordComboCount << "/" << SWORD_COMBO_MAX << ") → ОТСКОК\n";
             isBreakingAway = true;
             breakAwayTimer = BREAK_AWAY_DURATION;
             forceState(SamuraiState::IDLE);  // ← ИЗМЕНЕНО: WALK → IDLE перед отскоком
         } else {
             // Ещё есть удары в серии → следующий удар
-            std::cout << "[САМУРАЙ] УДАР " << swordComboCount << "/" << SWORD_COMBO_MAX << " — продолжаем серию\n";
             meleeHitDealt = false;
             animations[SamuraiState::SWORD_ATTACK].reset();
             forceState(SamuraiState::SWORD_ATTACK);
@@ -678,7 +645,6 @@ void BossSamurai::updateMeleeFallback(float deltaTime, float /*playerX*/, float 
 
     // ── НАЧАЛО ПЕРВОГО УДАРА в серии ─────────────────────────
     if (swordTimer <= 0.0f) {
-        std::cout << "[САМУРАЙ] УДАР МЕЧОМ — начало серии (combo 1/" << SWORD_COMBO_MAX << ")\n";
         meleeHitDealt = false;
         animations[SamuraiState::SWORD_ATTACK].reset();
         forceState(SamuraiState::SWORD_ATTACK);
@@ -877,7 +843,6 @@ float BossSamurai::checkPlayerDamage(SDL_Rect playerBox, float /*deltaTime*/) {
 
             SDL_Rect meleeBox = {hx, hy, SWORD_HIT_W, SWORD_HIT_H};
             if (rectsOverlap(playerBox, meleeBox)) {
-                std::cout << "[САМУРАЙ] ПОПАДАНИЕ МЕЧОМ — урон=" << DAMAGE_SWORD << "\n";
                 totalDamage += DAMAGE_SWORD;
             }
 
@@ -906,7 +871,6 @@ float BossSamurai::checkPlayerDamage(SDL_Rect playerBox, float /*deltaTime*/) {
             const float dx = (playerBox.x + playerBox.w / 2.0f) - bomb.x;
             const float dy = (playerBox.y + playerBox.h / 2.0f) - bomb.y;
             if (dx*dx + dy*dy <= Bomb::EXPLODE_RADIUS * Bomb::EXPLODE_RADIUS) {
-                std::cout << "[САМУРАЙ] ВЗРЫВ БОМБЫ попал по игроку — урон=" << DAMAGE_BOMB << "\n";
                 totalDamage   += DAMAGE_BOMB;
                 bomb.damageDealt = true;
                 bomb.active   = false;
