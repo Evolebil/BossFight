@@ -30,7 +30,7 @@ private:
     static constexpr float MOVE_SPEED       = 200.0f;
     static constexpr float HITBOX_W         = 35.0f;   // ← было в конструкторе
     static constexpr float HITBOX_H         = 40.0f;   // ← было в конструкторе
-    static constexpr float BASE_HP          = 100.0f;  // ← было в конструкторе
+    static constexpr float BASE_HP          = 1000000.0f;  // ← было в конструкторе
 
     // ============================================================
     // КОНСТАНТЫ СПРАЙТА

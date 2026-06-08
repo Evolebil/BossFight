@@ -1,8 +1,11 @@
 /**
  * @file boss_archer.h
- * @brief Босс-лучник — второй босс уровня 2 (появляется после смерти самурая)
+ * @brief Босс-лучник с BFS AI, клонами и стрелами
  * @author evol
- * @date 2026-06-03
+ * @date 2026-06-08
+ *
+ * Второй босс (уровень 2). Движется через BFS, прыгает/падает,
+ * спавнит клонов-фантомов. На 50% HP переходит в фазу 2 с дополнительными клонами.
  */
 #pragma once
 #include "../config/common.h"
@@ -10,12 +13,12 @@
 #include "../utils/texture_manager.h"
 
 // ============================================================
-// СТРУКТУРА СТРЕЛЫ
+// СТРУКТУРЫ ДАННЫХ
 // ============================================================
 
 /**
  * @struct ArcherArrow
- * @brief Летящая стрела от клона или лучника.
+ * @brief Летящая стрела. Спавнится клонами, урон фиксирован.
  */
 struct ArcherArrow {
     float x      = 0.0f;
@@ -24,29 +27,33 @@ struct ArcherArrow {
     float velY   = 0.0f;
     bool  active = false;
 
-    static constexpr float SPEED  = 500.0f; ///< Скорость стрелы (px/s)
-    static constexpr float DAMAGE = 15.0f;  ///< Урон стрелы
+    static constexpr float SPEED  = 500.0f;  ///< px/s
+    static constexpr float DAMAGE = 15.0f;
 };
-
-// ============================================================
-// СТРУКТУРА КЛОНА
-// ============================================================
 
 /**
  * @struct ArcherClone
- * @brief Клон-фантом лучника. Нематаемый — урон принимает только настоящий лучник.
- *        Направление стрельбы задаётся при спавне и не меняется (кроме центрального).
+ * @brief Фантом лучника (полупрозрачный). Неуязвим, только стреляет.
+ *        Центральный клон следит за игроком, боковые идут в фиксированных направлениях.
  */
 struct ArcherClone {
     float x              = 0.0f;
     float y              = 0.0f;
-    float dirX           = 0.0f;
+    float dirX           = 1.0f;  ///< Направление стрельбы (нормализовано)
     float dirY           = 0.0f;
-    float verticalOffset = 0.0f; ///< Смещение по Y от лучника (задаётся при спавне)
-    float offsetX        = 0.0f; ///< Смещение по X от центрального (сейчас 0)
+    float verticalOffset = 0.0f;  ///< Смещение от лучника по Y (зафиксировано при спавне)
+    float offsetX        = 0.0f;  ///< Смещение от центра по X (всегда 0 сейчас)
     bool  active         = false;
-    bool  isCenter       = false;
+    bool  isCenter       = false; ///< true = следит за игроком, false = фиксированный угол
 };
+
+// ============================================================
+// ПЕРЕЧИСЛЕНИЯ (должны быть в common.h или enum_boss.h)
+// ============================================================
+
+// Убедись что эти есть в твоём common.h:
+// enum class ArcherState { IDLE, WALK, SWORD_ATTACK, SHOOT, CLONE_VOLLEY, DEATH };
+// enum class ArcherPhase { PHASE_1, PHASE_2, DYING };
 
 // ============================================================
 // КЛАСС BOSSARCHER
@@ -55,79 +62,27 @@ struct ArcherClone {
 class BossArcher : public Boss {
 private:
 
-    // ============================================================
-    // КОНСТАНТЫ — ХИТБОКС И HP
-    // ============================================================
+    // ════════════════════════════════════════════════════════
+    // КОНСТАНТЫ
+    // ════════════════════════════════════════════════════════
 
+    // Физика и хитбокс
     static constexpr float HITBOX_W = 50.0f;
     static constexpr float HITBOX_H = 80.0f;
     static constexpr float BASE_HP  = 1000.0f;
 
-    // ============================================================
-    // КОНСТАНТЫ — ДВИЖЕНИЕ И БОЙ
-    // ============================================================
+    // Спрайт
+    static constexpr int   FRAME_W      = 128;
+    static constexpr int   FRAME_H      = 128;
+    static constexpr float SPRITE_SCALE = 1.5f;
 
-    static constexpr float MOVE_SPEED      = 180.0f; ///< Скорость преследования (px/s)
-    static constexpr float SWORD_DAMAGE    = 25.0f;  ///< Урон удара мечом
-    static constexpr float MELEE_RANGE     = 80.0f;  ///< Дистанция для атаки мечом (px)
-    static constexpr float SWORD_HIT_W     = 100.0f; ///< Ширина хитбокса меча (px)
-    static constexpr float SWORD_HIT_H     = 80.0f;  ///< Высота хитбокса меча (px)
-    static constexpr int   SWORD_HIT_FRAME = 3;      ///< Кадр анимации когда засчитывается хит
-
-    // ============================================================
-    // КОНСТАНТЫ — СТРЕЛА
-    // ============================================================
-
-    static constexpr int ARROW_HITBOX_W = 20; ///< Ширина хитбокса стрелы (px)
-    static constexpr int ARROW_HITBOX_H = 8;  ///< Высота хитбокса стрелы (px)
-    static constexpr int ARROW_W        = 64; ///< Ширина спрайта стрелы (px)
-    static constexpr int ARROW_H        = 64; ///< Высота спрайта стрелы (px)
-
-    // ============================================================
-    // КОНСТАНТЫ — КЛОНЫ
-    // ============================================================
-
-    static constexpr int   CLONE_COUNT           = 4;      ///< Клонов в фазе 1
-    static constexpr int   CLONE_COUNT_P2        = 6;      ///< Клонов в фазе 2
-    static constexpr float CLONE_SPACING         = 120.0f; ///< Вертикальный отступ между клонами (px)
-    static constexpr float CLONE_SHOOT_INTERVAL  = 1.2f;   ///< Интервал стрельбы клонов (сек)
-    static constexpr float VERTICAL_CLONE_OFFSET = 200.0f; ///< Смещение вертикального клона над лучником (px)
-
-    // ============================================================
-    // КОНСТАНТЫ — СМЕНА СОСТОЯНИЙ
-    // ============================================================
-
-    static constexpr float STATE_CHANGE_COOLDOWN = 0.3f;
-
-    // ============================================================
-    // КОНСТАНТЫ — БАЗОВЫЕ КУЛДАУНЫ
-    // ============================================================
-
-    static constexpr float BASE_SWORD_COOLDOWN = 2.0f; ///< Базовый кулдаун меча (сек)
-    static constexpr float BASE_SHOOT_COOLDOWN = 1.5f; ///< Базовый кулдаун выстрела (сек)
-
-    // ============================================================
-    // КОНСТАНТЫ — РАЗМЕРЫ СПРАЙТА
-    // ============================================================
-
-    static constexpr int   FRAME_W      = 128;  ///< Ширина кадра (px)
-    static constexpr int   FRAME_H      = 128;  ///< Высота кадра (px)
-    static constexpr float SPRITE_SCALE = 1.5f; ///< Масштаб при отрисовке
-
-    // ============================================================
-    // КОНСТАНТЫ — КОЛИЧЕСТВО КАДРОВ
-    // ============================================================
-
+    // Анимации
     static constexpr int FRAMES_IDLE         = 9;
     static constexpr int FRAMES_WALK         = 8;
-    static constexpr int FRAMES_SWORD_ATTACK = 5;  ///< Attack_1.png
-    static constexpr int FRAMES_SHOOT        = 14; ///< Shot.png
-    static constexpr int FRAMES_CLONE_VOLLEY = 5;  ///< Attack_2.png
-    static constexpr int FRAMES_DEATH        = 5;  ///< Dead.png
-
-    // ============================================================
-    // КОНСТАНТЫ — СКОРОСТИ АНИМАЦИЙ
-    // ============================================================
+    static constexpr int FRAMES_SWORD_ATTACK = 5;
+    static constexpr int FRAMES_SHOOT        = 14;
+    static constexpr int FRAMES_CLONE_VOLLEY = 5;
+    static constexpr int FRAMES_DEATH        = 5;
 
     static constexpr float ANIM_SPD_IDLE         = 0.12f;
     static constexpr float ANIM_SPD_WALK         = 0.09f;
@@ -136,147 +91,200 @@ private:
     static constexpr float ANIM_SPD_CLONE_VOLLEY = 0.09f;
     static constexpr float ANIM_SPD_DEATH        = 0.14f;
 
-    // ============================================================
-    // ПОЛЯ — СОСТОЯНИЕ И ФАЗА
-    // ============================================================
+    // Движение и боевые характеристики
+    static constexpr float MOVE_SPEED       = 180.0f;  ///< Скорость преследования
+    static constexpr float SWORD_DAMAGE     = 25.0f;
+    static constexpr float MELEE_RANGE      = 80.0f;   ///< До какой дистанции бить мечом
+    static constexpr float SWORD_HIT_W      = 100.0f;
+    static constexpr float SWORD_HIT_H      = 80.0f;
+    static constexpr int   SWORD_HIT_FRAME  = 3;       ///< На каком кадре засчитывается хит
 
-    ArcherState currentState      = ArcherState::IDLE;
-    ArcherState previousState     = ArcherState::IDLE;
-    ArcherPhase phase             = ArcherPhase::PHASE_1;
+    // Стрелы
+    static constexpr int ARROW_HITBOX_W = 20;
+    static constexpr int ARROW_HITBOX_H = 8;
+    static constexpr int ARROW_W        = 64;
+    static constexpr int ARROW_H        = 64;
 
-    float stateTimer          = 0.0f; ///< Монотонно растущий таймер (сек)
-    float lastStateChangeTime = 0.0f; ///< stateTimer в момент последней смены
-    float cloneShootTimer     = 0.0f; ///< Общий таймер стрельбы клонов (сек)
+    // Клоны (фаза 1: 4 клона, фаза 2: 6 + 2 новых)
+    static constexpr int   CLONE_COUNT           = 4;
+    static constexpr int   CLONE_COUNT_P2        = 6;
+    static constexpr float CLONE_SPACING         = 120.0f; ///< Расстояние между клонами по Y
+    static constexpr float CLONE_SHOOT_INTERVAL  = 1.2f;   ///< Интервал стрельбы клонов
+    static constexpr float VERTICAL_CLONE_OFFSET = 200.0f; ///< Где спавнится вертикальный клон
 
-    // ============================================================
-    // ПОЛЯ — ТАЙМЕРЫ И КУЛДАУНЫ
-    // ============================================================
+    // Кулдауны атак (уменьшаются на attackSpeedMult)
+    static constexpr float BASE_SWORD_COOLDOWN = 2.0f;
+    static constexpr float BASE_SHOOT_COOLDOWN = 1.5f;
 
-    float swordCooldown = 0.0f; ///< Текущий кулдаун меча (зависит от attackSpeedMult)
-    float swordTimer    = 0.0f; ///< До следующего удара мечом (сек)
-    float shootCooldown = 0.0f; ///< Текущий кулдаун выстрела (зависит от attackSpeedMult)
-    float shootTimer    = 0.0f; ///< До следующего выстрела (сек)
-    float spawnDelay    = 0.5f; ///< Задержка после спавна (сек)
+    // Прыжок и провал
+    static constexpr float JUMP_VELOCITY      = -580.0f;
+    static constexpr float JUMP_COOLDOWN_MAX  = 1.5f;
+    static constexpr float DROP_THRESHOLD     = 60.0f;  ///< На сколько ниже игрока = провал
+    static constexpr float DROP_DURATION      = 0.18f;
+    static constexpr float DROP_COOLDOWN      = 0.8f;
 
-    // ============================================================
-    // ПОЛЯ — ПРЫЖОК И ПРОВАЛ
-    // ============================================================
+    // Смена состояний
+    static constexpr float STATE_CHANGE_COOLDOWN = 0.3f;
 
-    float jumpCooldown      = 0.0f;   ///< До следующего прыжка (сек)
-    float platformDropTimer = 0.0f;   ///< >0 = проваливаемся через платформу
-    float dropCooldown      = 0.0f;   ///< Защита от повторного провала
+    // BFS (поиск пути через тайлы)
+    static constexpr int   BFS_TILE_SIZE  = 32;
+    static constexpr float BFS_INTERVAL   = 0.5f;   ///< Как часто пересчитывать путь
+    static constexpr int   BFS_MAX_TILES  = 8000;   ///< Макс узлов в BFS
+    static constexpr float BFS_REACH_DIST = 40.0f;  ///< Считаем узел достигнутым
 
-    // ============================================================
-    // КОНСТАНТЫ — BFS
-    // ============================================================
+    // ════════════════════════════════════════════════════════
+    // ТИПЫ ДАННЫХ BFS
+    // ════════════════════════════════════════════════════════
 
-    static constexpr int   BFS_TILE_SIZE  = 32;    ///< Размер тайла (px)
-    static constexpr float BFS_INTERVAL   = 0.5f;  ///< Пересчёт пути (сек)
-    static constexpr int   BFS_MAX_TILES  = 8000;  ///< Лимит узлов (160*50)
-    static constexpr float BFS_REACH_DIST = 40.0f; ///< Считаем узел достигнутым (px)
-
-    // ============================================================
-    // СТРУКТУРЫ BFS
-    // ============================================================
-
-    /// Тип действия между двумя узлами пути
+    /// Действие для перемещения между двумя тайлами
     enum class PathAction {
-        WALK_LEFT,   ///< Идти влево
-        WALK_RIGHT,  ///< Идти вправо
-        JUMP,        ///< Прыгнуть вверх
-        DROP         ///< Провалиться вниз
+        WALK_LEFT,
+        WALK_RIGHT,
+        JUMP,
+        DROP
     };
 
-    /// Один узел пути — тайл + действие чтобы туда попасть
+    /// Узел пути: тайл + действие чтобы туда попасть
     struct PathNode {
         int        col    = 0;
         int        row    = 0;
         PathAction action = PathAction::WALK_RIGHT;
     };
 
-    // ============================================================
-    // ПОЛЯ — BFS
-    // ============================================================
+    // ════════════════════════════════════════════════════════
+    // СОСТОЯНИЕ: Игровые переменные
+    // ════════════════════════════════════════════════════════
 
-    std::vector<PathNode> path;          ///< Текущий найденный путь
-    int                   pathIndex = 0; ///< Текущий узел пути
-    float                 bfsTimer  = 0.0f; ///< Таймер пересчёта пути
+    // Состояние и фаза
+    ArcherState currentState      = ArcherState::IDLE;
+    ArcherState previousState     = ArcherState::IDLE;
+    ArcherPhase phase             = ArcherPhase::PHASE_1;
 
-    // ============================================================
-    // КОНСТАНТЫ — ПРЫЖОК И ПРОВАЛ
-    // ============================================================
+    // Таймеры
+    float stateTimer          = 0.0f;  ///< Монотонно считаем вверх
+    float lastStateChangeTime = 0.0f;  ///< Когда последний раз сменилось состояние
+    float cloneShootTimer     = 0.0f;  ///< Когда клоны должны стрелять
 
-    static constexpr float JUMP_VELOCITY    = -580.0f;  ///< Начальная скорость прыжка
-    static constexpr float JUMP_COOLDOWN_MAX = 1.5f;    ///< Кулдаун прыжка (сек)
-    static constexpr float DROP_THRESHOLD   = 60.0f;    ///< Игрок ниже на столько → провал (px)
-    static constexpr float DROP_DURATION    = 0.18f;    ///< Длительность провала (сек)
-    static constexpr float DROP_COOLDOWN    = 0.8f;     ///< Кулдаун между провалами (сек)
+    // Кулдауны и таймеры атак
+    float swordCooldown = 0.0f;  ///< Между ударами мечом (зависит от attackSpeedMult)
+    float swordTimer    = 0.0f;  ///< Текущий отсчёт до удара
+    float shootCooldown = 0.0f;  ///< Между выстрелами
+    float shootTimer    = 0.0f;
+    float spawnDelay    = 0.5f;  ///< Задержка при спавне босса
 
-    // ============================================================
-    // ПОЛЯ — ФЛАГИ
-    // ============================================================
+    // Прыжок и платформы
+    float jumpCooldown      = 0.0f;  ///< До следующего прыжка
+    float platformDropTimer = 0.0f;  ///< Проваливаемся через платформу (>0 = активно)
+    float dropCooldown      = 0.0f;  ///< После провала не прыгаем
 
-    bool meleeHitDealt = false; ///< Удар мечом уже нанёс урон в этом замахе
-    bool clonesSpawned = false; ///< Клоны уже заспавнены
+    // BFS
+    std::vector<PathNode> path;   ///< Текущий рассчитанный путь
+    int                   pathIndex = 0;  ///< Какой узел пути мы выполняем
+    float                 bfsTimer  = 0.0f;  ///< Отсчёт до пересчёта
 
-    // ============================================================
-    // ПОЛЯ — КЛОНЫ, СТРЕЛЫ, ТЕКСТУРЫ
-    // ============================================================
+    // Флаги
+    bool meleeHitDealt = false;  ///< Удар мечом в этом цикле уже нанёс урон?
+    bool clonesSpawned = false;  ///< Клоны уже спавнены?
 
-    std::vector<ArcherClone> clones; ///< Активные клоны
-    std::vector<ArcherArrow> arrows; ///< Активные стрелы
+    // Сущности
+    std::vector<ArcherClone> clones;  ///< Фантомы
+    std::vector<ArcherArrow> arrows;  ///< Летящие стрелы
 
-    std::map<ArcherState, SDL_Texture*> textures;   ///< PNG для каждого состояния
-    std::map<ArcherState, Animation>    animations; ///< Анимация для каждого состояния
-    SDL_Texture* arrowTexture = nullptr;            ///< Arrow.png
+    // Графика
+    std::map<ArcherState, SDL_Texture*> textures;
+    std::map<ArcherState, Animation>    animations;
+    SDL_Texture* arrowTexture = nullptr;
 
-    // ============================================================
+    // ════════════════════════════════════════════════════════
     // ПРИВАТНЫЕ МЕТОДЫ
-    // ============================================================
+    // ════════════════════════════════════════════════════════
 
+    // Управление состояниями
     void setState(ArcherState newState);
     void forceState(ArcherState newState);
     [[nodiscard]] bool canChangeState() const;
 
+    // Инициализация
     void loadAnimations();
+
+    // Клоны
     void spawnClones();
     void updateClones(float dt, float playerX, float playerY);
     void checkPhaseTransition();
+
+    // AI
     void updateAI(float dt, float playerX, float playerY);
-    void renderHitboxes(SDL_Renderer* renderer);
     void updateMovement(float dt, float playerX, float playerY);
-    /// Пересчитать путь от лучника к игроку через BFS
+
+    // BFS — поиск пути
     void recalcPath(float playerX, float playerY);
 
-    /// Проверить можно ли прыгнуть из (col,row) и приземлиться на платформу выше
-    [[nodiscard]] bool canJumpTo(int col, int row, int& landRow) const;
+    /// Можно ли прыгнуть выше из (col,row) и приземлиться?
+    [[nodiscard]] bool canJumpTo(int col, int row, int& outLandRow) const;
 
-    /// Найти ближайшую платформу ниже (col,row) — возвращает row платформы или -1
-    [[nodiscard]] int  findPlatformBelow(int col, int row) const;
+    /// Найти платформу ниже текущей позиции
+    [[nodiscard]] int findPlatformBelow(int col, int row) const;
 
-    /// Тайл является платформой (есть на чём стоять снизу)
+    /// Тайл — платформа (есть опора снизу)
     [[nodiscard]] bool isSolidTile(int col, int row) const;
 
-    /// Тайл пустой (можно пройти сквозь)
+    /// Тайл — пустой (можно пройти)
     [[nodiscard]] bool isFreeTile(int col, int row) const;
+
+    // Отрисовка отладочных хитбоксов
+    void renderHitboxes(SDL_Renderer* renderer);
 
 public:
 
-    // ============================================================
+    // ════════════════════════════════════════════════════════
     // ПУБЛИЧНЫЕ МЕТОДЫ
-    // ============================================================
+    // ════════════════════════════════════════════════════════
 
+    /**
+     * @brief Конструктор босса-лучника
+     * @param spawnX Позиция X
+     * @param spawnY Позиция Y
+     * @param attackSpeedMult Множитель скорости атаки (1.0 = базовая, 2.0 = в 2 раза быстрее)
+     */
     BossArcher(float spawnX, float spawnY, float attackSpeedMult = 1.0f);
+
     ~BossArcher() override = default;
 
+    /**
+     * @brief Главный update босса
+     * @param deltaTime Время кадра (сек)
+     * @param playerX X игрока (для AI)
+     * @param playerY Y игрока (для AI)
+     * @param playerFacingRight Не используется
+     */
     void update(float deltaTime, float playerX, float playerY,
                 bool playerFacingRight = false) override;
 
+    /**
+     * @brief Пустой override из Boss
+     */
     void update(float deltaTime) override { (void)deltaTime; }
 
+    /**
+     * @brief Отрисовка: клоны → стрелы → босс + хитбоксы
+     */
     void render(SDL_Renderer* renderer) override;
 
+    /**
+     * @brief Получить хитбокс (для коллизий)
+     */
     [[nodiscard]] SDL_Rect getHitbox() const override;
-    [[nodiscard]] bool  isDeathAnimFinished() const;
+
+    /**
+     * @brief Закончилась ли анимация смерти?
+     */
+    [[nodiscard]] bool isDeathAnimFinished() const;
+
+    /**
+     * @brief Проверить урон игроку (меч + стрелы)
+     * @param playerBox Хитбокс игрока
+     * @param deltaTime Не используется
+     * @return Общий урон (0 если не попала)
+     */
     [[nodiscard]] float checkPlayerDamage(SDL_Rect playerBox, float deltaTime);
 };
