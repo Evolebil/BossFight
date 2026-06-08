@@ -25,6 +25,7 @@
 #include <array>
 #include <unordered_map>
 #include <fstream>
+#include <queue>
 
 // ===== НАШИ КЛАССЫ (только объявления) =====
 class Config;

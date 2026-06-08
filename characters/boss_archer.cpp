@@ -144,7 +144,8 @@ void BossArcher::update(float deltaTime, float playerX, float playerY,
     // AI — движение и ближний бой
     updateAI(deltaTime, playerX, playerY);
 
-    applyGravityAndCollisions(deltaTime);
+    // Вертикальная физика — передаём флаг провала
+    applyGravityAndCollisions(deltaTime, platformDropTimer > 0.0f);
 
     // Анимация текущего состояния
     // SWORD_ATTACK обновляется здесь — updateAI только проверяет isFinished()
@@ -316,20 +317,27 @@ void BossArcher::checkPhaseTransition() {
 void BossArcher::updateAI(float dt, float playerX, float playerY) {
     if (currentState == ArcherState::DEATH) return;
 
-    const float dx    = playerX - x;
-    const float distX = std::abs(dx);
-    facingRight = (dx > 0);
+    // BFS-движение (прыжок, провал, ходьба по пути)
+    updateMovement(dt, playerX, playerY);
 
-    // ── ИДЁТ АНИМАЦИЯ УДАРА — ждём конца ─────────────────────
+    // Применяем горизонтальное движение + коллизии
+    x += velocityX * dt;
+    applyCollisionsX();
+
+    const float distX = std::abs(playerX - x);
+
+    // ── АНИМАЦИЯ ─────────────────────────────────────────────
     if (currentState == ArcherState::SWORD_ATTACK) {
         auto it = animations.find(ArcherState::SWORD_ATTACK);
         if (it != animations.end() && it->second.isFinished())
-            setState(ArcherState::WALK);
-        return;  // во время атаки не двигаемся
+            setState(ArcherState::IDLE);
+        return;
     }
 
-    // ── БЛИЖНЯЯ ДИСТАНЦИЯ — начать атаку ─────────────────────
-    if (distX <= MELEE_RANGE && swordTimer <= 0.0f) {
+    if (platformDropTimer > 0.0f) return;
+
+    // ── БЛИЖНЯЯ АТАКА ────────────────────────────────────────
+    if (distX <= MELEE_RANGE && swordTimer <= 0.0f && isGrounded) {
         meleeHitDealt = false;
         velocityX     = 0.0f;
         forceState(ArcherState::SWORD_ATTACK);
@@ -337,12 +345,13 @@ void BossArcher::updateAI(float dt, float playerX, float playerY) {
         return;
     }
 
-    // ── ПРЕСЛЕДОВАНИЕ ────────────────────────────────────────
-    velocityX = (dx > 0) ? MOVE_SPEED : -MOVE_SPEED;
-    setState(ArcherState::WALK);
-
-    x += velocityX * dt;
-    applyCollisionsX();
+    // ── АНИМАЦИЯ ДВИЖЕНИЯ ────────────────────────────────────
+    if (isGrounded) {
+        if (velocityX != 0.0f)
+            setState(ArcherState::WALK);
+        else if (currentState == ArcherState::WALK)
+            setState(ArcherState::IDLE);
+    }
 }
 
 // ============================================================
@@ -580,4 +589,307 @@ void BossArcher::forceState(ArcherState newState) {
 
 bool BossArcher::canChangeState() const {
     return (stateTimer - lastStateChangeTime) >= STATE_CHANGE_COOLDOWN;
+}
+
+// ============================================================
+// BFS — ВСПОМОГАТЕЛЬНЫЕ
+// ============================================================
+
+bool BossArcher::isSolidTile(int col, int row) const {
+    if (!g_currentLevel) return false;
+    int ox, oy;
+    g_currentLevel->getMapOffset(ox, oy);
+    int px = ox + col * BFS_TILE_SIZE + BFS_TILE_SIZE / 2;
+    int py = oy + row * BFS_TILE_SIZE + BFS_TILE_SIZE - 1; // низ тайла
+    return g_currentLevel->isSolid(px, py) ||
+           g_currentLevel->isPlatform(px, py);
+}
+
+
+bool BossArcher::isFreeTile(int col, int row) const {
+    if (!g_currentLevel) return true;
+    int ox, oy;
+    g_currentLevel->getMapOffset(ox, oy);
+    int px = ox + col * BFS_TILE_SIZE + BFS_TILE_SIZE / 2;
+    int py = oy + row * BFS_TILE_SIZE + BFS_TILE_SIZE / 2;
+    return !g_currentLevel->isSolid(px, py);
+}
+
+bool BossArcher::canJumpTo(int col, int row, int& landRow) const {
+    if (!g_currentLevel) return false;
+
+    for (int r = row - 1; r >= row - 4; r--) {
+        if (r < 0) break;
+        if (isSolidTile(col, r)) {
+            if (r + 1 < row && isFreeTile(col, r + 1)) {
+                landRow = r + 1;
+                std::cout << "[JUMP FOUND] from=(" << col << "," << row
+                          << ") landRow=" << landRow << "\n";  // ← ДОБАВЬ
+                return true;
+            }
+        }
+    }
+    return false;
+}
+int BossArcher::findPlatformBelow(int col, int row) const {
+    if (!g_currentLevel) return -1;
+
+    int ox, oy;
+    g_currentLevel->getMapOffset(ox, oy);
+    const int maxRows = g_currentLevel->getMapHeight() / BFS_TILE_SIZE;
+
+    // Идём вниз пока не найдём твёрдый тайл
+    for (int r = row + 1; r < maxRows; r++) {
+        if (isSolidTile(col, r)) {
+            return r - 1;  // стоим на тайле над платформой
+        }
+    }
+    return -1;
+}
+
+// ============================================================
+// BFS — ПОИСК ПУТИ
+// ============================================================
+
+void BossArcher::recalcPath(float playerX, float playerY) {
+    path.clear();
+    pathIndex = 0;
+
+    if (!g_currentLevel) return;
+
+    int ox, oy;
+    g_currentLevel->getMapOffset(ox, oy);
+    const int mapCols = g_currentLevel->getMapWidth()  / BFS_TILE_SIZE;
+    const int mapRows = g_currentLevel->getMapHeight() / BFS_TILE_SIZE;
+
+    // Переводим позиции в тайлы
+    const int startCol = (int)((x       - ox) / BFS_TILE_SIZE);
+    const int startRow = (int)((y + HITBOX_H / 2 - oy) / BFS_TILE_SIZE) - 1;
+    int goalCol  = (int)((playerX - ox) / BFS_TILE_SIZE);
+    int goalRow  = (int)((playerY - oy) / BFS_TILE_SIZE);
+
+    // После вычисления startCol/startRow в recalcPath():
+    std::cout << "[BFS] archer x=" << x << " y=" << y << "\n";
+    std::cout << "[BFS] floor tile=" << isSolidTile(startCol, startRow + 1) << "\n";
+    std::cout << "[BFS] isSolid floor=" << (g_currentLevel ? g_currentLevel->isSolid(
+                                                                 ox + startCol * BFS_TILE_SIZE + BFS_TILE_SIZE/2,
+                                                                 oy + (startRow+1) * BFS_TILE_SIZE + BFS_TILE_SIZE/2) : -1) << "\n";
+    std::cout << "[BFS] isPlatform floor=" << (g_currentLevel ? g_currentLevel->isPlatform(
+                                                                    ox + startCol * BFS_TILE_SIZE + BFS_TILE_SIZE/2,
+                                                                    oy + (startRow+1) * BFS_TILE_SIZE + BFS_TILE_SIZE/2) : -1) << "\n";
+
+    // Сдвигаем цель вверх пока не найдём свободный тайл
+    // (игрок стоит на платформе — его Y-тайл может быть твёрдым)
+    while (goalRow > 0 && !isFreeTile(goalCol, goalRow))
+        goalRow--;
+
+    // Проверяем границы
+    if (startCol < 0 || startCol >= mapCols ||
+        startRow < 0 || startRow >= mapRows ||
+        goalCol  < 0 || goalCol  >= mapCols ||
+        goalRow  < 0 || goalRow  >= mapRows) return;
+
+    // ── СТРУКТУРА УЗЛА BFS ────────────────────────────────────
+    struct BFSNode {
+        int        col    = 0;
+        int        row    = 0;
+        int        parent = -1;  ///< Индекс родителя в visited[]
+        PathAction action = PathAction::WALK_RIGHT;
+    };
+
+    // visited[row * mapCols + col] = индекс в nodes[]  (-1 = не посещён)
+    std::vector<int> visited(mapCols * mapRows, -1);
+    std::vector<BFSNode> nodes;
+    nodes.reserve(512);
+
+    std::queue<int> queue;  // индексы в nodes[]
+
+    // Стартовый узел
+    BFSNode start;
+    start.col    = startCol;
+    start.row    = startRow;
+    start.parent = -1;
+    nodes.push_back(start);
+    visited[startRow * mapCols + startCol] = 0;
+    queue.push(0);
+
+    int goalIdx = -1;
+
+    // ── ВОЛНА BFS ─────────────────────────────────────────────
+    while (!queue.empty() && (int)nodes.size() < BFS_MAX_TILES) {
+        const int idx = queue.front();
+        queue.pop();
+
+        const BFSNode& cur = nodes[idx];
+
+        // Достигли цели?
+        if (cur.col == goalCol && cur.row == goalRow) {
+            goalIdx = idx;
+            break;
+        }
+
+        // ── СОСЕДИ ───────────────────────────────────────────
+
+        // Лямбда добавляет соседа если он свободен и не посещён
+        auto tryAdd = [&](int nc, int nr, PathAction act) {
+            if (nc < 0 || nc >= mapCols || nr < 0 || nr >= mapRows) return;
+            if (!isFreeTile(nc, nr)) return;
+            if (visited[nr * mapCols + nc] != -1) return;
+
+            BFSNode next;
+            next.col    = nc;
+            next.row    = nr;
+            next.parent = idx;
+            next.action = act;
+
+            const int newIdx = (int)nodes.size();
+            visited[nr * mapCols + nc] = newIdx;
+            nodes.push_back(next);
+            queue.push(newIdx);
+        };
+
+        // 1. Шаг влево/вправо — тайл свободен И под ним есть пол (не висим в воздухе)
+        auto canWalk = [&](int nc, int nr) {
+            return isFreeTile(nc, nr) && isSolidTile(nc, nr + 1);
+        };
+        if (canWalk(cur.col - 1, cur.row))
+            tryAdd(cur.col - 1, cur.row, PathAction::WALK_LEFT);
+        if (canWalk(cur.col + 1, cur.row))
+            tryAdd(cur.col + 1, cur.row, PathAction::WALK_RIGHT);
+
+        // 2. Прыжок — проверяем свободное пространство и платформу выше
+        {
+            int landRow = -1;
+            if (canJumpTo(cur.col, cur.row, landRow)) {
+                tryAdd(cur.col, landRow, PathAction::JUMP);
+            }
+        }
+
+        // 3. Провал — ищем ближайшую платформу ниже
+        {
+            // Провалиться можно только если стоим на платформе
+            if (isSolidTile(cur.col, cur.row + 1)) {
+                int dropRow = findPlatformBelow(cur.col, cur.row);
+                if (dropRow != -1 && dropRow != cur.row) {
+                    tryAdd(cur.col, dropRow, PathAction::DROP);
+                }
+            }
+        }
+    }
+
+    std::cout << "[BFS] start=(" << startCol << "," << startRow << ")"
+              << " goal=(" << goalCol << "," << goalRow << ")"
+              << " startFree=" << isFreeTile(startCol, startRow)
+              << " startHasFloor=" << isSolidTile(startCol, startRow + 1)
+              << " goalFree=" << isFreeTile(goalCol, goalRow)
+              << "\n";
+    // Цель не найдена
+    if (goalIdx == -1) return;
+
+    // ── ВОССТАНАВЛИВАЕМ ПУТЬ (от цели к старту, потом разворачиваем) ──
+    std::vector<PathNode> reversed;
+    int cur = goalIdx;
+    while (cur != -1) {
+        const BFSNode& n = nodes[cur];
+        PathNode pn;
+        pn.col    = n.col;
+        pn.row    = n.row;
+        pn.action = n.action;
+        reversed.push_back(pn);
+        cur = n.parent;
+    }
+
+    // Разворачиваем — путь идёт от старта к цели
+    std::reverse(reversed.begin(), reversed.end());
+
+    // path[0] = старт (сам лучник), path[1] = первый шаг
+    path      = reversed;
+    pathIndex = 1;  // начинаем с первого шага, не со старта
+
+    std::cout << "[BFS RESULT] start=(" << startCol << "," << startRow
+              << ") goal=(" << goalCol << "," << goalRow
+              << ") size=" << path.size() << "\n";  // ← ДОБАВЬ
+}
+
+// ============================================================
+// ДВИЖЕНИЕ — ПРЫЖОК И ПРОВАЛ
+// ============================================================
+
+void BossArcher::updateMovement(float dt, float playerX, float playerY) {
+    // ── КУЛДАУНЫ ─────────────────────────────────────────────
+    if (jumpCooldown > 0.0f) jumpCooldown -= dt;
+    if (dropCooldown > 0.0f) dropCooldown -= dt;
+
+    // ── АКТИВНЫЙ ПРОВАЛ — ждём пока не упадём ────────────────
+    if (platformDropTimer > 0.0f) {
+        platformDropTimer -= dt;
+        y += 2.0f;
+        // Горизонтально стоим на месте во время провала
+        velocityX = 0.0f;
+        return;
+    }
+
+    // ── ПЕРЕСЧЁТ ПУТИ ────────────────────────────────────────
+    bfsTimer -= dt;
+    if (bfsTimer <= 0.0f) {
+        bfsTimer = BFS_INTERVAL;
+        recalcPath(playerX, playerY);
+    }
+
+    // Нет пути — просто стоим
+    if (path.empty() || pathIndex >= (int)path.size()) {
+        velocityX = 0.0f;
+        return;
+    }
+
+    // ── ТЕКУЩИЙ УЗЕЛ ЦЕЛИ ────────────────────────────────────
+    const PathNode& target = path[pathIndex];
+
+    if (!g_currentLevel) return;
+    int ox, oy;
+    g_currentLevel->getMapOffset(ox, oy);
+
+    // Позиция цели в пикселях (центр тайла)
+    const float targetX = ox + target.col * BFS_TILE_SIZE + BFS_TILE_SIZE / 2.0f;
+    const float targetY = oy + target.row * BFS_TILE_SIZE + BFS_TILE_SIZE / 2.0f;
+
+    const float distToTarget = std::abs(x - targetX);
+
+    // Достигли текущего узла — переходим к следующему
+    if (distToTarget < BFS_REACH_DIST &&
+        std::abs(y - targetY) < BFS_TILE_SIZE * 1.5f) {
+        pathIndex++;
+        return;
+    }
+
+    // ── ВЫПОЛНЯЕМ ДЕЙСТВИЕ ───────────────────────────────────
+    facingRight = (targetX > x);
+
+    switch (target.action) {
+
+    case PathAction::WALK_LEFT:
+    case PathAction::WALK_RIGHT:
+        // Просто идём горизонтально
+        velocityX = (targetX > x) ? MOVE_SPEED : -MOVE_SPEED;
+        break;
+
+    case PathAction::JUMP:
+        // Прыгаем только если стоим на земле и кулдаун прошёл
+        if (isGrounded && jumpCooldown <= 0.0f) {
+            velocityY    = JUMP_VELOCITY;
+            isGrounded   = false;
+            jumpCooldown = JUMP_COOLDOWN_MAX;
+        }
+        // Во время прыжка тоже двигаемся горизонтально к цели
+        velocityX = (targetX > x) ? MOVE_SPEED : -MOVE_SPEED;
+        break;
+
+    case PathAction::DROP:
+        // Провалиться через платформу
+        if (isGrounded && dropCooldown <= 0.0f) {
+            platformDropTimer = DROP_DURATION;
+            dropCooldown      = DROP_COOLDOWN;
+        }
+        break;
+    }
 }

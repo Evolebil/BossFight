@@ -159,6 +159,60 @@ private:
     float spawnDelay    = 0.5f; ///< Задержка после спавна (сек)
 
     // ============================================================
+    // ПОЛЯ — ПРЫЖОК И ПРОВАЛ
+    // ============================================================
+
+    float jumpCooldown      = 0.0f;   ///< До следующего прыжка (сек)
+    float platformDropTimer = 0.0f;   ///< >0 = проваливаемся через платформу
+    float dropCooldown      = 0.0f;   ///< Защита от повторного провала
+
+    // ============================================================
+    // КОНСТАНТЫ — BFS
+    // ============================================================
+
+    static constexpr int   BFS_TILE_SIZE  = 32;    ///< Размер тайла (px)
+    static constexpr float BFS_INTERVAL   = 0.5f;  ///< Пересчёт пути (сек)
+    static constexpr int   BFS_MAX_TILES  = 8000;  ///< Лимит узлов (160*50)
+    static constexpr float BFS_REACH_DIST = 40.0f; ///< Считаем узел достигнутым (px)
+
+    // ============================================================
+    // СТРУКТУРЫ BFS
+    // ============================================================
+
+    /// Тип действия между двумя узлами пути
+    enum class PathAction {
+        WALK_LEFT,   ///< Идти влево
+        WALK_RIGHT,  ///< Идти вправо
+        JUMP,        ///< Прыгнуть вверх
+        DROP         ///< Провалиться вниз
+    };
+
+    /// Один узел пути — тайл + действие чтобы туда попасть
+    struct PathNode {
+        int        col    = 0;
+        int        row    = 0;
+        PathAction action = PathAction::WALK_RIGHT;
+    };
+
+    // ============================================================
+    // ПОЛЯ — BFS
+    // ============================================================
+
+    std::vector<PathNode> path;          ///< Текущий найденный путь
+    int                   pathIndex = 0; ///< Текущий узел пути
+    float                 bfsTimer  = 0.0f; ///< Таймер пересчёта пути
+
+    // ============================================================
+    // КОНСТАНТЫ — ПРЫЖОК И ПРОВАЛ
+    // ============================================================
+
+    static constexpr float JUMP_VELOCITY    = -580.0f;  ///< Начальная скорость прыжка
+    static constexpr float JUMP_COOLDOWN_MAX = 1.5f;    ///< Кулдаун прыжка (сек)
+    static constexpr float DROP_THRESHOLD   = 60.0f;    ///< Игрок ниже на столько → провал (px)
+    static constexpr float DROP_DURATION    = 0.18f;    ///< Длительность провала (сек)
+    static constexpr float DROP_COOLDOWN    = 0.8f;     ///< Кулдаун между провалами (сек)
+
+    // ============================================================
     // ПОЛЯ — ФЛАГИ
     // ============================================================
 
@@ -190,6 +244,21 @@ private:
     void checkPhaseTransition();
     void updateAI(float dt, float playerX, float playerY);
     void renderHitboxes(SDL_Renderer* renderer);
+    void updateMovement(float dt, float playerX, float playerY);
+    /// Пересчитать путь от лучника к игроку через BFS
+    void recalcPath(float playerX, float playerY);
+
+    /// Проверить можно ли прыгнуть из (col,row) и приземлиться на платформу выше
+    [[nodiscard]] bool canJumpTo(int col, int row, int& landRow) const;
+
+    /// Найти ближайшую платформу ниже (col,row) — возвращает row платформы или -1
+    [[nodiscard]] int  findPlatformBelow(int col, int row) const;
+
+    /// Тайл является платформой (есть на чём стоять снизу)
+    [[nodiscard]] bool isSolidTile(int col, int row) const;
+
+    /// Тайл пустой (можно пройти сквозь)
+    [[nodiscard]] bool isFreeTile(int col, int row) const;
 
 public:
 
