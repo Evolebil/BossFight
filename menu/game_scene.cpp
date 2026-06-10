@@ -128,12 +128,12 @@ void GameScene::handleInput(SDL_Event& event, int mx, int my,
                 }
                 break;
             // Консольная команда — набираем текст в любой момент игры
-            case SDL_SCANCODE_K:
-                if (boss && resultState == ResultState::PLAYING) {
-                    boss->takeDamage(9999999.0f);
-                    std::cout << "[DEBUG] /kill_boss\n";
-                }
-                break;
+            // case SDL_SCANCODE_K:
+            //     if (boss && resultState == ResultState::PLAYING) {
+            //         boss->takeDamage(9999999.0f);
+            //         std::cout << "[DEBUG] /kill_boss\n";
+            //     }
+            //     break;
             default:
                 break;
             }
