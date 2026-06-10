@@ -26,6 +26,7 @@
 #include <unordered_map>
 #include <fstream>
 #include <queue>
+#include <set>
 
 // ===== НАШИ КЛАССЫ (только объявления) =====
 class Config;
@@ -85,7 +86,10 @@ enum class SamuraiPhase {
 enum class ArcherState {
     IDLE,
     WALK,
-    SWORD_ATTACK,
+    ATTACK_1,
+    ATTACK_2,
+    ATTACK_3,
+    HURT,
     SHOOT,
     CLONE_VOLLEY,
     DEATH

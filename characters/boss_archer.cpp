@@ -3,18 +3,6 @@
  * @brief Реализация BossArcher
  * @author evol
  * @date 2026-06-08
- *
- * АРХИТЕКТУРА UPDATE():
- *  1. spawnDelay → только физика
- *  2. Смерть → анимация + физика
- *  3. Регулярный кадр:
- *     - Таймеры
- *     - Проверка фазы 2 (50% HP)
- *     - Спавн/обновление клонов
- *     - Обновление стрел
- *     - updateAI() → прыжки/ходьба через BFS
- *     - Физика (гравитация)
- *     - Анимация
  */
 
 #include "boss_archer.h"
@@ -28,11 +16,11 @@ extern ILevel* g_currentLevel;
 
 BossArcher::BossArcher(float spawnX, float spawnY, float attackSpeedMult)
     : Boss(spawnX, spawnY, HITBOX_W, HITBOX_H, BASE_HP, attackSpeedMult)
+    , lastRecalcPlayerX(spawnX)
+    , lastRecalcPlayerY(spawnY)
 {
-    // Кулдауны зависят от множителя скорости
     swordCooldown = BASE_SWORD_COOLDOWN / attackSpeedMult;
     shootCooldown = BASE_SHOOT_COOLDOWN / attackSpeedMult;
-
     loadAnimations();
 }
 
@@ -41,7 +29,6 @@ BossArcher::BossArcher(float spawnX, float spawnY, float attackSpeedMult)
 // ============================================================
 
 void BossArcher::loadAnimations() {
-    // Таблица: состояние → путь к PNG → кол-во кадров → скорость анимации → зацикленность
     struct AnimInfo {
         ArcherState state;
         const char* path;
@@ -53,439 +40,384 @@ void BossArcher::loadAnimations() {
     static const AnimInfo ANIMS[] = {
                                       { ArcherState::IDLE,         "assets/Samurai_Archer/Idle.png",     FRAMES_IDLE,         ANIM_SPD_IDLE,         true  },
                                       { ArcherState::WALK,         "assets/Samurai_Archer/Run.png",      FRAMES_WALK,         ANIM_SPD_WALK,         true  },
-                                      { ArcherState::SWORD_ATTACK, "assets/Samurai_Archer/Attack_1.png", FRAMES_SWORD_ATTACK, ANIM_SPD_SWORD_ATTACK, false },
+                                      { ArcherState::ATTACK_1,     "assets/Samurai_Archer/Attack_1.png", FRAMES_ATTACK_1,     ANIM_SPD_ATTACK_1,     false },
+                                      { ArcherState::ATTACK_2,     "assets/Samurai_Archer/Attack_2.png", FRAMES_ATTACK_2,     ANIM_SPD_ATTACK_2,     false },
+                                      { ArcherState::ATTACK_3,     "assets/Samurai_Archer/Attack_3.png", FRAMES_ATTACK_3,     ANIM_SPD_ATTACK_3,     false },
+                                      { ArcherState::HURT,         "assets/Samurai_Archer/Hurt.png",     FRAMES_HURT,         ANIM_SPD_HURT,         false },
                                       { ArcherState::SHOOT,        "assets/Samurai_Archer/Shot.png",     FRAMES_SHOOT,        ANIM_SPD_SHOOT,        false },
                                       { ArcherState::CLONE_VOLLEY, "assets/Samurai_Archer/Attack_2.png", FRAMES_CLONE_VOLLEY, ANIM_SPD_CLONE_VOLLEY, false },
                                       { ArcherState::DEATH,        "assets/Samurai_Archer/Dead.png",     FRAMES_DEATH,        ANIM_SPD_DEATH,        false },
                                       };
 
-    // Загрузить стрелы отдельно
     arrowTexture = TextureManager::getTexture("assets/Samurai_Archer/Arrow.png");
 
-    // Загрузить все анимации
     for (const auto& info : ANIMS) {
         SDL_Texture* tex = TextureManager::getTexture(info.path);
         if (!tex) {
-            std::cerr << "[BossArcher::loadAnimations] ОШИБКА: Не загружена "
-                      << info.path << "\n";
+            std::cerr << "[BossArcher] ОШИБКА: не загружена " << info.path << "\n";
             continue;
         }
-
-        // Создать анимацию: все кадры в одной строке (слева направо)
         Animation anim(info.loop);
-        for (int i = 0; i < info.frames; i++) {
-            anim.addFrame(
-                i * FRAME_W,  // srcX = кадр * ширина кадра
-                0,            // srcY = всегда верхняя строка
-                FRAME_W,
-                FRAME_H,
-                info.speed
-                );
-        }
-
+        for (int i = 0; i < info.frames; i++)
+            anim.addFrame(i * FRAME_W, 0, FRAME_W, FRAME_H, info.speed);
         textures[info.state]   = tex;
         animations[info.state] = anim;
     }
 }
 
 // ============================================================
-// ГЛАВНЫЙ UPDATE (ПОРЯДОК КРИТИЧЕН!)
+// ГЛАВНЫЙ UPDATE
 // ============================================================
 
 void BossArcher::update(float deltaTime, float playerX, float playerY,
                         bool /*playerFacingRight*/) {
-    // 1. ЗАПОМНИТЬ ПОЗИЦИЮ ИГРОКА
     lastPlayerX = playerX;
     lastPlayerY = playerY;
 
-    // 2. ЗАДЕРЖКА СПАВНА
+    // 1. ЗАДЕРЖКА СПАВНА
     if (spawnDelay > 0.0f) {
         spawnDelay -= deltaTime;
         applyGravityAndCollisions(deltaTime);
-        return;  // ← Выходим, остального нет
+        return;
     }
 
-    // 3. СМЕРТЬ (ОТДЕЛЬНАЯ ВЕТКА)
+    // 2. СМЕРТЬ
     if (hp <= 0) {
-        // Первый раз в DEATH?
         if (currentState != ArcherState::DEATH) {
             phase     = ArcherPhase::DYING;
             velocityX = 0.0f;
-
-            // Отключить клонов и стрелы
-            for (auto& clone : clones)
-                clone.active = false;
-            for (auto& arrow : arrows)
-                arrow.active = false;
-
+            for (auto& c : clones) c.active = false;
+            for (auto& a : arrows) a.active = false;
             forceState(ArcherState::DEATH);
         }
-
-        // Продолжить падение (физика)
         applyGravityAndCollisions(deltaTime);
-
-        // Обновить анимацию смерти
         auto it = animations.find(ArcherState::DEATH);
-        if (it != animations.end()) {
-            it->second.update(deltaTime);
-        }
-        return;  // ← Выходим
+        if (it != animations.end()) it->second.update(deltaTime);
+        return;
     }
 
-    // 4. РЕГУЛЯРНЫЙ КАДР
+    // 3. РЕГУЛЯРНЫЙ КАДР
     stateTimer += deltaTime;
 
-    if (swordTimer > 0.0f)
-        swordTimer -= deltaTime;
-    if (shootTimer > 0.0f)
-        shootTimer -= deltaTime;
+    // Визуализация BFS
+    if (showHitboxes && bfsVisualStep < (int)bfsAllNodes.size()) {
+        bfsVisualTimer += deltaTime;
+        while (bfsVisualTimer >= BFS_VIS_STEP_INTERVAL &&
+               bfsVisualStep < (int)bfsAllNodes.size()) {
+            bfsVisualTimer -= BFS_VIS_STEP_INTERVAL;
+            bfsVisualStep++;
+        }
+    }
 
-    // 5. ПРОВЕРКА ПЕРЕХОД В ФАЗУ 2 (при 50% HP)
+    if (swordTimer    > 0.0f) swordTimer    -= deltaTime;
+    if (shootTimer    > 0.0f) shootTimer    -= deltaTime;
+    if (teleportCooldown > 0.0f) teleportCooldown -= deltaTime;
+
+    // 4. АНИМАЦИЯ HURT ПЕРЕД ТЕЛЕПОРТОМ
+    // Если играет — ждём конца, потом телепортируемся
+    if (playingPreTeleportHurt) {
+        auto it = animations.find(ArcherState::HURT);
+        if (it != animations.end()) it->second.update(deltaTime);
+
+        if (it == animations.end() || it->second.isFinished()) {
+            playingPreTeleportHurt = false;
+            // Теперь сам телепорт
+            teleportNearPlayer(playerX, playerY);
+        }
+        // Физика продолжается даже во время hurt
+        applyGravityAndCollisions(deltaTime);
+        return;
+    }
+
     checkPhaseTransition();
 
-    // 6. ПЕРВЫЙ СПАВН КЛОНОВ
     if (!clonesSpawned) {
         spawnClones();
         clonesSpawned = true;
     }
 
-    // 7. ОБНОВЛЕНИЕ КЛОНОВ (ПОЗИЦИИ + СТРЕЛЬБА)
     updateClones(deltaTime, playerX, playerY);
 
-    // 8. ОБНОВЛЕНИЕ СТРЕЛ (ДВИЖЕНИЕ + ОЧИСТКА НЕАКТИВНЫХ)
+    // Обновление стрел
     for (auto& arrow : arrows) {
-        if (!arrow.active)
-            continue;
-
-        // Двигаем стрелу
+        if (!arrow.active) continue;
         arrow.x += arrow.velX * deltaTime;
         arrow.y += arrow.velY * deltaTime;
-
-        // Проверка: вышла ли стрела за пределы разумного расстояния?
         const float dx = arrow.x - x;
         const float dy = arrow.y - y;
-        const float distSq = dx * dx + dy * dy;
-        const float maxDistSq = ArcherArrow::SPEED * ArcherArrow::SPEED * 16.0f;
-
-        if (distSq > maxDistSq) {
+        if (dx*dx + dy*dy > ArcherArrow::SPEED * ArcherArrow::SPEED * 16.0f)
             arrow.active = false;
-        }
     }
-
-    // Удалить неактивные стрелы (очистка)
     arrows.erase(
         std::remove_if(arrows.begin(), arrows.end(),
-                       [](const ArcherArrow& a) { return !a.active; }),
-        arrows.end()
-        );
+                       [](const ArcherArrow& a){ return !a.active; }),
+        arrows.end());
 
-    // 9. AI (ДВИЖЕНИЕ ПО ПУТИ BFS + БЛИЖНИЙ БОЙ)
     updateAI(deltaTime, playerX, playerY);
 
-    // 10. ФИЗИКА (ГРАВИТАЦИЯ + КОЛЛИЗИИ)
-    // Передаём флаг: если проваливаемся, то пропустить обычные коллизии по Y
     applyGravityAndCollisions(deltaTime, platformDropTimer > 0.0f);
+    if (platformDropTimer > 0.0f) platformDropTimer -= deltaTime;
 
-    // 11. АНИМАЦИЯ (ОБНОВИТЬ ТЕКУЩЕЕ СОСТОЯНИЕ)
+    // Обновляем анимацию текущего состояния
+    // (HURT обновляется отдельно выше — здесь не трогаем)
     auto it = animations.find(currentState);
-    if (it != animations.end()) {
-        it->second.update(deltaTime);
-    }
+    if (it != animations.end()) it->second.update(deltaTime);
 }
 
 // ============================================================
-// СПАВН КЛОНОВ (ФАЗА 1 И 2)
+// СПАВН КЛОНОВ
 // ============================================================
 
 void BossArcher::spawnClones() {
     clones.clear();
+    const int count = (phase == ArcherPhase::PHASE_1) ? CLONE_COUNT : CLONE_COUNT_P2;
 
-    // Сколько клонов в текущей фазе?
-    const int count = (phase == ArcherPhase::PHASE_1)
-                          ? CLONE_COUNT
-                          : CLONE_COUNT_P2;
-
-    // Создать вертикальный ряд клонов
-    // Они расположены выше и ниже лучника с равным интервалом
     for (int i = 0; i < count; i++) {
-        // Смещение: центр = i = count/2
-        //   если count=4: i=0,1,2,3 → offset=-1.5, -0.5, +0.5, +1.5
         const float offset = (i - (count - 1) / 2.0f) * CLONE_SPACING;
-
         ArcherClone clone;
         clone.x              = x;
         clone.y              = y + offset;
-        clone.verticalOffset = offset;  // Запоминаем навсегда
-        clone.offsetX        = 0.0f;    // Горизонтально не смещаем
+        clone.verticalOffset = offset;
+        clone.offsetX        = 0.0f;
         clone.active         = true;
-        clone.isCenter       = (i == count / 2);  // Средний клон = центральный
-
-        // Центральный клон следит за игроком (updateClones пересчитает direction)
-        // Остальные смотрят в сторону, куда смотрит босс
-        if (clone.isCenter) {
-            clone.dirX = 0.0f;
-            clone.dirY = 0.0f;
-        } else {
-            clone.dirX = facingRight ? 1.0f : -1.0f;
-            clone.dirY = 0.0f;
-        }
-
+        clone.isCenter       = (i == count / 2);
+        clone.dirX           = clone.isCenter ? 0.0f : (facingRight ? 1.0f : -1.0f);
+        clone.dirY           = 0.0f;
         clones.push_back(clone);
     }
 }
 
 // ============================================================
-// ОБНОВЛЕНИЕ КЛОНОВ (КАЖДЫЙ КАДР)
+// ОБНОВЛЕНИЕ КЛОНОВ
 // ============================================================
 
 void BossArcher::updateClones(float dt, float playerX, float playerY) {
-    if (clones.empty())
-        return;
+    if (clones.empty()) return;
 
-    // Найти центральный клон
     ArcherClone* center = nullptr;
-    for (auto& clone : clones) {
-        if (clone.isCenter) {
-            center = &clone;
-            break;
-        }
-    }
-    if (!center)
-        return;
+    for (auto& clone : clones)
+        if (clone.isCenter) { center = &clone; break; }
+    if (!center) return;
 
-    // ── ЦЕНТРАЛЬНЫЙ КЛОН ──
-    // Позиция: следует за лучником по X
     center->x = x;
     center->y = y + center->verticalOffset;
 
-    // Направление: каждый кадр пересчитываем к игроку
-    const float cdx = playerX - center->x;
-    const float cdy = playerY - center->y;
-    const float clen = std::sqrt(cdx * cdx + cdy * cdy);
-
+    const float cdx  = playerX - center->x;
+    const float cdy  = playerY - center->y;
+    const float clen = std::sqrt(cdx*cdx + cdy*cdy);
     if (clen > 1.0f) {
         center->dirX = cdx / clen;
         center->dirY = cdy / clen;
     }
 
-    // ── БОКОВЫЕ КЛОНЫ ──
     for (auto& clone : clones) {
-        if (clone.isCenter)
-            continue;
-
-        // Позиция: следуют за центром по X, но сохраняют вертикальное смещение
+        if (clone.isCenter) continue;
         clone.x = center->x + clone.offsetX;
         clone.y = y + clone.verticalOffset;
 
-        // Направление зависит от фазы
         if (phase == ArcherPhase::PHASE_2) {
-            // ФАЗА 2: дополнительные клоны могут менять направление
-
-            // Вертикальный клон (высоко над лучником) — смотрит на игрока вниз
             if (clone.verticalOffset <= -VERTICAL_CLONE_OFFSET) {
-                const float dx = playerX - clone.x;
-                const float dy = playerY - clone.y;
-                const float vlen = std::sqrt(dx * dx + dy * dy);
-
-                if (vlen > 1.0f) {
-                    clone.dirX = dx / vlen;
-                    clone.dirY = dy / vlen;
-                }
-            }
-            // Диагональный клон — фиксированный угол 45° вниз
-            else if (clone.dirY > 0.5f && std::abs(clone.dirX) > 0.5f) {
+                const float dx  = playerX - clone.x;
+                const float dy  = playerY - clone.y;
+                const float len = std::sqrt(dx*dx + dy*dy);
+                if (len > 1.0f) { clone.dirX = dx/len; clone.dirY = dy/len; }
+            } else if (clone.dirY > 0.5f && std::abs(clone.dirX) > 0.5f) {
                 clone.dirX = facingRight ? 0.707f : -0.707f;
                 clone.dirY = 0.707f;
-            }
-            // Остальные (горизонтальные) — смотрят в сторону босса
-            else {
+            } else {
                 clone.dirX = facingRight ? 1.0f : -1.0f;
                 clone.dirY = 0.0f;
             }
         } else {
-            // ФАЗА 1: все боковые смотрят горизонтально
             clone.dirX = facingRight ? 1.0f : -1.0f;
             clone.dirY = 0.0f;
         }
     }
 
-    // ── СТРЕЛЬБА (ОБЩИЙ ТАЙМЕР ДЛЯ ВСЕХ КЛОНОВ) ──
     cloneShootTimer -= dt;
-
-    if (cloneShootTimer > 0.0f)
-        return;  // ← Ещё не время
-
-    // Пересчитать таймер
+    if (cloneShootTimer > 0.0f) return;
     cloneShootTimer = CLONE_SHOOT_INTERVAL / attackSpeedMult;
 
-    // Все клоны стреляют
+    const float centerDist = std::sqrt(cdx*cdx + cdy*cdy);
     for (const auto& clone : clones) {
-        if (!clone.active)
-            continue;
-
-        // Центральный клон не стреляет если игрок совсем рядом
-        const float centerDist = std::sqrt(cdx * cdx + cdy * cdy);
-        if (clone.isCenter && centerDist <= 1.0f)
-            continue;
-
-        // Создать стрелу
+        if (!clone.active) continue;
+        if (clone.isCenter && centerDist <= 1.0f) continue;
         ArcherArrow arrow;
         arrow.x      = clone.x;
         arrow.y      = clone.y;
         arrow.velX   = clone.dirX * ArcherArrow::SPEED;
         arrow.velY   = clone.dirY * ArcherArrow::SPEED;
         arrow.active = true;
-
         arrows.push_back(arrow);
     }
 }
 
 // ============================================================
-// ПРОВЕРКА ПЕРЕХОД В ФАЗУ 2 (50% HP)
+// ПЕРЕХОД В ФАЗУ 2
 // ============================================================
 
 void BossArcher::checkPhaseTransition() {
-    if (phase != ArcherPhase::PHASE_1)
-        return;  // Уже в другой фазе
+    if (phase != ArcherPhase::PHASE_1) return;
+    if (hp > maxHP * 0.5f) return;
 
-    if (hp > maxHP * 0.5f)
-        return;  // HP ещё больше половины
-
-    // ── ПЕРЕХОД ──
     phase = ArcherPhase::PHASE_2;
-
-    // Пересоздать клонов (теперь CLONE_COUNT_P2 штук)
     spawnClones();
 
-    // Добавить ДИАГОНАЛЬНЫЙ клон (45° вниз-в сторону)
-    {
-        ArcherClone diag;
-        diag.x              = x;
-        diag.y              = y;
-        diag.verticalOffset = 0.0f;
-        diag.offsetX        = 0.0f;
-        diag.dirX           = facingRight ? 0.707f : -0.707f;
-        diag.dirY           = 0.707f;
-        diag.active         = true;
-        diag.isCenter       = false;
-        clones.push_back(diag);
-    }
+    // Диагональный клон
+    ArcherClone diag;
+    diag.x = x; diag.y = y; diag.verticalOffset = 0.0f; diag.offsetX = 0.0f;
+    diag.dirX = facingRight ? 0.707f : -0.707f; diag.dirY = 0.707f;
+    diag.active = true; diag.isCenter = false;
+    clones.push_back(diag);
 
-    // Добавить ВЕРТИКАЛЬНЫЙ клон (высоко над лучником)
-    {
-        ArcherClone vert;
-        vert.x              = x;
-        vert.y              = y - VERTICAL_CLONE_OFFSET;
-        vert.verticalOffset = -VERTICAL_CLONE_OFFSET;
-        vert.offsetX        = 0.0f;
-        vert.dirX           = 0.0f;
-        vert.dirY           = 1.0f;  // Начальное направление (вниз)
-        vert.active         = true;
-        vert.isCenter       = false;
-        clones.push_back(vert);
-    }
+    // Вертикальный клон
+    ArcherClone vert;
+    vert.x = x; vert.y = y - VERTICAL_CLONE_OFFSET;
+    vert.verticalOffset = -VERTICAL_CLONE_OFFSET; vert.offsetX = 0.0f;
+    vert.dirX = 0.0f; vert.dirY = 1.0f;
+    vert.active = true; vert.isCenter = false;
+    clones.push_back(vert);
 
-    // Сбросить таймеры атак
     swordTimer      = swordCooldown;
     shootTimer      = shootCooldown;
     cloneShootTimer = CLONE_SHOOT_INTERVAL;
 }
 
 // ============================================================
-// AI — УПРАВЛЕНИЕ И АТАКИ
+// AI
 // ============================================================
 
 void BossArcher::updateAI(float dt, float playerX, float playerY) {
-    if (currentState == ArcherState::DEATH)
-        return;
+    if (currentState == ArcherState::DEATH) return;
 
-    // Движение по BFS пути
     updateMovement(dt, playerX, playerY);
-
-    // Применить горизонтальное движение (velocityX уже установлен в updateMovement)
     x += velocityX * dt;
-    applyCollisionsX();  // Коллизии со стенами
+    applyCollisionsX();
 
-    // ── ПРОВЕРКА БЛИЖНЕГО БОЯ ──
-    const float distX = std::abs(playerX - x);
-
-    // Если мы ещё замахиваемся мечом — ждём
-    if (currentState == ArcherState::SWORD_ATTACK) {
-        auto it = animations.find(ArcherState::SWORD_ATTACK);
-        if (it != animations.end() && it->second.isFinished()) {
+    // Атака идёт — ждём конца, движение НЕ останавливаем
+    const bool isAttacking = (currentState == ArcherState::ATTACK_1 ||
+                              currentState == ArcherState::ATTACK_2 ||
+                              currentState == ArcherState::ATTACK_3);
+    if (isAttacking) {
+        auto it = animations.find(currentState);
+        if (it != animations.end() && it->second.isFinished())
             setState(ArcherState::IDLE);
-        }
-        return;  // ← Не делаем ничего пока замахиваемся
-    }
-
-    // Если проваливаемся через платформу — ничего не делаем
-    if (platformDropTimer > 0.0f)
         return;
-
-    // БЛИЖНИЙ БОЙ (если близко, на земле, и кулдаун прошёл)
-    if (distX <= MELEE_RANGE && swordTimer <= 0.0f && isGrounded) {
-        meleeHitDealt = false;  // Сброс флага: урон ещё не нанесён
-        velocityX     = 0.0f;   // Стоп на месте
-        forceState(ArcherState::SWORD_ATTACK);
-        swordTimer = swordCooldown;
-        return;  // ← Не обновляем анимацию движения
     }
 
-    // ── АНИМАЦИЯ ДВИЖЕНИЯ ──
+    if (platformDropTimer > 0.0f) return;
+
+    const float distX = std::abs(playerX - x);
+    const float distY = std::abs(playerY - y);
+
+    // Телепорт если игрок слишком далеко и кулдаун прошёл
+    if (distX > TELEPORT_TRIGGER_DIST && teleportCooldown <= 0.0f) {
+        // Сначала — анимация Hurt (без урона)
+        playingPreTeleportHurt = true;
+        auto it = animations.find(ArcherState::HURT);
+        if (it != animations.end()) it->second.reset();
+        forceState(ArcherState::HURT);
+        return;
+    }
+
+    // Ближний бой — случайная из трёх анимаций, движение не останавливаем
+    if (distX <= MELEE_RANGE && distY <= HITBOX_H &&
+        swordTimer <= 0.0f && isGrounded) {
+        meleeHitDealt = false;
+
+        std::uniform_int_distribution<int> roll(0, 2);
+        currentAttack = roll(rng);
+
+        ArcherState attackState = ArcherState::ATTACK_1;
+        if (currentAttack == 1) attackState = ArcherState::ATTACK_2;
+        if (currentAttack == 2) attackState = ArcherState::ATTACK_3;
+
+        forceState(attackState);
+        swordTimer = swordCooldown;
+        return;
+    }
+
+    // Анимация движения
     if (isGrounded) {
-        if (velocityX != 0.0f) {
+        if (std::abs(velocityX) > 10.0f)
             setState(ArcherState::WALK);
-        } else if (currentState == ArcherState::WALK) {
+        else if (currentState == ArcherState::WALK)
             setState(ArcherState::IDLE);
-        }
     }
 }
 
 // ============================================================
-// ПРОВЕРКА УРОНА (МЕЧ + СТРЕЛЫ)
+// ТЕЛЕПОРТ В СЛУЧАЙНУЮ ТОЧКУ РЯДОМ С ИГРОКОМ
+// ============================================================
+
+void BossArcher::teleportNearPlayer(float playerX, float playerY) {
+    if (!g_currentLevel) return;
+
+    int ox, oy;
+    getCurrentMapOffset(ox, oy);
+
+    std::uniform_real_distribution<float> angleDist(0.0f, 2.0f * static_cast<float>(M_PI));
+    std::uniform_real_distribution<float> distDist(TELEPORT_MIN_DIST, TELEPORT_MAX_DIST);
+
+    for (int attempt = 0; attempt < 12; ++attempt) {
+        const float angle   = angleDist(rng);
+        const float dist    = distDist(rng);
+        const float targetX = playerX + std::cos(angle) * dist;
+        const float targetY = playerY + std::sin(angle) * dist;
+
+        const int col = static_cast<int>((targetX - ox) / BFS_TILE_SIZE);
+        const int row = static_cast<int>((targetY - oy) / BFS_TILE_SIZE);
+
+        if (isWalkable(col, row) && hasSupport(col, row)) {
+            x = ox + col * BFS_TILE_SIZE + BFS_TILE_SIZE / 2.0f;
+            y = oy + row * BFS_TILE_SIZE + BFS_TILE_SIZE / 2.0f;
+            teleportCooldown = TELEPORT_COOLDOWN;
+            facingRight      = (playerX > x);
+            path.clear();
+            pathIndex = 0;
+            return;
+        }
+    }
+    // 12 попыток не нашли валидную позицию — ставим половину кулдауна
+    teleportCooldown = TELEPORT_COOLDOWN * 0.5f;
+}
+
+// ============================================================
+// ПРОВЕРКА УРОНА ПО ИГРОКУ
 // ============================================================
 
 float BossArcher::checkPlayerDamage(SDL_Rect playerBox, float /*deltaTime*/) {
-    if (phase == ArcherPhase::DYING)
-        return 0.0f;
+    if (phase == ArcherPhase::DYING) return 0.0f;
 
     float totalDamage = 0.0f;
 
-    // ── УДАР МЕЧОМ ──
-    if (currentState == ArcherState::SWORD_ATTACK && !meleeHitDealt) {
-        auto it = animations.find(ArcherState::SWORD_ATTACK);
-        if (it != animations.end()) {
-            // Проверить: достаточно ли кадров прошло?
-            if (it->second.getCurrentFrameIndex() >= SWORD_HIT_FRAME) {
-                // Создать хитбокс меча (зависит от направления)
-                const int hx = facingRight
-                                   ? (int)(x + width / 2)
-                                   : (int)(x - width / 2 - SWORD_HIT_W);
-                const int hy = (int)(y - SWORD_HIT_H / 2);
-
-                SDL_Rect meleeBox = {hx, hy, (int)SWORD_HIT_W, (int)SWORD_HIT_H};
-
-                if (rectsOverlap(playerBox, meleeBox)) {
-                    totalDamage += SWORD_DAMAGE;
-                }
-
-                meleeHitDealt = true;  // ← Больше не наносим урон в этом замахе
-            }
+    // Меч — любая из трёх атак
+    const bool isAttackingNow = (currentState == ArcherState::ATTACK_1 ||
+                                 currentState == ArcherState::ATTACK_2 ||
+                                 currentState == ArcherState::ATTACK_3);
+    if (isAttackingNow && !meleeHitDealt) {
+        auto it = animations.find(currentState);
+        if (it != animations.end() &&
+            it->second.getCurrentFrameIndex() >= SWORD_HIT_FRAME) {
+            const int hx = facingRight
+                               ? (int)(x + width / 2)
+                               : (int)(x - width / 2 - SWORD_HIT_W);
+            const int hy = (int)(y - SWORD_HIT_H / 2);
+            SDL_Rect meleeBox = {hx, hy, (int)SWORD_HIT_W, (int)SWORD_HIT_H};
+            if (rectsOverlap(playerBox, meleeBox))
+                totalDamage += SWORD_DAMAGE;
+            meleeHitDealt = true;
         }
     }
 
-    // ── СТРЕЛЫ ──
+    // Стрелы
     for (auto& arrow : arrows) {
-        if (!arrow.active)
-            continue;
-
+        if (!arrow.active) continue;
         SDL_Rect arrowBox = {
             (int)(arrow.x - ARROW_HITBOX_W / 2),
             (int)(arrow.y - ARROW_HITBOX_H / 2),
-            ARROW_HITBOX_W,
-            ARROW_HITBOX_H
+            ARROW_HITBOX_W, ARROW_HITBOX_H
         };
-
         if (rectsOverlap(playerBox, arrowBox)) {
             arrow.active = false;
             totalDamage += ArcherArrow::DAMAGE;
@@ -500,87 +432,61 @@ float BossArcher::checkPlayerDamage(SDL_Rect playerBox, float /*deltaTime*/) {
 // ============================================================
 
 void BossArcher::render(SDL_Renderer* renderer) {
-    if (!renderer)
-        return;
+    if (!renderer) return;
 
-    // Получить смещение камеры
     const int camOffsetX = g_camera ? (int)g_camera->getOffsetX() : 0;
     const int camOffsetY = g_camera ? (int)g_camera->getOffsetY() : 0;
-
-    // Размер спрайта на экране
     const int dstW = (int)(FRAME_W * SPRITE_SCALE);
     const int dstH = (int)(FRAME_H * SPRITE_SCALE);
 
-    // ── 1. КЛОНЫ (ПОЛУПРОЗРАЧНЫЕ) ──
+    // 1. КЛОНЫ
     {
         auto idleTexIt  = textures.find(ArcherState::IDLE);
         auto idleAnimIt = animations.find(ArcherState::IDLE);
-
         if (idleTexIt != textures.end() && idleTexIt->second &&
             idleAnimIt != animations.end()) {
-
-            // Установить прозрачность
             SDL_SetTextureAlphaMod(idleTexIt->second, 120);
-
             for (const auto& clone : clones) {
-                if (!clone.active)
-                    continue;
-
+                if (!clone.active) continue;
                 SDL_Rect src = idleAnimIt->second.getCurrentFrame();
                 SDL_Rect dst = {
                     (int)(clone.x - dstW / 2) - camOffsetX,
                     (int)(clone.y + HITBOX_H / 2) - dstH - camOffsetY,
                     dstW, dstH
                 };
-
-                SDL_RendererFlip flip = (clone.dirX >= 0)
-                                            ? SDL_FLIP_NONE
-                                            : SDL_FLIP_HORIZONTAL;
-
-                SDL_RenderCopyEx(renderer, idleTexIt->second,
-                                 &src, &dst, 0, nullptr, flip);
+                SDL_RendererFlip flip = (clone.dirX >= 0) ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL;
+                SDL_RenderCopyEx(renderer, idleTexIt->second, &src, &dst, 0, nullptr, flip);
             }
-
-            // Восстановить прозрачность
             SDL_SetTextureAlphaMod(idleTexIt->second, 255);
         }
     }
 
-    // ── 2. СТРЕЛЫ ──
-    {
-        for (const auto& arrow : arrows) {
-            if (!arrow.active)
-                continue;
-
-            // Угол поворота (от направления движения)
-            const double angleRad = std::atan2(arrow.velY, arrow.velX);
-            const double angleDeg = angleRad * 180.0 / M_PI;
-
-            SDL_Rect dst = {
-                (int)(arrow.x - ARROW_W / 2) - camOffsetX,
-                (int)(arrow.y - ARROW_H / 2) - camOffsetY,
-                ARROW_W, ARROW_H
-            };
-
-            if (arrowTexture) {
-                SDL_RenderCopyEx(renderer, arrowTexture,
-                                 nullptr, &dst, angleDeg, nullptr, SDL_FLIP_NONE);
-            } else {
-                // Заглушка — жёлтый прямоугольник
-                SDL_SetRenderDrawColor(renderer, 200, 160, 80, 255);
-                SDL_RenderFillRect(renderer, &dst);
-            }
+    // 2. СТРЕЛЫ
+    for (const auto& arrow : arrows) {
+        if (!arrow.active) continue;
+        const double angleDeg = std::atan2(arrow.velY, arrow.velX) * 180.0 / M_PI;
+        SDL_Rect dst = {
+            (int)(arrow.x - ARROW_W / 2) - camOffsetX,
+            (int)(arrow.y - ARROW_H / 2) - camOffsetY,
+            ARROW_W, ARROW_H
+        };
+        if (arrowTexture)
+            SDL_RenderCopyEx(renderer, arrowTexture, nullptr, &dst, angleDeg, nullptr, SDL_FLIP_NONE);
+        else {
+            SDL_SetRenderDrawColor(renderer, 200, 160, 80, 255);
+            SDL_RenderFillRect(renderer, &dst);
         }
     }
 
-    // ── 3. БОСС (СПРАЙТ) ──
+    // 3. БОСС
     {
-        auto texIt  = textures.find(currentState);
-        auto animIt = animations.find(currentState);
+        // Во время playingPreTeleportHurt рисуем Hurt текстуру
+        ArcherState renderState = playingPreTeleportHurt ? ArcherState::HURT : currentState;
 
-        if (texIt == textures.end() || !texIt->second ||
-            animIt == animations.end()) {
-            // Заглушка — оранжевый прямоугольник
+        auto texIt  = textures.find(renderState);
+        auto animIt = animations.find(renderState);
+
+        if (texIt == textures.end() || !texIt->second || animIt == animations.end()) {
             SDL_SetRenderDrawColor(renderer, 200, 80, 0, 255);
             SDL_Rect rect = {
                 (int)(x - width / 2) - camOffsetX,
@@ -595,114 +501,137 @@ void BossArcher::render(SDL_Renderer* renderer) {
                 (int)(y + height / 2) - dstH - camOffsetY,
                 dstW, dstH
             };
-
-            SDL_RendererFlip flip = facingRight
-                                        ? SDL_FLIP_NONE
-                                        : SDL_FLIP_HORIZONTAL;
-
-            SDL_RenderCopyEx(renderer, texIt->second,
-                             &src, &dst, 0, nullptr, flip);
+            SDL_RendererFlip flip = facingRight ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL;
+            SDL_RenderCopyEx(renderer, texIt->second, &src, &dst, 0, nullptr, flip);
         }
     }
 
-    // ── 4. ОТЛАДОЧНЫЕ ХИТБОКСЫ (если включены) ──
-    if (showHitboxes) {
-        renderHitboxes(renderer);
-    }
+    if (showHitboxes) renderHitboxes(renderer);
 }
 
 // ============================================================
-// ОТЛАДКА — ХИТБОКСЫ
+// ХИТБОКСЫ (ОТЛАДКА)
 // ============================================================
 
 void BossArcher::renderHitboxes(SDL_Renderer* renderer) {
     const int cx = g_camera ? (int)g_camera->getOffsetX() : 0;
     const int cy = g_camera ? (int)g_camera->getOffsetY() : 0;
 
+    int ox = 0, oy = 0;
+    if (g_currentLevel) g_currentLevel->getMapOffset(ox, oy);
+
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-    // СИНИЙ — физический хитбокс босса
+    // СИНИЙ — хитбокс босса
     SDL_SetRenderDrawColor(renderer, 0, 100, 255, 255);
     SDL_Rect hb = getHitbox();
-    SDL_Rect hbScreen = {hb.x - cx, hb.y - cy, hb.w, hb.h};
-    SDL_RenderDrawRect(renderer, &hbScreen);
+    SDL_Rect bossHb = {hb.x - cx, hb.y - cy, hb.w, hb.h};
+    SDL_RenderDrawRect(renderer, &bossHb);
 
-    // КРАСНЫЙ — хитбокс меча (если замахиваемся)
-    if (currentState == ArcherState::SWORD_ATTACK) {
+    // КРАСНЫЙ — хитбокс меча
+    const bool isAttackingDbg = (currentState == ArcherState::ATTACK_1 ||
+                                 currentState == ArcherState::ATTACK_2 ||
+                                 currentState == ArcherState::ATTACK_3);
+    if (isAttackingDbg) {
         const int hx = facingRight
                            ? (int)(x + width / 2)
                            : (int)(x - width / 2 - SWORD_HIT_W);
         const int hy = (int)(y - SWORD_HIT_H / 2);
-
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-        SDL_Rect swordBox = {hx - cx, hy - cy, (int)SWORD_HIT_W, (int)SWORD_HIT_H};
-        SDL_RenderDrawRect(renderer, &swordBox);
+        SDL_Rect swordHb = {hx - cx, hy - cy, (int)SWORD_HIT_W, (int)SWORD_HIT_H};
+        SDL_RenderDrawRect(renderer, &swordHb);
     }
 
-    // ЖЁЛТЫЙ — хитбоксы стрел
+    // ЖЁЛТЫЙ — стрелы
     SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
     for (const auto& arrow : arrows) {
-        if (!arrow.active)
-            continue;
-
-        SDL_Rect arrowBox = {
+        if (!arrow.active) continue;
+        SDL_Rect arrowHb = {
             (int)(arrow.x - ARROW_HITBOX_W / 2) - cx,
             (int)(arrow.y - ARROW_HITBOX_H / 2) - cy,
             ARROW_HITBOX_W, ARROW_HITBOX_H
         };
-        SDL_RenderDrawRect(renderer, &arrowBox);
+        SDL_RenderDrawRect(renderer, &arrowHb);
     }
 
-    // ЗЕЛЁНЫЙ — хитбоксы клонов
+    // ЗЕЛЁНЫЙ — клоны
     SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
     for (const auto& clone : clones) {
-        if (!clone.active)
-            continue;
-
-        SDL_Rect cloneBox = {
+        if (!clone.active) continue;
+        SDL_Rect cloneHb = {
             (int)(clone.x - HITBOX_W / 2) - cx,
             (int)(clone.y - HITBOX_H / 2) - cy,
             (int)HITBOX_W, (int)HITBOX_H
         };
-        SDL_RenderDrawRect(renderer, &cloneBox);
+        SDL_RenderDrawRect(renderer, &cloneHb);
     }
 
-    // Белая точка — центр босса
+    // Белая точка — центр
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDL_RenderDrawPoint(renderer, (int)x - cx, (int)y - cy);
+
+    // BFS визуализация
+    if (!bfsAllNodes.empty()) {
+        std::set<std::pair<int,int>> pathSet;
+        for (const auto& pn : path) pathSet.insert({pn.col, pn.row});
+
+        const int limit = std::min(bfsVisualStep, (int)bfsAllNodes.size());
+        for (int i = 0; i < limit; i++) {
+            const auto& n = bfsAllNodes[i];
+            bool onPath = pathSet.count({n.col, n.row}) > 0;
+            if (onPath)
+                SDL_SetRenderDrawColor(renderer, 0, 255, 80, 160);
+            else
+                SDL_SetRenderDrawColor(renderer, 120, 120, 120, 80);
+            SDL_Rect cell = {
+                ox + n.col * BFS_TILE_SIZE + 4 - cx,
+                oy + n.row * BFS_TILE_SIZE + 4 - cy,
+                BFS_TILE_SIZE - 8, BFS_TILE_SIZE - 8
+            };
+            SDL_RenderFillRect(renderer, &cell);
+        }
+    }
+
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 200);
+    for (int i = pathIndex; i + 1 < (int)path.size(); i++) {
+        SDL_RenderDrawLine(renderer,
+                           ox + path[i].col   * BFS_TILE_SIZE + BFS_TILE_SIZE/2 - cx,
+                           oy + path[i].row   * BFS_TILE_SIZE + BFS_TILE_SIZE/2 - cy,
+                           ox + path[i+1].col * BFS_TILE_SIZE + BFS_TILE_SIZE/2 - cx,
+                           oy + path[i+1].row * BFS_TILE_SIZE + BFS_TILE_SIZE/2 - cy);
+    }
+
+    if (pathIndex < (int)path.size()) {
+        SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+        SDL_Rect bfsRect = {
+            ox + path[pathIndex].col * BFS_TILE_SIZE - cx,
+            oy + path[pathIndex].row * BFS_TILE_SIZE - cy,
+            BFS_TILE_SIZE, BFS_TILE_SIZE
+        };
+        SDL_RenderDrawRect(renderer, &bfsRect);
+    }
 }
 
 // ============================================================
-// ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ
+// ВСПОМОГАТЕЛЬНЫЕ
 // ============================================================
 
 SDL_Rect BossArcher::getHitbox() const {
     return {
-        (int)(x - width / 2),
-        (int)(y - height / 2),
-        (int)width,
-        (int)height
+        (int)(x - width / 2), (int)(y - height / 2),
+        (int)width, (int)height
     };
 }
 
 bool BossArcher::isDeathAnimFinished() const {
     auto it = animations.find(ArcherState::DEATH);
-    if (it == animations.end())
-        return true;
+    if (it == animations.end()) return true;
     return it->second.isFinished();
 }
 
-// ============================================================
-// УПРАВЛЕНИЕ СОСТОЯНИЯМИ
-// ============================================================
-
 void BossArcher::setState(ArcherState newState) {
-    if (currentState == newState)
-        return;  // Уже в этом состоянии
-
-    if (!canChangeState())
-        return;  // Кулдаун смены состояний
-
+    if (currentState == newState) return;
+    if (!canChangeState()) return;
     previousState       = currentState;
     currentState        = newState;
     lastStateChangeTime = stateTimer;
@@ -712,384 +641,282 @@ void BossArcher::forceState(ArcherState newState) {
     previousState       = currentState;
     currentState        = newState;
     lastStateChangeTime = stateTimer;
-
-    // Сбросить анимацию
     auto it = animations.find(newState);
-    if (it != animations.end()) {
-        it->second.reset();
-    }
+    if (it != animations.end()) it->second.reset();
 }
 
 bool BossArcher::canChangeState() const {
     return (stateTimer - lastStateChangeTime) >= STATE_CHANGE_COOLDOWN;
 }
 
-// ============================================================
-// BFS — ПРОВЕРКА ТАЙЛОВ
-// ============================================================
+void BossArcher::getCurrentMapOffset(int& ox, int& oy) const {
+    ox = 0; oy = 0;
+    if (g_currentLevel) g_currentLevel->getMapOffset(ox, oy);
+}
+
+bool BossArcher::hasSupport(int col, int row) const {
+    if (!g_currentLevel) return false;
+    int ox, oy; getCurrentMapOffset(ox, oy);
+    return g_currentLevel->isSolid(ox + col*BFS_TILE_SIZE + BFS_TILE_SIZE/2,
+                                   oy + (row+1)*BFS_TILE_SIZE - 1) ||
+           g_currentLevel->isPlatform(ox + col*BFS_TILE_SIZE + BFS_TILE_SIZE/2,
+                                      oy + (row+1)*BFS_TILE_SIZE - 1);
+}
+
+bool BossArcher::isWalkable(int col, int row) const {
+    if (!g_currentLevel) return false;
+    int ox, oy; getCurrentMapOffset(ox, oy);
+    return !g_currentLevel->isSolid(ox + col*BFS_TILE_SIZE + BFS_TILE_SIZE/2,
+                                    oy + row*BFS_TILE_SIZE + BFS_TILE_SIZE/2);
+}
 
 bool BossArcher::isSolidTile(int col, int row) const {
-    if (!g_currentLevel)
-        return false;
-
-    int ox, oy;
-    g_currentLevel->getMapOffset(ox, oy);
-
-    // Позиция в мировых координатах (нижняя часть тайла)
-    int px = ox + col * BFS_TILE_SIZE + BFS_TILE_SIZE / 2;
-    int py = oy + row * BFS_TILE_SIZE + BFS_TILE_SIZE - 1;
-
-    // Платформа или стена?
-    return g_currentLevel->isSolid(px, py) ||
-           g_currentLevel->isPlatform(px, py);
+    if (!g_currentLevel) return false;
+    int ox, oy; g_currentLevel->getMapOffset(ox, oy);
+    int px = ox + col*BFS_TILE_SIZE + BFS_TILE_SIZE/2;
+    int py = oy + row*BFS_TILE_SIZE + BFS_TILE_SIZE - 1;
+    return g_currentLevel->isSolid(px, py) || g_currentLevel->isPlatform(px, py);
 }
 
 bool BossArcher::isFreeTile(int col, int row) const {
-    if (!g_currentLevel)
-        return true;
-
-    int ox, oy;
-    g_currentLevel->getMapOffset(ox, oy);
-
-    // Позиция в мировых координатах (центр тайла)
-    int px = ox + col * BFS_TILE_SIZE + BFS_TILE_SIZE / 2;
-    int py = oy + row * BFS_TILE_SIZE + BFS_TILE_SIZE / 2;
-
-    // Стена?
-    return !g_currentLevel->isSolid(px, py);
+    if (!g_currentLevel) return true;
+    int ox, oy; g_currentLevel->getMapOffset(ox, oy);
+    return !g_currentLevel->isSolid(ox + col*BFS_TILE_SIZE + BFS_TILE_SIZE/2,
+                                    oy + row*BFS_TILE_SIZE + BFS_TILE_SIZE/2);
 }
 
-// ============================================================
-// BFS — ПРЫЖОК И ПАДЕНИЕ
-// ============================================================
-
 bool BossArcher::canJumpTo(int col, int row, int& outLandRow) const {
-    if (!g_currentLevel)
-        return false;
-
-    // Ищем платформу выше текущей позиции (на 1-4 тайла выше)
-    for (int r = row - 1; r >= row - 4; r--) {
-        if (r < 0)
-            break;
-
-        // Найдена твёрдая платформа?
-        if (isSolidTile(col, r)) {
-            // Проверить что место для приземления свободно
-            if (r < row && isFreeTile(col, r)) {
-                outLandRow = r;  // ← Возвращаем эту строку
-                return true;
-            }
+    if (!g_currentLevel) return false;
+    for (int r = row - 1; r >= row - BFS_JUMP_REACH_H; r--) {
+        if (r < 0) break;
+        if (isFreeTile(col, r) && isSolidTile(col, r + 1)) {
+            outLandRow = r;
+            return true;
         }
     }
-
     return false;
 }
 
 int BossArcher::findPlatformBelow(int col, int row) const {
-    if (!g_currentLevel)
-        return -1;
-
-    int ox, oy;
-    g_currentLevel->getMapOffset(ox, oy);
+    if (!g_currentLevel) return -1;
+    int ox, oy; getCurrentMapOffset(ox, oy);
     const int maxRows = g_currentLevel->getMapHeight() / BFS_TILE_SIZE;
-
-    // Ищем вниз пока не найдём твёрдый тайл
-    for (int r = row + 1; r < maxRows; r++) {
-        if (isSolidTile(col, r)) {
-            return r - 1;  // Приземляемся на тайл ДО платформы
+    for (int r = row + 1; r < maxRows; ++r) {
+        int px = ox + col*BFS_TILE_SIZE + BFS_TILE_SIZE/2;
+        int py = oy + r*BFS_TILE_SIZE + BFS_TILE_SIZE/2;
+        if (!isWalkable(col, r)) {
+            if (!g_currentLevel->isPlatform(px, py)) return -1;
+            continue;
         }
+        if (hasSupport(col, r)) return r;
     }
-
     return -1;
 }
 
-/**
- * @brief BFS — поиск пути БЕЗ ОГРАНИЧЕНИЙ
- *        Работает даже если:
- *        - Игрок в воздухе
- *        - Игрок внутри стены
- *        - Игрок на платформе
- *        - Игрок где угодно
- *
- * ИДЕЯ: Ищем путь не из центра босса, а из БЛИЖАЙШЕЙ ВАЛИДНОЙ позиции
- */
+// ============================================================
+// BFS
+// ============================================================
+
 void BossArcher::recalcPath(float playerX, float playerY) {
     path.clear();
     pathIndex = 0;
-
-    if (!g_currentLevel)
-        return;
+    bfsAllNodes.clear();
+    if (!g_currentLevel) return;
 
     int ox, oy;
-    g_currentLevel->getMapOffset(ox, oy);
-    const int mapCols = g_currentLevel->getMapWidth() / BFS_TILE_SIZE;
+    getCurrentMapOffset(ox, oy);
+    const int mapCols = g_currentLevel->getMapWidth()  / BFS_TILE_SIZE;
     const int mapRows = g_currentLevel->getMapHeight() / BFS_TILE_SIZE;
+    if (mapCols <= 0 || mapRows <= 0) return;
 
-    // ── ВСПОМОГАТЕЛЬНЫЕ ЛЯМБДЫ ──
+    int startCol = static_cast<int>((x  - ox) / BFS_TILE_SIZE);
+    int startRow = static_cast<int>((y + HITBOX_H/2 - oy) / BFS_TILE_SIZE);
 
-    auto isPlatformTile = [this](int col, int row) -> bool {
-        if (!g_currentLevel)
-            return false;
-        int ox, oy;
-        g_currentLevel->getMapOffset(ox, oy);
-        int px = ox + col * BFS_TILE_SIZE + BFS_TILE_SIZE / 2;
-        int py = oy + row * BFS_TILE_SIZE + BFS_TILE_SIZE / 2;
-        return g_currentLevel->isPlatform(px, py);
-    };
-
-    auto hasSupport = [this, isPlatformTile](int col, int row) -> bool {
-        if (row + 1 < 0) return false;  // Граница карты
-        return isSolidTile(col, row + 1) || isPlatformTile(col, row + 1);
-    };
-
-    auto isWalkable = [this](int col, int row) -> bool {
-        return isFreeTile(col, row);
-    };
-
-    // ── КОНВЕРТИРОВАТЬ ПОЗИЦИИ В ТАЙЛЫ ──
-
-    int startCol = (int)((x - ox) / BFS_TILE_SIZE);
-    int startRow = (int)((y + HITBOX_H / 2 - oy) / BFS_TILE_SIZE) - 1;
-
-    int goalCol = (int)((playerX - ox) / BFS_TILE_SIZE);
-    int goalRow = (int)((playerY + HITBOX_H / 2 - oy) / BFS_TILE_SIZE) - 1;
-
-    // ── ГЛАВНОЕ ОТЛИЧИЕ: Не требуем поддержку в стартовой позиции ──
-    // (босс может быть где угодно, мы его спасаем)
-
-    // Если уже на одном тайле — выходим
-    if (startCol == goalCol && startRow == goalRow) {
-        return;
+    if (!hasSupport(startCol, startRow)) {
+        for (int r = startRow + 1; r < mapRows; ++r)
+            if (isWalkable(startCol, r) && hasSupport(startCol, r)) { startRow = r; break; }
     }
 
-    // Проверить границы
-    if (startCol < 0 || startCol >= mapCols ||
-        startRow < 0 || startRow >= mapRows) {
-        return;  // Босс за пределами карты — беда
+    int goalCol = static_cast<int>((playerX - ox) / BFS_TILE_SIZE);
+    int goalRow = static_cast<int>((playerY + HITBOX_H/2 - oy) / BFS_TILE_SIZE);
+
+    if (!hasSupport(goalCol, goalRow)) {
+        float bestDist = 1e9f;
+        int bestC = goalCol, bestR = goalRow;
+        for (int dc = -6; dc <= 6; ++dc) {
+            for (int dr = -4; dr <= 8; ++dr) {
+                int c = goalCol + dc, r = goalRow + dr;
+                if (c < 0 || c >= mapCols || r < 0 || r >= mapRows) continue;
+                if (!isWalkable(c, r) || !hasSupport(c, r)) continue;
+                float d = std::hypot(playerX - (ox + c*BFS_TILE_SIZE + BFS_TILE_SIZE/2.0f),
+                                     playerY - (oy + r*BFS_TILE_SIZE + BFS_TILE_SIZE/2.0f));
+                if (d < bestDist) { bestDist = d; bestC = c; bestR = r; }
+            }
+        }
+        goalCol = bestC; goalRow = bestR;
     }
 
-    // ── КЛЮЧЕВОЕ ОТЛИЧИЕ: Обработать цель которая может быть в стене/воздухе ──
+    if (startCol == goalCol && startRow == goalRow) return;
 
-    // Если цель в стене — сдвинуть вверх пока не будет свободна
-    while (goalRow >= 0 && !isWalkable(goalCol, goalRow)) {
-        goalRow--;
-    }
-
-    // Если даже сдвинув не нашли — выходим
-    if (goalRow < 0 || goalCol < 0 || goalCol >= mapCols || goalRow >= mapRows) {
-        return;
-    }
-
-    // ── BFS СТРУКТУРЫ ──
-
-    struct BFSNode {
-        int        col    = 0;
-        int        row    = 0;
-        int        parent = -1;
-        PathAction action = PathAction::WALK_RIGHT;
-    };
-
-    std::vector<int> visited(mapRows * mapCols, -1);
+    struct BFSNode { int col, row, parent; PathAction action; };
     std::vector<BFSNode> nodes;
-    nodes.reserve(512);
+    std::vector<int> visited(mapRows * mapCols, -1);
+    std::queue<int> q;
 
-    std::queue<int> queue;
-
-    // Добавить стартовый узел
-    // ВАЖНО: Стартовый узел НЕ требует поддержки!
-    {
-        BFSNode start;
-        start.col    = startCol;
-        start.row    = startRow;
-        start.parent = -1;
-        start.action = PathAction::WALK_RIGHT;
-        nodes.push_back(start);
-        visited[startRow * mapCols + startCol] = 0;
-        queue.push(0);
-    }
-
+    nodes.push_back({startCol, startRow, -1, PathAction::WALK_RIGHT});
+    visited[startRow * mapCols + startCol] = 0;
+    q.push(0);
     int goalIdx = -1;
 
-    // ── ВОЛНА BFS ──
+    while (!q.empty() && nodes.size() < 6000) {
+        int idx = q.front(); q.pop();
+        const auto& cur = nodes[idx];
 
-    while (!queue.empty() && (int)nodes.size() < BFS_MAX_TILES) {
-        int idx = queue.front();
-        queue.pop();
-
-        const BFSNode& cur = nodes[idx];
-
-        // Достигли цели?
-        if (cur.col == goalCol && cur.row == goalRow) {
-            goalIdx = idx;
-            break;
-        }
-
-        // ── ПРОБОВАТЬ СОСЕДЕЙ ──
+        if (cur.col == goalCol && cur.row == goalRow) { goalIdx = idx; break; }
 
         auto tryAdd = [&](int nc, int nr, PathAction act) {
-            // Границы?
-            if (nc < 0 || nc >= mapCols || nr < 0 || nr >= mapRows)
-                return;
-
-            // Уже посетили?
-            if (visited[nr * mapCols + nc] != -1)
-                return;
-
-            // Стена?
-            if (!isWalkable(nc, nr))
-                return;
-
-            // ── КЛЮЧЕВОЕ ОТЛИЧИЕ: НЕ требуем поддержку для ВСЕХ узлов ──
-            // Разрешаем быть в воздухе! Босс упадёт через гравитацию.
-            // Но если это не первый шаг — проверяем поддержку
-            if (idx != 0) {  // Если не стартовый узел
-                if (!hasSupport(nc, nr))
-                    return;
-            }
-
-            BFSNode next;
-            next.col    = nc;
-            next.row    = nr;
-            next.parent = idx;
-            next.action = act;
-
-            int newIdx = (int)nodes.size();
-            visited[nr * mapCols + nc] = newIdx;
-            nodes.push_back(next);
-            queue.push(newIdx);
+            if (nc < 0 || nc >= mapCols || nr < 0 || nr >= mapRows) return;
+            if (visited[nr * mapCols + nc] != -1) return;
+            if (!isWalkable(nc, nr)) return;
+            if ((act == PathAction::WALK_LEFT || act == PathAction::WALK_RIGHT) &&
+                !hasSupport(nc, nr)) return;
+            int ni = (int)nodes.size();
+            nodes.push_back({nc, nr, idx, act});
+            visited[nr * mapCols + nc] = ni;
+            q.push(ni);
         };
 
-        // Ходьба влево/вправо
         tryAdd(cur.col - 1, cur.row, PathAction::WALK_LEFT);
         tryAdd(cur.col + 1, cur.row, PathAction::WALK_RIGHT);
 
-        // Прыжок вверх — проверяем что есть место
-        {
-            int landRow = -1;
-            if (canJumpTo(cur.col, cur.row, landRow)) {
-                tryAdd(cur.col, landRow, PathAction::JUMP);
+        // Прыжок — максимум BFS_JUMP_REACH_H тайлов вверх
+        if (hasSupport(cur.col, cur.row)) {
+            for (int dx = -BFS_JUMP_REACH_W; dx <= BFS_JUMP_REACH_W; ++dx) {
+                if (dx == 0) continue;
+                int nc = cur.col + dx;
+                for (int dy = -BFS_JUMP_REACH_H; dy <= -1; ++dy) {
+                    int nr = cur.row + dy;
+                    if (nr < 0) continue;
+                    if (isWalkable(nc, nr) && hasSupport(nc, nr)) {
+                        tryAdd(nc, nr, PathAction::JUMP);
+                        break;
+                    }
+                }
             }
         }
 
-        // Провал вниз — проверяем что есть опора
+        // Drop вниз
         if (hasSupport(cur.col, cur.row)) {
             int dropRow = findPlatformBelow(cur.col, cur.row);
-            if (dropRow != -1 && dropRow != cur.row) {
+            if (dropRow != -1 && dropRow > cur.row)
                 tryAdd(cur.col, dropRow, PathAction::DROP);
-            }
         }
     }
 
-    // Путь не найден
+    for (const auto& n : nodes)
+        bfsAllNodes.push_back({n.col, n.row, 0});
+
     if (goalIdx == -1) {
-        // Даже если путь не нашли — двигаемся просто к игроку горизонтально
-        velocityX = (playerX > x) ? MOVE_SPEED : -MOVE_SPEED;
+        velocityX   = (playerX > x) ? MOVE_SPEED : -MOVE_SPEED;
         facingRight = (playerX > x);
         return;
     }
 
-    // ── ВОССТАНОВИТЬ ПУТЬ ──
-
-    std::vector<PathNode> reversed;
-    int cur = goalIdx;
-
-    while (cur != -1) {
-        const BFSNode& n = nodes[cur];
-        PathNode pn;
-        pn.col    = n.col;
-        pn.row    = n.row;
-        pn.action = n.action;
-        reversed.push_back(pn);
-        cur = n.parent;
-    }
-
-    std::reverse(reversed.begin(), reversed.end());
-
-    // Установить путь
-    path      = reversed;
-    pathIndex = (path.size() > 1) ? 1 : 0;
+    std::vector<PathNode> newPath;
+    for (int i = goalIdx; i != -1; i = nodes[i].parent)
+        newPath.push_back({nodes[i].col, nodes[i].row, nodes[i].action});
+    std::reverse(newPath.begin(), newPath.end());
+    path = std::move(newPath);
+    pathIndex = path.empty() ? 0 : 1;
 }
 
 // ============================================================
-// ДВИЖЕНИЕ — ОБНОВЛЕНИЕ ПОЗИЦИИ И ДЕЙСТВИЙ
+// ДВИЖЕНИЕ
 // ============================================================
 
 void BossArcher::updateMovement(float dt, float playerX, float playerY) {
-    // ── СПАД ТАЙМЕРОВ ──
-    if (jumpCooldown > 0.0f)
-        jumpCooldown -= dt;
-    if (dropCooldown > 0.0f)
-        dropCooldown -= dt;
+    if (currentState == ArcherState::DEATH) return;
 
-    // ── АКТИВНЫЙ ПРОВАЛ (ЧЕРЕЗ ПЛАТФОРМУ) ──
+    if (jumpCooldown > 0.0f) jumpCooldown -= dt;
+    if (dropCooldown > 0.0f) dropCooldown -= dt;
+
+    int ox = 0, oy = 0;
+    getCurrentMapOffset(ox, oy);
+
     if (platformDropTimer > 0.0f) {
-        platformDropTimer -= dt;
-        y += 2.0f;  // Медленно спускаемся
-        velocityX = 0.0f;
+        y += 5.5f;
+        velocityX = (playerX > x) ? MOVE_SPEED * 0.65f : -MOVE_SPEED * 0.65f;
         return;
     }
 
-    // ── ПЕРЕСЧЁТ ПУТИ ──
-    bfsTimer -= dt;
-    if (bfsTimer <= 0.0f) {
-        bfsTimer = BFS_INTERVAL;
+    const float playerDistSq =
+        (playerX - lastRecalcPlayerX) * (playerX - lastRecalcPlayerX) +
+        (playerY - lastRecalcPlayerY) * (playerY - lastRecalcPlayerY);
+
+    if (path.empty() || bfsTimer <= 0.0f ||
+        playerDistSq > RECALC_DISTANCE_THRESHOLD * RECALC_DISTANCE_THRESHOLD) {
+        bfsTimer = 0.35f;
+        lastRecalcPlayerX = playerX;
+        lastRecalcPlayerY = playerY;
         recalcPath(playerX, playerY);
+    } else {
+        bfsTimer -= dt;
     }
 
-    // Нет пути — стоим на месте
     if (path.empty() || pathIndex >= (int)path.size()) {
-        velocityX = 0.0f;
+        const float toX = std::abs(playerX - x);
+        const float toY = std::abs(playerY - y);
+        if (toX <= MELEE_RANGE && toY <= HITBOX_H * 2.0f)
+            velocityX = 0.0f;
+        else {
+            velocityX   = (playerX > x) ? MOVE_SPEED * 0.9f : -MOVE_SPEED * 0.9f;
+            facingRight = (playerX > x);
+        }
         return;
     }
 
-    // ── ТЕКУЩИЙ УЗЕЛ ПУТИ ──
-    const PathNode& target = path[pathIndex];
+    const PathNode& target  = path[pathIndex];
+    const float     targetX = ox + target.col * BFS_TILE_SIZE + BFS_TILE_SIZE / 2.0f;
+    const float     targetY = oy + target.row * BFS_TILE_SIZE + BFS_TILE_SIZE / 2.0f;
 
-    if (!g_currentLevel)
-        return;
-
-    int ox, oy;
-    g_currentLevel->getMapOffset(ox, oy);
-
-    // Позиция целевого тайла (центр)
-    const float targetX = ox + target.col * BFS_TILE_SIZE + BFS_TILE_SIZE / 2.0f;
-    const float targetY = oy + target.row * BFS_TILE_SIZE + BFS_TILE_SIZE / 2.0f;
-
-    const float distToTarget = std::abs(x - targetX);
-
-    // Достигли узла?
-    if (distToTarget < BFS_REACH_DIST &&
-        std::abs(y - targetY) < BFS_TILE_SIZE * 1.5f) {
-        pathIndex++;
-        return;
-    }
-
-    // ── НАПРАВЛЕНИЕ И ДЕЙСТВИЕ ──
     facingRight = (targetX > x);
+    const float distX = std::abs(x - targetX);
+    const float distY = std::abs(y - targetY);
+
+    bool reached = false;
+    switch (target.action) {
+    case PathAction::JUMP:
+    case PathAction::DROP:
+        reached = (distY < BFS_TILE_SIZE * 1.5f && distX < 90.0f);
+        break;
+    default:
+        reached = (distX < BFS_REACH_DIST);
+        break;
+    }
+    if (reached) { pathIndex++; return; }
 
     switch (target.action) {
     case PathAction::WALK_LEFT:
     case PathAction::WALK_RIGHT:
-        // Просто идём к целевому тайлу
         velocityX = (targetX > x) ? MOVE_SPEED : -MOVE_SPEED;
         break;
-
     case PathAction::JUMP:
-        // Прыгаем если на земле и кулдаун прошёл
-        if (isGrounded && jumpCooldown <= 0.0f) {
-            velocityY    = JUMP_VELOCITY;
+        if (isGrounded && jumpCooldown <= 0.0f && distX < 120.0f) {
+            velocityY    = JUMP_VELOCITY * 1.05f;
             isGrounded   = false;
-            jumpCooldown = JUMP_COOLDOWN_MAX;
+            jumpCooldown = JUMP_COOLDOWN_MAX * 0.9f;
+        } else if (!isGrounded) {
+            velocityX = (targetX > x) ? MOVE_SPEED * 0.9f : -MOVE_SPEED * 0.9f;
+        } else {
+            velocityX = (targetX > x) ? MOVE_SPEED : -MOVE_SPEED;
         }
-        // И продолжаем двигаться горизонтально
-        velocityX = (targetX > x) ? MOVE_SPEED : -MOVE_SPEED;
         break;
-
     case PathAction::DROP:
-        // Провалиться через платформу
         if (isGrounded && dropCooldown <= 0.0f) {
             platformDropTimer = DROP_DURATION;
             dropCooldown      = DROP_COOLDOWN;
+        } else if (!isGrounded) {
+            velocityX = (targetX > x) ? MOVE_SPEED * 0.75f : -MOVE_SPEED * 0.75f;
         }
         break;
     }
