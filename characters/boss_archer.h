@@ -143,8 +143,9 @@ private:
     static constexpr float BFS_INTERVAL            = 0.5f;
     static constexpr int   BFS_MAX_TILES           = 8000;
     static constexpr float BFS_REACH_DIST          = 40.0f;
-    static constexpr int   BFS_JUMP_REACH_H        = 3;    ///< Макс тайлов вверх (было 5)
-    static constexpr int   BFS_JUMP_REACH_W        = 5;    ///< Макс тайлов по горизонтали
+    static constexpr int   BFS_MAX_JUMP_HEIGHT     = 6;   // в тайлах
+    static constexpr int   BFS_JUMP_REACH_H        = 6;
+    static constexpr int   BFS_JUMP_REACH_W        = 6;    ///< Макс тайлов по горизонтали
     static constexpr float BFS_VIS_STEP_INTERVAL   = 0.015f;
     static constexpr float RECALC_DISTANCE_THRESHOLD = 80.0f;
 

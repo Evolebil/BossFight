@@ -790,16 +790,17 @@ void BossArcher::recalcPath(float playerX, float playerY) {
         tryAdd(cur.col + 1, cur.row, PathAction::WALK_RIGHT);
 
         // Прыжок — максимум BFS_JUMP_REACH_H тайлов вверх
+        // Прыжок
         if (hasSupport(cur.col, cur.row)) {
             for (int dx = -BFS_JUMP_REACH_W; dx <= BFS_JUMP_REACH_W; ++dx) {
                 if (dx == 0) continue;
                 int nc = cur.col + dx;
-                for (int dy = -BFS_JUMP_REACH_H; dy <= -1; ++dy) {
+                for (int dy = -BFS_MAX_JUMP_HEIGHT; dy <= -1; ++dy) {   // ← используем новую константу
                     int nr = cur.row + dy;
                     if (nr < 0) continue;
                     if (isWalkable(nc, nr) && hasSupport(nc, nr)) {
                         tryAdd(nc, nr, PathAction::JUMP);
-                        break;
+                        break;   // нашли ближайшую платформу по вертикали
                     }
                 }
             }
