@@ -7,6 +7,7 @@
 
 #include "boss_archer.h"
 #include "../levels/ilevel.h"
+#include "../config/config.h"
 
 extern ILevel* g_currentLevel;
 
@@ -69,187 +70,213 @@ void BossArcher::loadAnimations() {
 // ГЛАВНЫЙ UPDATE
 // ============================================================
 
+// СТАЛО:
 void BossArcher::update(float deltaTime, float playerX, float playerY,
                         bool /*playerFacingRight*/) {
     lastPlayerX = playerX;
     lastPlayerY = playerY;
 
-    // 1. ЗАДЕРЖКА СПАВНА
     if (spawnDelay > 0.0f) {
         spawnDelay -= deltaTime;
         applyGravityAndCollisions(deltaTime);
         return;
     }
 
-    // 2. СМЕРТЬ
     if (hp <= 0) {
         if (currentState != ArcherState::DEATH) {
             phase     = ArcherPhase::DYING;
             velocityX = 0.0f;
-            for (auto& c : clones) c.active = false;
-            for (auto& a : arrows) a.active = false;
+            for (auto& arrow : arrows)
+                arrow.active = false;
             forceState(ArcherState::DEATH);
         }
         applyGravityAndCollisions(deltaTime);
         auto it = animations.find(ArcherState::DEATH);
-        if (it != animations.end()) it->second.update(deltaTime);
+        if (it != animations.end())
+            it->second.update(deltaTime);
         return;
     }
 
-    // 3. РЕГУЛЯРНЫЙ КАДР
     stateTimer += deltaTime;
-
-    // Визуализация BFS
-    if (showHitboxes && bfsVisualStep < (int)bfsAllNodes.size()) {
-        bfsVisualTimer += deltaTime;
-        while (bfsVisualTimer >= BFS_VIS_STEP_INTERVAL &&
-               bfsVisualStep < (int)bfsAllNodes.size()) {
-            bfsVisualTimer -= BFS_VIS_STEP_INTERVAL;
-            bfsVisualStep++;
-        }
-    }
-
-    if (swordTimer    > 0.0f) swordTimer    -= deltaTime;
-    if (shootTimer    > 0.0f) shootTimer    -= deltaTime;
-    if (teleportCooldown > 0.0f) teleportCooldown -= deltaTime;
-
-    // 4. АНИМАЦИЯ HURT ПЕРЕД ТЕЛЕПОРТОМ
-    // Если играет — ждём конца, потом телепортируемся
-    if (playingPreTeleportHurt) {
-        auto it = animations.find(ArcherState::HURT);
-        if (it != animations.end()) it->second.update(deltaTime);
-
-        if (it == animations.end() || it->second.isFinished()) {
-            playingPreTeleportHurt = false;
-            // Теперь сам телепорт
-            teleportNearPlayer(playerX, playerY);
-        }
-        // Физика продолжается даже во время hurt
-        applyGravityAndCollisions(deltaTime);
-        return;
-    }
+    if (swordTimer > 0.0f) swordTimer -= deltaTime;
+    if (shootTimer > 0.0f) shootTimer -= deltaTime;
 
     checkPhaseTransition();
 
-    if (!clonesSpawned) {
-        spawnClones();
-        clonesSpawned = true;
+    // ── ФОРМАЦИИ BULLET HELL ──
+    // Вертикальная — половина ширины камеры, работает всегда
+    const float vertDistance = Config::getWindowWidth() * VERTICAL_DIST_FRACTION;
+    updateFormation(verticalFormation, deltaTime, playerX, playerY, vertDistance);
+
+    // Горизонтальная — половина высоты камеры, только в фазе 2
+    if (phase == ArcherPhase::PHASE_2) {
+        const float horDistance = Config::getWindowHeight() * HORIZONTAL_DIST_FRACTION;
+        updateFormation(horizontalFormation, deltaTime, playerX, playerY, horDistance);
     }
 
-    updateClones(deltaTime, playerX, playerY);
-
-    // Обновление стрел
+    // ── СТРЕЛЫ ──
     for (auto& arrow : arrows) {
         if (!arrow.active) continue;
+
         arrow.x += arrow.velX * deltaTime;
         arrow.y += arrow.velY * deltaTime;
-        const float dx = arrow.x - x;
-        const float dy = arrow.y - y;
-        if (dx*dx + dy*dy > ArcherArrow::SPEED * ArcherArrow::SPEED * 16.0f)
+
+        const float dx        = arrow.x - x;
+        const float dy        = arrow.y - y;
+        const float distSq    = dx * dx + dy * dy;
+        const float maxDistSq = Formation::ARROW_SPEED * Formation::ARROW_SPEED * 16.0f;
+
+        if (distSq > maxDistSq)
             arrow.active = false;
     }
+
     arrows.erase(
         std::remove_if(arrows.begin(), arrows.end(),
-                       [](const ArcherArrow& a){ return !a.active; }),
-        arrows.end());
+                       [](const ArcherArrow& a) { return !a.active; }),
+        arrows.end()
+        );
 
     updateAI(deltaTime, playerX, playerY);
-
     applyGravityAndCollisions(deltaTime, platformDropTimer > 0.0f);
-    if (platformDropTimer > 0.0f) platformDropTimer -= deltaTime;
 
-    // Обновляем анимацию текущего состояния
-    // (HURT обновляется отдельно выше — здесь не трогаем)
     auto it = animations.find(currentState);
-    if (it != animations.end()) it->second.update(deltaTime);
+    if (it != animations.end())
+        it->second.update(deltaTime);
 }
 
-// ============================================================
-// СПАВН КЛОНОВ
-// ============================================================
+// СТАЛО:
+void BossArcher::recalcFormation(Formation& f, float playerX, float playerY, float distanceFromPlayer) {
+    if (!g_currentLevel) return;
 
-void BossArcher::spawnClones() {
-    clones.clear();
-    const int count = (phase == ArcherPhase::PHASE_1) ? CLONE_COUNT : CLONE_COUNT_P2;
+    int ox, oy;
+    g_currentLevel->getMapOffset(ox, oy);
+    const float mapLeft   = (float)ox;
+    const float mapRight  = (float)(ox + g_currentLevel->getMapWidth());
+    const float mapTop    = (float)oy;
+    const float mapBottom = (float)(oy + g_currentLevel->getMapHeight());
 
-    for (int i = 0; i < count; i++) {
-        const float offset = (i - (count - 1) / 2.0f) * CLONE_SPACING;
-        ArcherClone clone;
-        clone.x              = x;
-        clone.y              = y + offset;
-        clone.verticalOffset = offset;
-        clone.offsetX        = 0.0f;
-        clone.active         = true;
-        clone.isCenter       = (i == count / 2);
-        clone.dirX           = clone.isCenter ? 0.0f : (facingRight ? 1.0f : -1.0f);
-        clone.dirY           = 0.0f;
-        clones.push_back(clone);
-    }
-}
+    const float halfSpan = (Formation::CLONE_COUNT - 1) / 2.0f * Formation::SPACING;
 
-// ============================================================
-// ОБНОВЛЕНИЕ КЛОНОВ
-// ============================================================
+    if (f.type == FormationType::VERTICAL) {
+        // Ось формации — Y (столбец клонов), сторона — X (лево/право от игрока)
+        auto sideX = [&](FormationSide s) {
+            return (s == FormationSide::NEGATIVE) ? playerX - distanceFromPlayer
+                                                  : playerX + distanceFromPlayer;
+        };
 
-void BossArcher::updateClones(float dt, float playerX, float playerY) {
-    if (clones.empty()) return;
+        // Отражение — уперлись в стену на своей стороне, прыгаем на другую
+        if (f.side == FormationSide::NEGATIVE && sideX(f.side) < mapLeft + Formation::MARGIN)
+            f.side = FormationSide::POSITIVE;
+        else if (f.side == FormationSide::POSITIVE && sideX(f.side) > mapRight - Formation::MARGIN)
+            f.side = FormationSide::NEGATIVE;
 
-    ArcherClone* center = nullptr;
-    for (auto& clone : clones)
-        if (clone.isCenter) { center = &clone; break; }
-    if (!center) return;
+        const float x0 = std::clamp(sideX(f.side), mapLeft + Formation::MARGIN, mapRight - Formation::MARGIN);
 
-    center->x = x;
-    center->y = y + center->verticalOffset;
+        // Центр столбца по Y — тянемся к игроку, но не вылезаем за пол/потолок
+        float lo = mapTop    + Formation::MARGIN + halfSpan;
+        float hi = mapBottom - Formation::MARGIN - halfSpan;
+        if (lo > hi) std::swap(lo, hi);  // карта меньше формации — защита от UB в clamp
+        const float centerY = std::clamp(playerY, lo, hi);
 
-    const float cdx  = playerX - center->x;
-    const float cdy  = playerY - center->y;
-    const float clen = std::sqrt(cdx*cdx + cdy*cdy);
-    if (clen > 1.0f) {
-        center->dirX = cdx / clen;
-        center->dirY = cdy / clen;
-    }
+        for (int i = 0; i < Formation::CLONE_COUNT; i++) {
+            f.cloneX[i] = x0;
+            f.cloneY[i] = centerY + (i - (Formation::CLONE_COUNT - 1) / 2.0f) * Formation::SPACING;
+        }
+    } else {
+        // HORIZONTAL: ось — X (ряд клонов), сторона — Y (верх/низ от игрока)
+        auto sideY = [&](FormationSide s) {
+            return (s == FormationSide::NEGATIVE) ? playerY - distanceFromPlayer
+                                                  : playerY + distanceFromPlayer;
+        };
 
-    for (auto& clone : clones) {
-        if (clone.isCenter) continue;
-        clone.x = center->x + clone.offsetX;
-        clone.y = y + clone.verticalOffset;
+        if (f.side == FormationSide::NEGATIVE && sideY(f.side) < mapTop + Formation::MARGIN)
+            f.side = FormationSide::POSITIVE;
+        else if (f.side == FormationSide::POSITIVE && sideY(f.side) > mapBottom - Formation::MARGIN)
+            f.side = FormationSide::NEGATIVE;
 
-        if (phase == ArcherPhase::PHASE_2) {
-            if (clone.verticalOffset <= -VERTICAL_CLONE_OFFSET) {
-                const float dx  = playerX - clone.x;
-                const float dy  = playerY - clone.y;
-                const float len = std::sqrt(dx*dx + dy*dy);
-                if (len > 1.0f) { clone.dirX = dx/len; clone.dirY = dy/len; }
-            } else if (clone.dirY > 0.5f && std::abs(clone.dirX) > 0.5f) {
-                clone.dirX = facingRight ? 0.707f : -0.707f;
-                clone.dirY = 0.707f;
-            } else {
-                clone.dirX = facingRight ? 1.0f : -1.0f;
-                clone.dirY = 0.0f;
-            }
-        } else {
-            clone.dirX = facingRight ? 1.0f : -1.0f;
-            clone.dirY = 0.0f;
+        const float y0 = std::clamp(sideY(f.side), mapTop + Formation::MARGIN, mapBottom - Formation::MARGIN);
+
+        float lo = mapLeft  + Formation::MARGIN + halfSpan;
+        float hi = mapRight - Formation::MARGIN - halfSpan;
+        if (lo > hi) std::swap(lo, hi);
+        const float centerX = std::clamp(playerX, lo, hi);
+
+        for (int i = 0; i < Formation::CLONE_COUNT; i++) {
+            f.cloneY[i] = y0;
+            f.cloneX[i] = centerX + (i - (Formation::CLONE_COUNT - 1) / 2.0f) * Formation::SPACING;
         }
     }
+}
 
-    cloneShootTimer -= dt;
-    if (cloneShootTimer > 0.0f) return;
-    cloneShootTimer = CLONE_SHOOT_INTERVAL / attackSpeedMult;
+void BossArcher::updateFormation(Formation& f, float deltaTime, float playerX, float playerY, float distanceFromPlayer) {
+    if (!f.isTelegraphing) {
+        // Фаза слежения — позиции пересчитываются каждый кадр заново
+        recalcFormation(f, playerX, playerY, distanceFromPlayer);
 
-    const float centerDist = std::sqrt(cdx*cdx + cdy*cdy);
-    for (const auto& clone : clones) {
-        if (!clone.active) continue;
-        if (clone.isCenter && centerDist <= 1.0f) continue;
-        ArcherArrow arrow;
-        arrow.x      = clone.x;
-        arrow.y      = clone.y;
-        arrow.velX   = clone.dirX * ArcherArrow::SPEED;
-        arrow.velY   = clone.dirY * ArcherArrow::SPEED;
-        arrow.active = true;
-        arrows.push_back(arrow);
+        f.cycleTimer += deltaTime;
+        if (f.cycleTimer >= Formation::COOLDOWN) {
+            // Входим в телеграф — позиции ЗАМОРОЖЕНЫ, чтобы линия
+            // предупреждения точно совпадала с будущим залпом
+            f.isTelegraphing = true;
+            f.telegraphTimer = Formation::TELEGRAPH_TIME;
+        }
+    } else {
+        f.telegraphTimer -= deltaTime;
+        if (f.telegraphTimer <= 0.0f) {
+            // ЗАЛП — все 7 клонов стреляют одновременно строго по линии
+            float velX = 0.0f, velY = 0.0f;
+            if (f.type == FormationType::VERTICAL)
+                velX = (f.side == FormationSide::NEGATIVE) ? Formation::ARROW_SPEED : -Formation::ARROW_SPEED;
+            else
+                velY = (f.side == FormationSide::NEGATIVE) ? Formation::ARROW_SPEED : -Formation::ARROW_SPEED;
+
+            for (int i = 0; i < Formation::CLONE_COUNT; i++)
+                spawnArrow(f.cloneX[i], f.cloneY[i], velX, velY);
+
+            f.isTelegraphing = false;
+            f.cycleTimer      = 0.0f;
+            f.telegraphTimer  = 0.0f;
+        }
     }
+}
+
+void BossArcher::renderFormationWarning(SDL_Renderer* renderer, const Formation& f, int camOffsetX, int camOffsetY) const {
+    if (!f.isTelegraphing) return;
+
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 255, 60, 60, 140);
+
+    constexpr int thickness = 4;
+    constexpr int lineLen   = (int)Formation::LINE_LENGTH;
+
+    for (int i = 0; i < Formation::CLONE_COUNT; i++) {
+        const int cx = (int)f.cloneX[i] - camOffsetX;
+        const int cy = (int)f.cloneY[i] - camOffsetY;
+
+        if (f.type == FormationType::VERTICAL) {
+            // Стрела летит по X — горизонтальная линия
+            SDL_Rect line = (f.side == FormationSide::NEGATIVE)
+                                ? SDL_Rect{cx, cy - thickness / 2, lineLen, thickness}
+                                : SDL_Rect{cx - lineLen, cy - thickness / 2, lineLen, thickness};
+            SDL_RenderFillRect(renderer, &line);
+        } else {
+            // Стрела летит по Y — вертикальная линия
+            SDL_Rect line = (f.side == FormationSide::NEGATIVE)
+                                ? SDL_Rect{cx - thickness / 2, cy, thickness, lineLen}
+                                : SDL_Rect{cx - thickness / 2, cy - lineLen, thickness, lineLen};
+            SDL_RenderFillRect(renderer, &line);
+        }
+    }
+}
+
+void BossArcher::spawnArrow(float spawnX, float spawnY, float velX, float velY) {
+    ArcherArrow arrow;
+    arrow.x      = spawnX;
+    arrow.y      = spawnY;
+    arrow.velX   = velX;
+    arrow.velY   = velY;
+    arrow.active = true;
+    arrows.push_back(arrow);
 }
 
 // ============================================================
@@ -257,30 +284,20 @@ void BossArcher::updateClones(float dt, float playerX, float playerY) {
 // ============================================================
 
 void BossArcher::checkPhaseTransition() {
-    if (phase != ArcherPhase::PHASE_1) return;
-    if (hp > maxHP * 0.5f) return;
+    if (phase != ArcherPhase::PHASE_1)
+        return;
+    if (hp > maxHP * 0.5f)
+        return;
 
     phase = ArcherPhase::PHASE_2;
-    spawnClones();
 
-    // Диагональный клон
-    ArcherClone diag;
-    diag.x = x; diag.y = y; diag.verticalOffset = 0.0f; diag.offsetX = 0.0f;
-    diag.dirX = facingRight ? 0.707f : -0.707f; diag.dirY = 0.707f;
-    diag.active = true; diag.isCenter = false;
-    clones.push_back(diag);
+    // Горизонтальная формация включается только со 2 фазы —
+    // сбрасываем цикл, чтобы она не выстрелила в тот же кадр
+    horizontalFormation.cycleTimer     = 0.0f;
+    horizontalFormation.isTelegraphing = false;
 
-    // Вертикальный клон
-    ArcherClone vert;
-    vert.x = x; vert.y = y - VERTICAL_CLONE_OFFSET;
-    vert.verticalOffset = -VERTICAL_CLONE_OFFSET; vert.offsetX = 0.0f;
-    vert.dirX = 0.0f; vert.dirY = 1.0f;
-    vert.active = true; vert.isCenter = false;
-    clones.push_back(vert);
-
-    swordTimer      = swordCooldown;
-    shootTimer      = shootCooldown;
-    cloneShootTimer = CLONE_SHOOT_INTERVAL;
+    swordTimer = swordCooldown;
+    shootTimer = shootCooldown;
 }
 
 // ============================================================
@@ -326,11 +343,15 @@ void BossArcher::updateAI(float dt, float playerX, float playerY) {
         meleeHitDealt = false;
 
         std::uniform_int_distribution<int> roll(0, 2);
-        currentAttack = roll(rng);
+
+        int attack = roll(rng);
 
         ArcherState attackState = ArcherState::ATTACK_1;
-        if (currentAttack == 1) attackState = ArcherState::ATTACK_2;
-        if (currentAttack == 2) attackState = ArcherState::ATTACK_3;
+
+        if (attack == 1)
+            attackState = ArcherState::ATTACK_2;
+        else if (attack == 2)
+            attackState = ArcherState::ATTACK_3;
 
         forceState(attackState);
         swordTimer = swordCooldown;
@@ -439,27 +460,10 @@ void BossArcher::render(SDL_Renderer* renderer) {
     const int dstW = (int)(FRAME_W * SPRITE_SCALE);
     const int dstH = (int)(FRAME_H * SPRITE_SCALE);
 
-    // 1. КЛОНЫ
-    {
-        auto idleTexIt  = textures.find(ArcherState::IDLE);
-        auto idleAnimIt = animations.find(ArcherState::IDLE);
-        if (idleTexIt != textures.end() && idleTexIt->second &&
-            idleAnimIt != animations.end()) {
-            SDL_SetTextureAlphaMod(idleTexIt->second, 120);
-            for (const auto& clone : clones) {
-                if (!clone.active) continue;
-                SDL_Rect src = idleAnimIt->second.getCurrentFrame();
-                SDL_Rect dst = {
-                    (int)(clone.x - dstW / 2) - camOffsetX,
-                    (int)(clone.y + HITBOX_H / 2) - dstH - camOffsetY,
-                    dstW, dstH
-                };
-                SDL_RendererFlip flip = (clone.dirX >= 0) ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL;
-                SDL_RenderCopyEx(renderer, idleTexIt->second, &src, &dst, 0, nullptr, flip);
-            }
-            SDL_SetTextureAlphaMod(idleTexIt->second, 255);
-        }
-    }
+    // ── 1. ПРЕДУПРЕЖДАЮЩИЕ ЛИНИИ BULLET HELL ──
+    renderFormationWarning(renderer, verticalFormation, camOffsetX, camOffsetY);
+    if (phase == ArcherPhase::PHASE_2)
+        renderFormationWarning(renderer, horizontalFormation, camOffsetX, camOffsetY);
 
     // 2. СТРЕЛЫ
     for (const auto& arrow : arrows) {
@@ -552,18 +556,6 @@ void BossArcher::renderHitboxes(SDL_Renderer* renderer) {
             ARROW_HITBOX_W, ARROW_HITBOX_H
         };
         SDL_RenderDrawRect(renderer, &arrowHb);
-    }
-
-    // ЗЕЛЁНЫЙ — клоны
-    SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
-    for (const auto& clone : clones) {
-        if (!clone.active) continue;
-        SDL_Rect cloneHb = {
-            (int)(clone.x - HITBOX_W / 2) - cx,
-            (int)(clone.y - HITBOX_H / 2) - cy,
-            (int)HITBOX_W, (int)HITBOX_H
-        };
-        SDL_RenderDrawRect(renderer, &cloneHb);
     }
 
     // Белая точка — центр

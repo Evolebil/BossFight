@@ -20,15 +20,38 @@ struct ArcherArrow {
     static constexpr float DAMAGE = 15.0f;
 };
 
-struct ArcherClone {
-    float x              = 0.0f;
-    float y              = 0.0f;
-    float dirX           = 1.0f;
-    float dirY           = 0.0f;
-    float verticalOffset = 0.0f;
-    float offsetX        = 0.0f;
-    bool  active         = false;
-    bool  isCenter       = false;
+enum class FormationType { VERTICAL, HORIZONTAL };
+
+// Сторона формации относительно игрока.
+// NEGATIVE = слева (вертикальная) / сверху (горизонтальная)
+// POSITIVE = справа (вертикальная) / снизу (горизонтальная)
+enum class FormationSide { NEGATIVE, POSITIVE };
+
+/**
+ * @struct Formation
+ * @brief Формация из 7 точек стрельбы, ведущая себя как единый объект.
+ *        Клоны — НЕ сущности, только точки спавна стрел.
+ *        Позиции пересчитываются каждый кадр из позиции игрока и границ карты
+ *        (см. BossArcher::recalcFormation) — сама структура хранит только
+ *        текущее состояние (сторона, таймеры, последние вычисленные точки).
+ */
+struct Formation {
+    static constexpr int   CLONE_COUNT    = 7;
+    static constexpr float SPACING        = 70.0f;   ///< px между клонами
+    static constexpr float MARGIN         = 40.0f;   ///< отступ от стен/пола/потолка
+    static constexpr float COOLDOWN       = 2.0f;    ///< сек слежения между залпами
+    static constexpr float TELEGRAPH_TIME = 0.5f;    ///< сек предупреждения перед залпом
+    static constexpr float ARROW_SPEED    = 700.0f;  ///< px/s
+    static constexpr float LINE_LENGTH    = 2500.0f; ///< длина линии предупреждения (px)
+
+    FormationType type;
+    FormationSide side           = FormationSide::NEGATIVE;
+    float         cycleTimer     = 0.0f;
+    float         telegraphTimer = 0.0f;
+    bool          isTelegraphing = false;  ///< true = позиции заморожены, показываем линию
+
+    std::array<float, CLONE_COUNT> cloneX{};
+    std::array<float, CLONE_COUNT> cloneY{};
 };
 
 class BossArcher : public Boss {
@@ -111,14 +134,11 @@ private:
     static constexpr int ARROW_H        = 64;
 
     // ════════════════════════════════════════════════════════
-    // КОНСТАНТЫ — КЛОНЫ
+    // КОНСТАНТЫ — ФОРМАЦИЯ
     // ════════════════════════════════════════════════════════
-
-    static constexpr int   CLONE_COUNT           = 4;
-    static constexpr int   CLONE_COUNT_P2        = 6;
-    static constexpr float CLONE_SPACING         = 120.0f;
-    static constexpr float CLONE_SHOOT_INTERVAL  = 1.2f;
-    static constexpr float VERTICAL_CLONE_OFFSET = 200.0f;
+    // Дистанция формаций от игрока — доля от размера окна (камеры)
+    static constexpr float VERTICAL_DIST_FRACTION   = 0.5f;  ///< от ширины окна
+    static constexpr float HORIZONTAL_DIST_FRACTION = 0.5f;  ///< от высоты окна
 
     // ════════════════════════════════════════════════════════
     // КОНСТАНТЫ — ТЕЛЕПОРТ
@@ -176,7 +196,6 @@ private:
 
     float stateTimer          = 0.0f;
     float lastStateChangeTime = 0.0f;
-    float cloneShootTimer     = 0.0f;
 
     float swordCooldown    = 0.0f;
     float swordTimer       = 0.0f;
@@ -199,12 +218,15 @@ private:
     float lastRecalcPlayerX = 0.0f;
     float lastRecalcPlayerY = 0.0f;
 
-    bool meleeHitDealt = false;
-    bool clonesSpawned = false;
-    int  currentAttack = 0;  ///< 0/1/2 — какая из трёх атак сейчас
+    // Флаги
+    bool meleeHitDealt = false;  ///< Удар мечом в этом цикле уже нанёс урон?
 
-    std::vector<ArcherClone> clones;
-    std::vector<ArcherArrow> arrows;
+    // Формации bullet hell
+    Formation verticalFormation   { FormationType::VERTICAL };
+    Formation horizontalFormation { FormationType::HORIZONTAL };  ///< активна только в фазе 2
+
+    // Сущности
+    std::vector<ArcherArrow> arrows;  ///< Летящие стрелы
 
     std::map<ArcherState, SDL_Texture*> textures;
     std::map<ArcherState, Animation>    animations;
@@ -225,9 +247,12 @@ private:
     [[nodiscard]] bool canChangeState() const;
 
     void loadAnimations();
-    void spawnClones();
-    void updateClones(float dt, float playerX, float playerY);
+    // Формации bullet hell
     void checkPhaseTransition();
+    void recalcFormation(Formation& f, float playerX, float playerY, float distanceFromPlayer);
+    void updateFormation(Formation& f, float deltaTime, float playerX, float playerY, float distanceFromPlayer);
+    void renderFormationWarning(SDL_Renderer* renderer, const Formation& f, int camOffsetX, int camOffsetY) const;
+    void spawnArrow(float spawnX, float spawnY, float velX, float velY);
     void updateAI(float dt, float playerX, float playerY);
     void updateMovement(float dt, float playerX, float playerY);
     void teleportNearPlayer(float playerX, float playerY);
