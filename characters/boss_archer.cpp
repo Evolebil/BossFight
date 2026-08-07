@@ -100,6 +100,7 @@ void BossArcher::update(float deltaTime, float playerX, float playerY,
     stateTimer += deltaTime;
     if (swordTimer > 0.0f) swordTimer -= deltaTime;
     if (shootTimer > 0.0f) shootTimer -= deltaTime;
+    if (teleportCooldown > 0.0f) teleportCooldown -= deltaTime;
 
     checkPhaseTransition();
 
@@ -323,6 +324,19 @@ void BossArcher::updateAI(float dt, float playerX, float playerY) {
     }
 
     if (platformDropTimer > 0.0f) return;
+
+    // Ждём завершения преднастроечной Hurt-анимации, затем телепортируемся.
+    // Пока флаг активен — не входим в остальную AI-логику ниже,
+    // иначе distX-проверка будет каждый кадр сбрасывать анимацию заново.
+    if (playingPreTeleportHurt) {
+        auto it = animations.find(ArcherState::HURT);
+        if (it != animations.end() && it->second.isFinished()) {
+            playingPreTeleportHurt = false;
+            teleportNearPlayer(playerX, playerY);
+            setState(ArcherState::IDLE);
+        }
+        return;
+    }
 
     const float distX = std::abs(playerX - x);
     const float distY = std::abs(playerY - y);
@@ -748,7 +762,13 @@ void BossArcher::recalcPath(float playerX, float playerY) {
         goalCol = bestC; goalRow = bestR;
     }
 
-    if (startCol == goalCol && startRow == goalRow) return;
+    std::cout << "[BFS] start=(" << startCol << "," << startRow
+              << ") goal=(" << goalCol << "," << goalRow << ")\n";
+
+    if (startCol == goalCol && startRow == goalRow) {
+        std::cout << "[BFS] start==goal -> path cleared\n";
+        return;
+    }
 
     struct BFSNode { int col, row, parent; PathAction action; };
     std::vector<BFSNode> nodes;
@@ -832,9 +852,14 @@ void BossArcher::updateMovement(float dt, float playerX, float playerY) {
 
     if (jumpCooldown > 0.0f) jumpCooldown -= dt;
     if (dropCooldown > 0.0f) dropCooldown -= dt;
+    if (platformDropTimer > 0.0f) platformDropTimer -= dt;
 
     int ox = 0, oy = 0;
     getCurrentMapOffset(ox, oy);
+
+    std::cout << "[Move] path.size=" << path.size()
+              << " pathIndex=" << pathIndex
+              << " bfsTimer=" << bfsTimer << "\n";
 
     if (platformDropTimer > 0.0f) {
         y += 5.5f;
@@ -875,6 +900,9 @@ void BossArcher::updateMovement(float dt, float playerX, float playerY) {
     facingRight = (targetX > x);
     const float distX = std::abs(x - targetX);
     const float distY = std::abs(y - targetY);
+    std::cout << "[Move] target=(" << target.col << "," << target.row
+              << ") distX=" << distX << " distY=" << distY
+              << " action=" << (int)target.action << "\n";
 
     bool reached = false;
     switch (target.action) {
