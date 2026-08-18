@@ -26,7 +26,13 @@ private:
     // КОНСТАНТЫ ФИЗИКИ
     // ============================================================
 
-    static constexpr float JUMP_VELOCITY    = -650.0f;
+    static constexpr float JUMP_VELOCITY_MIN  = -277.0f;  // минимум — высота 1 тайл (32px): v=√(2·GRAVITY·32)
+    static constexpr float JUMP_VELOCITY_MAX  = -650.0f;  // максимум — как было раньше (JUMP_VELOCITY)
+    static constexpr float JUMP_MAX_HOLD_TIME = 0.3f;     // сек — сколько удерживать для полной высоты
+
+    // Инерция: торможение после отпускания, скольжение ≈ 1 тайл (32px) от MOVE_SPEED.
+    // a = v² / (2·d) = 200² / (2·32) ≈ 625
+    static constexpr float FRICTION_DECEL     = 625.0f;   // px/s²
     static constexpr float MOVE_SPEED       = 200.0f;
     static constexpr float HITBOX_W         = 35.0f;   // ← было в конструкторе
     static constexpr float HITBOX_H         = 40.0f;   // ← было в конструкторе
@@ -152,6 +158,20 @@ private:
     // ============================================================
 
     bool wantsToJump    = false;
+
+    // ============================================================
+    // ПРЫЖОК С РЕГУЛИРУЕМОЙ ВЫСОТОЙ (держи дольше — выше)
+    // ============================================================
+
+    bool  isJumpKeyHeld  = false;  // текущее состояние кнопки прыжка (не "нажата в этом кадре", а держится ли)
+    bool  isJumpCharging = false;  // true = прыжок ещё "заряжается" (можно добавить высоты, удерживая кнопку)
+    float jumpChargeTime = 0.0f;
+
+    // ============================================================
+    // ГОРИЗОНТАЛЬНОЕ ДВИЖЕНИЕ С ИНЕРЦИЕЙ
+    // ============================================================
+
+    int moveInputDir = 0;   // намерение игрока: -1 влево, 0 нет ввода, +1 вправо
     bool wantsToAttack  = false;
     bool wantsToDefend  = false;
 
@@ -166,6 +186,12 @@ private:
 
 
     float platformDropTimer = 0.0f;  // > 0 = игнорируем платформы (провал)
+
+    // ============================================================
+    // ЛЕСТНИЦА (треугольный slope-коллайдер, см. ILevel::getStairGroundY)
+    // ============================================================
+
+    bool isOnStairSlope = false;   // true = в этом кадре ноги стояли на гипотенузе пандуса
 
     // ============================================================
     // РАЗМЕР КАРТЫ
@@ -208,7 +234,9 @@ private:
 public:
     bool showHitboxes = false;
 
-    explicit Player(float spawnX, float spawnY);
+    // hpMultiplier — множитель максимального HP от сложности (Config::Difficulty::playerHP).
+    // Дефолт 1.0f — старые вызовы с 2 аргументами (например respawnPlayer()) не ломаются.
+    explicit Player(float spawnX, float spawnY, float hpMultiplier = 1.0f);
     ~Player() override = default;
 
     void update(float deltaTime) override;
@@ -242,6 +270,7 @@ public:
     [[nodiscard]] bool  getIsDead()            const { return isDead; }
     [[nodiscard]] bool isDropping() const { return platformDropTimer > 0.0f; }
     [[nodiscard]] bool getIsStunned() const { return isStunned; }
+    [[nodiscard]] bool getIsOnStairSlope() const { return isOnStairSlope; }
 
 private:
     void loadAnimations();

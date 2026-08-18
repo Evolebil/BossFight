@@ -93,6 +93,9 @@ add_executable(BossFight main.cpp
     characters/boss_samurai.cpp
     characters/boss_archer.h
     characters/boss_archer.cpp
+    levels/level3.h
+    levels/level3.cpp
+
 
 )
 

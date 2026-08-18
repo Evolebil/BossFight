@@ -7,13 +7,18 @@
 #include "player.h"
 #include "../utils/texture_manager.h"
 #include "../utils/input_manager.h"
+#include "../levels/ilevel.h"
+
+// Глобальный указатель на текущий уровень — используется для проверки лестницы.
+// Объявлен и назначается в levels/ilevel.cpp, тот же самый что читает CollisionSystem.
+extern ILevel* g_currentLevel;
 
 // ============================================================
 // КОНСТРУКТОР — чистый, всё в .h
 // ============================================================
 
-Player::Player(float spawnX, float spawnY)
-    : Character(spawnX, spawnY, HITBOX_W, HITBOX_H, BASE_HP)
+Player::Player(float spawnX, float spawnY, float hpMultiplier)
+    : Character(spawnX, spawnY, HITBOX_W, HITBOX_H, BASE_HP * hpMultiplier)
 // ВСЁ остальное имеет дефолты в .h
 {
     loadAnimations();
@@ -79,15 +84,16 @@ void Player::processInput() {
     wantsToJump      = false;
     wantsToAttack    = false;
     wantsToCastMagic = false;
-    velocityX        = 0;
+    moveInputDir     = 0;
 
     const bool left  = InputManager::isKeyDown(controls.left);
     const bool right = InputManager::isKeyDown(controls.right);
 
-    if (left  && !right) { velocityX = -MOVE_SPEED; facingRight = false; }
-    if (right && !left)  { velocityX =  MOVE_SPEED; facingRight = true;  }
+    if (left  && !right) { moveInputDir = -1; facingRight = false; }
+    if (right && !left)  { moveInputDir =  1; facingRight = true;  }
 
     if (InputManager::isKeyPressed(controls.jump)) wantsToJump = true;
+    isJumpKeyHeld = InputManager::isKeyDown(controls.jump);
 
     if (!isAttacking && !isCastingMagic && !isHurt && !isDefending && attackTimer <= 0.0f) {
         if (InputManager::isMousePressed(controls.attackMouseButton))
@@ -203,9 +209,41 @@ void Player::update(float deltaTime) {
         return;
     }
 
+    // ── ГОРИЗОНТАЛЬНОЕ ДВИЖЕНИЕ С ИНЕРЦИЕЙ ──────────────────────
+    // moveInputDir — чистое намерение игрока из processInput(). Пока
+    // клавиша зажата — velocityX сразу равна MOVE_SPEED в нужную сторону
+    // (отклика без задержки). Как только отпустили — не обнуляем резко,
+    // а гасим трением (FRICTION_DECEL), получается проскальзывание ≈1 тайл.
+    // isDashing ниже перезапишет velocityX сам — конфликта нет.
+    if (moveInputDir != 0) {
+        velocityX = moveInputDir * MOVE_SPEED;
+    } else if (velocityX > 0.0f) {
+        velocityX = std::max(0.0f, velocityX - FRICTION_DECEL * deltaTime);
+    } else if (velocityX < 0.0f) {
+        velocityX = std::min(0.0f, velocityX + FRICTION_DECEL * deltaTime);
+    }
+
+    // ── ПРЫЖОК С РЕГУЛИРУЕМОЙ ВЫСОТОЙ ────────────────────────────
+    // Отжатие кнопки сразу даёт минимальный импульс (гарантирует минимум
+    // 1 тайл высоты). Пока кнопка удерживается (и не дольше JUMP_MAX_HOLD_TIME,
+    // и пока всё ещё летим вверх) — высота докручивается по нарастающей кривой
+    // (t², "ускоряющийся" рост) до JUMP_VELOCITY_MAX.
     if (wantsToJump && isGrounded && !isDefending) {
-        velocityY = JUMP_VELOCITY;  // ← перезаписывает 50.0f если wantsToJump=true
-        isGrounded = false;
+        velocityY      = JUMP_VELOCITY_MIN;
+        isGrounded     = false;
+        isJumpCharging = true;
+        jumpChargeTime = 0.0f;
+    }
+
+    if (isJumpCharging) {
+        if (isJumpKeyHeld && jumpChargeTime < JUMP_MAX_HOLD_TIME && velocityY < 0.0f) {
+            jumpChargeTime += deltaTime;
+            const float t     = std::clamp(jumpChargeTime / JUMP_MAX_HOLD_TIME, 0.0f, 1.0f);
+            const float eased = t * t;  // ускоряющийся рост
+            velocityY = JUMP_VELOCITY_MIN + (JUMP_VELOCITY_MAX - JUMP_VELOCITY_MIN) * eased;
+        } else {
+            isJumpCharging = false;  // отпустил / вышло время / уже падаем
+        }
     }
 
     if (wantsToAttack)    startAttack();
@@ -266,9 +304,31 @@ void Player::update(float deltaTime) {
         platformDropTimer -= deltaTime;
         y += PLATFORM_DROP_PUSH;// ← форсируем выход из тайла платформы каждый кадр пока таймер идёт
     }
+
+    // Обычная физика — как и без лестницы, гравитацию никогда не выключаем
     x += velocityX * deltaTime;
     applyCollisionsX();
     applyGravityAndCollisions(deltaTime, platformDropTimer > 0.0f);
+
+    // ── ЛЕСТНИЦА (треугольный slope-коллайдер) ──────────────────
+    // Гипотенуза пандуса обращена к ступенькам. Проверяем ПРАВЫЙ НИЖНИЙ угол
+    // хитбокса (не центр!) — при движении вправо/вверх по лестнице именно этот
+    // угол первым доходит до нужного X, центр же отстаёт на полширины хитбокса
+    // и снап срабатывал позже, чем физически нужно (из-за этого требовался
+    // прыжок на верхнем этаже). Да, выглядит чуть криво как решение, но
+    // по-другому правый нижний угол не проверить.
+    isOnStairSlope = false;
+    float stairGroundY = 0.0f;
+    const float stairCheckX = x + width / 2.0f;   // правый край хитбокса
+    if (g_currentLevel && g_currentLevel->getStairGroundY(stairCheckX, stairGroundY)) {
+        const float feetY = y + height / 2.0f;    // нижний край хитбокса
+        if (feetY >= stairGroundY) {
+            y = stairGroundY - height / 2.0f;
+            velocityY     = 0.0f;
+            isGrounded    = true;
+            isOnStairSlope = true;
+        }
+    }
 
     mana += MANA_REGEN * deltaTime;
     if (mana > maxMana) mana = maxMana;

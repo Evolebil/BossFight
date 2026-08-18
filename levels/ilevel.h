@@ -28,6 +28,16 @@ public:
     virtual bool isPlatform(int pixelX, int pixelY) = 0;
     virtual void getMapOffset(int& outX, int& outY) = 0;
 
+    // --- Наклонная лестница (гипотенуза) ---
+    // НЕ чистый виртуальный — дефолт false, чтобы Level1/Level2 (без лестниц)
+    // не пришлось трогать. Переопределяется только там, где лестница есть (Level3).
+    //
+    // Возвращает true, если по этой мировой X-координате лестница существует,
+    // и кладёт в outGroundY высоту (Y) её поверхности в этой точке — СПЛОШНУЮ
+    // диагональную линию (гипотенузу), а не дискретные ступени. Игрок прилипает
+    // к ней как к обычному полу, без переключения гравитации.
+    virtual bool getStairGroundY(float /*pixelX*/, float& /*outGroundY*/) { return false; }
+
     // --- Спавны ---
     virtual std::pair<float, float> getPlayerSpawn() = 0;
     virtual std::pair<float, float> getBossSpawn() = 0;

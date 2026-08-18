@@ -68,7 +68,7 @@ void GameScene::initPositions() {
     const int mapW = level->getMapWidth();
     const int mapH = level->getMapHeight();
 
-    player = std::make_unique<Player>(px, py);
+    player = std::make_unique<Player>(px, py, diff.playerHP);
     player->setMapSize(mapW, mapH);
 
     boss = level->createBoss(bx, by, diff.projectileSpeed);
@@ -212,9 +212,11 @@ void GameScene::update(float deltaTime) {
         }
         SDL_Rect pb = player->getHitbox();
 
+        const float dmgMult = Config::getDifficulties()[Config::getCurrentDifficulty()].damage;
+
         // Урон по игроку от босса
         if (auto* golem = dynamic_cast<BossGolem*>(boss.get())) {
-            float dmgToPlayer = golem->checkPlayerDamage(pb, deltaTime);
+            float dmgToPlayer = golem->checkPlayerDamage(pb, deltaTime) * dmgMult;
             if (dmgToPlayer > 0.0f) {
                 player->takeDamage(dmgToPlayer);
                 playerTookDamage = true;
@@ -222,7 +224,7 @@ void GameScene::update(float deltaTime) {
         }
 
         if (auto* samurai = dynamic_cast<BossSamurai*>(boss.get())) {
-            float dmgToPlayer = samurai->checkPlayerDamage(pb, deltaTime);
+            float dmgToPlayer = samurai->checkPlayerDamage(pb, deltaTime) * dmgMult;
             if (dmgToPlayer > 0.0f) {
                 player->takeDamage(dmgToPlayer);
                 playerTookDamage = true;
@@ -231,7 +233,7 @@ void GameScene::update(float deltaTime) {
 
         if (auto* archer = dynamic_cast<BossArcher*>(boss.get())) {
             archer->update(deltaTime, player->getX(), player->getY());
-            float dmg = archer->checkPlayerDamage(pb, deltaTime);
+            float dmg = archer->checkPlayerDamage(pb, deltaTime) * dmgMult;
             if (dmg > 0.0f) {
                 player->takeDamage(dmg);
                 playerTookDamage = true;
@@ -342,7 +344,8 @@ void GameScene::update(float deltaTime) {
 
 void GameScene::respawnPlayer() {
     auto [px, py] = getPlayerSpawnPos();
-    player = std::make_unique<Player>(px, py);
+    const Config::Difficulty& diff = Config::getDifficulties()[Config::getCurrentDifficulty()];
+    player = std::make_unique<Player>(px, py, diff.playerHP);
     // Сохраняем флаг хитбоксов при респавне
     if (auto* golem = dynamic_cast<BossGolem*>(boss.get()))
         player->showHitboxes = golem->showHitboxes;

@@ -77,6 +77,17 @@ const std::unordered_map<std::string, TileInfo>& getTileLookup() {
         {"odb0000",  {10, 13, 0.0, SDL_FLIP_NONE,     false}},
         {"odb1000",  {11, 13, 0.0, SDL_FLIP_NONE,     false}},
         {"stf0000", {14, 1, 0.0, SDL_FLIP_NONE, false}},
+        // --- Каменная лестница (solid=true, shape='f' — блокирует со всех сторон) ---
+        {"ssf0000", {1, 5,  0.0, SDL_FLIP_NONE, true}},
+        {"ssf0002", {1, 6,  0.0, SDL_FLIP_NONE, true}},
+
+        // --- Приставная лестница (solid=false — декор, climb-механики в игре нет) ---
+        {"slb0100", {9,  5, 0.0, SDL_FLIP_NONE, false}},
+        {"slb1100", {11, 5, 0.0, SDL_FLIP_NONE, false}},
+
+        {"ssf0000", {1, 5, 0.0, SDL_FLIP_NONE, true}},   // ступени лестницы
+        {"unb0000", {2, 5, 0.0, SDL_FLIP_NONE, false}},  // подложка лестницы ← вот эта магента у тебя
+        {"em00000", {2, 2, 0.0, SDL_FLIP_NONE, false}},  // чистый чёрный фон
         };
 return lookup;
 }
