@@ -207,6 +207,8 @@ void GameScene::update(float deltaTime) {
             golem->update(deltaTime, player->getX(), player->getY());
         else if (auto* samurai = dynamic_cast<BossSamurai*>(boss.get())) {
             samurai->update(deltaTime, player->getX(), player->getY(), player->getFacingRight());
+        } else if (auto* deadnight = dynamic_cast<BossDeadNight*>(boss.get())) {
+            deadnight->update(deltaTime, player->getX(), player->getY(), player->getFacingRight());
         } else {
             boss->update(deltaTime);
         }
@@ -240,6 +242,14 @@ void GameScene::update(float deltaTime) {
             }
         }
 
+        if (auto* deadnight = dynamic_cast<BossDeadNight*>(boss.get())) {
+            float dmg = deadnight->checkPlayerDamage(pb, deltaTime) * dmgMult;
+            if (dmg > 0.0f) {
+                player->takeDamage(dmg);
+                playerTookDamage = true;
+            }
+        }
+
         // Урон от шипов уровня 2 (Level2::isSpike)
         if (auto* lv2 = dynamic_cast<Level2*>(level.get())) {
             SDL_Rect pb = player->getHitbox();
@@ -252,6 +262,12 @@ void GameScene::update(float deltaTime) {
 
             if (onSpike)
                 player->takeDamage(Level2::SPIKE_DAMAGE_PER_SEC * deltaTime);
+        }
+
+        // Урон от шипов уровня 2 (Level2::isSpike)
+        if (auto* lv2 = dynamic_cast<Level2*>(level.get())) {
+            // Наземные миньоны уровня 3 — спавн, движение, дверь
+            updateGroundMinions(deltaTime);
         }
 
         // Урон по боссу от игрока
@@ -273,8 +289,29 @@ void GameScene::update(float deltaTime) {
             } else if (auto* archer = dynamic_cast<BossArcher*>(boss.get())) {
                 if (rectsOverlap(atk, archer->getHitbox()))
                     archer->takeDamage(dmgToBoss);
+            } else if (auto* deadnight = dynamic_cast<BossDeadNight*>(boss.get())) {
+                if (rectsOverlap(atk, deadnight->getHitbox()))
+                    deadnight->takeDamage(dmgToBoss);
             }
 
+            // Тот же замах может задеть наземного миньона
+            if (auto* dn = dynamic_cast<BossDeadNight*>(boss.get())) {
+                for (auto& m : groundMinions) {
+                    if (!m.active) continue;
+                    SDL_Rect mBox = {
+                        (int)(m.x - GroundMinion::WIDTH / 2),
+                        (int)(m.y - GroundMinion::HEIGHT / 2),
+                        (int)GroundMinion::WIDTH, (int)GroundMinion::HEIGHT
+                    };
+                    if (rectsOverlap(atk, mBox)) {
+                        m.hp -= dmgToBoss;
+                        if (m.hp <= 0.0f) {
+                            m.active = false;
+                            dn->registerMinionKilled();
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -316,8 +353,12 @@ void GameScene::update(float deltaTime) {
         } else if (auto* archer = dynamic_cast<BossArcher*>(boss.get())) {
             // Лучник — настоящая победа
             finalDead = archer->isDeathAnimFinished();
-        }
 
+        } else if (auto* deadnight = dynamic_cast<BossDeadNight*>(boss.get())) {
+            // Смерть Ночи — финальный босс, победа сразу по смерти
+            // TODO: заменить на !isDeathAnimFinished когда будет анимация смерти + взрывы
+            finalDead = true;
+        }
         if (finalDead) {
             bossDefeated = true;
             calculateAndSaveStars();
@@ -335,6 +376,67 @@ void GameScene::update(float deltaTime) {
         } else {
             resultState = ResultState::DEFEAT;
         }
+    }
+}
+
+// ============================================================
+//  НАЗЕМНЫЕ МИНЬОНЫ (Уровень 3)
+// ============================================================
+
+void GameScene::updateGroundMinions(float deltaTime) {
+    auto* lv3       = dynamic_cast<Level3*>(level.get());
+    auto* deadnight = dynamic_cast<BossDeadNight*>(boss.get());
+    if (!lv3 || !deadnight) return;
+
+    int ox, oy;
+    lv3->getMapOffset(ox, oy);
+
+    // Спавн — только после 30 сек выживания и пока не набрано 5/5
+    if (deadnight->getSurvivalPassed() &&
+        deadnight->getMinionsKilled() < deadnight->getMinionsRequired()) {
+        minionSpawnTimer -= deltaTime;
+        if (minionSpawnTimer <= 0.0f) {
+            minionSpawnTimer = MINION_SPAWN_INTERVAL;
+
+            GroundMinion m;
+            m.x = ox + Level3::MINION_WALK_SPAWN_COL * TILE_SIZE + TILE_SIZE / 2.0f;
+            m.y = oy + Level3::GROUND_FLOOR_ROW * TILE_SIZE - GroundMinion::HEIGHT / 2.0f;
+            m.hp = GroundMinion::MAX_HP;
+            m.active = true;
+            groundMinions.push_back(m);
+        }
+    }
+
+    // Движение к двери
+    const float doorX = ox + Level3::DOOR_COL * TILE_SIZE + TILE_SIZE / 2.0f;
+    for (auto& m : groundMinions) {
+        if (!m.active) continue;
+        m.x -= GroundMinion::BASE_SPEED * deltaTime;
+        if (m.x <= doorX) {
+            m.active = false; // дошёл до двери — исчезает, счётчик НЕ увеличиваем
+        }
+    }
+
+    groundMinions.erase(
+        std::remove_if(groundMinions.begin(), groundMinions.end(),
+                       [](const GroundMinion& m) { return !m.active; }),
+        groundMinions.end());
+}
+
+void GameScene::renderGroundMinions(SDL_Renderer* renderer) {
+    if (groundMinions.empty()) return;
+    const int cx = camera ? (int)camera->getOffsetX() : 0;
+    const int cy = camera ? (int)camera->getOffsetY() : 0;
+
+    SDL_SetRenderDrawColor(renderer, 150, 30, 200, 255); // фиолетовый — заглушка
+    for (const auto& m : groundMinions) {
+        if (!m.active) continue;
+        SDL_Rect r = {
+            (int)(m.x - GroundMinion::WIDTH / 2) - cx,
+            (int)(m.y - GroundMinion::HEIGHT / 2) - cy,
+            (int)GroundMinion::WIDTH, (int)GroundMinion::HEIGHT
+        };
+        SDL_RenderFillRect(renderer, &r);
     }
 }
 
@@ -384,6 +486,7 @@ void GameScene::render(SDL_Renderer* renderer) {
 
     if (player) player->render(renderer);
     if (boss)   boss->render(renderer);
+    renderGroundMinions(renderer);
     drawHealthBars(renderer);
 
     // Пауза
@@ -583,6 +686,31 @@ void GameScene::drawHealthBars(SDL_Renderer* renderer) {
         SDL_RenderFillRect(renderer, &bar);
         SDL_SetRenderDrawColor(renderer, 180, 180, 180, 255);
         SDL_RenderDrawRect(renderer, &bg);
+
+        // Фиолетовая полоса — прогресс убийства миньонов (только у Смерти Ночи)
+        if (auto* deadnight = dynamic_cast<BossDeadNight*>(boss.get())) {
+            const int killed   = deadnight->getMinionsKilled();
+            const int required = deadnight->getMinionsRequired();
+            const float mpct   = required > 0 ? (float)killed / (float)required : 0.0f;
+            const int purpleY  = HUD_BAR_Y + HUD_BAR_H + 15; // TODO: подобрать отступ
+
+            drawText(renderer, Config::getFont(), "Миньоны",
+                     W - HUD_BOSS_X_OFF, purpleY - 20, {200, 200, 200, 255});
+
+            SDL_SetRenderDrawColor(renderer, 40, 40, 40, 220);
+            SDL_Rect pbg = {W - HUD_BOSS_X_OFF, purpleY, HUD_BAR_W, HUD_BAR_H};
+            SDL_RenderFillRect(renderer, &pbg);
+            SDL_SetRenderDrawColor(renderer, 160, 60, 220, 255);
+            SDL_Rect pbar = {W - HUD_BOSS_X_OFF, purpleY, (int)(HUD_BAR_W * mpct), HUD_BAR_H};
+            SDL_RenderFillRect(renderer, &pbar);
+            SDL_SetRenderDrawColor(renderer, 180, 180, 180, 255);
+            SDL_RenderDrawRect(renderer, &pbg);
+
+            char buf[16];
+            std::snprintf(buf, sizeof(buf), "%d/%d", killed, required);
+            drawText(renderer, Config::getFont(), buf,
+                     W - HUD_BOSS_X_OFF + HUD_BAR_W + 10, purpleY, {220, 180, 255, 255});
+        }
     }
 }
 

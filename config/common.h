@@ -105,6 +105,32 @@ enum class ArcherPhase {
     DYING     ///< HP = 0: анимация смерти, AI остановлен
 };
 
+/**
+ * @enum DeadNightState
+ * @brief Состояния босса "Смерть Ночи" (Уровень 3, финальный босс)
+ */
+enum class DeadNightState {
+    FLYING_TOP,    ///< Наверху, неуязвим, летает влево-вправо, кидает файрболы
+    DESCENDING,    ///< Спускается на арену (после 5/5 миньонов)
+    ARENA_IDLE,    ///< На арене, между рывками, уязвим
+    DASHING,       ///< Выполняет рывок
+    MELEE_ATTACK,  ///< Ближняя атака
+    RETREATING,    ///< Отступление после серии из 3 рывков
+    ASCENDING,     ///< Улетает наверх (после потери 25% MAX HP)
+    DEATH          ///< Мёртв
+};
+
+/**
+ * @enum DeadNightPhase
+ * @brief Фазы босса "Смерть Ночи". Каждая фаза = -25% MAX HP.
+ */
+enum class DeadNightPhase {
+    PHASE_1,
+    PHASE_2,
+    PHASE_3,
+    PHASE_4
+};
+
 enum class TileType {
     EMPTY      = 0,
     WALL       = 1,

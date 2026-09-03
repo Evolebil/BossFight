@@ -42,9 +42,7 @@
 #include "ilevel.h"
 #include "level1_assets.h"  // TILE_SIZE, TILE_SOURCE, getTileLookup(), drawTileByCode()
 
-// TODO(evol): подставить настоящий класс летающего босса, когда он будет готов.
-// #include "../characters/boss_phantom.h"
-
+#include "../characters/boss_deadnight.h"
 // ============================================================
 // ТОЧКА СПАВНА МИНЬОНА-ЛУЧНИКА
 // ============================================================
@@ -68,6 +66,10 @@ public:
     static constexpr int L3_BOSS_ROW = 18;
 
     static constexpr int MINION_COUNT = 4;
+
+    static constexpr int GROUND_FLOOR_ROW      = 27; // ряд пола для наземных миньонов
+    static constexpr int MINION_WALK_SPAWN_COL = 24; // TODO: подтвердить колонку спавна
+    static constexpr int DOOR_COL              = 3;  // колонка двери (odb-тайлы)
 
     void drawMap(SDL_Renderer* renderer, int camX = 0, int camY = 0) override;
     bool isSolid(int pixelX, int pixelY) override;

@@ -15,9 +15,11 @@
 #include "../utils/camera.h"      // ← Camera объявлен здесь
 #include "../levels/level1_assets.h"
 #include "../levels/level2.h"
+#include "../levels/level3.h"
 #include "../utils/save_manager.h"
 #include "../characters/boss_samurai.h"
 #include "../characters/boss_archer.h"
+#include "../characters/boss_deadnight.h"
 
 // Forward declarations
 class Player;
@@ -34,6 +36,22 @@ enum class ResultState { PLAYING, VICTORY, DEFEAT };
  * @brief Управляет игровым процессом: обновляет Player и BossGolem,
  *        проверяет урон, считает звёзды, рисует HUD.
  */
+
+/**
+ * @struct GroundMinion
+ * @brief Наземный миньон уровня 3 — заглушка (фиолетовый квадрат), идёт к двери.
+ */
+struct GroundMinion {
+    float x = 0.0f, y = 0.0f;
+    float hp = 50.0f;
+    bool  active = true;
+
+    static constexpr float WIDTH      = 40.0f;
+    static constexpr float HEIGHT     = 60.0f;
+    static constexpr float MAX_HP     = 50.0f;  // 2 удара базовой атакой игрока (25×2)
+    static constexpr float BASE_SPEED = 80.0f;  // TODO: скорость фазы 1, подобрать
+};
+
 class GameScene : public Scene {
 private:
     // ============================================================
@@ -81,6 +99,9 @@ private:
     // Подсказки (отступ снизу экрана)
     static constexpr int HUD_HINT_HB_Y    = 30;
     static constexpr int HUD_HINT_ESC_Y   = 55;
+
+
+    static constexpr float MINION_SPAWN_INTERVAL = 2.0f;
 
     // ============================================================
     // КОНСТАНТЫ ПАУЗЫ
@@ -146,6 +167,8 @@ private:
     std::unique_ptr<Character> boss;
     std::unique_ptr<ILevel>    level;
     std::unique_ptr<Camera>    camera;  // ← Camera теперь объявлен через include
+    std::vector<GroundMinion> groundMinions;
+    float minionSpawnTimer = 0.0f;
 
     int   currentLevel    = 0;
     int   livesLeft       = 0;
@@ -188,6 +211,9 @@ private:
     void renderVictoryScreen(SDL_Renderer* renderer);
     void renderDefeatScreen(SDL_Renderer* renderer);
     void drawStar(SDL_Renderer* renderer, int cx, int cy, int size, bool filled);
+
+    void updateGroundMinions(float deltaTime);
+    void renderGroundMinions(SDL_Renderer* renderer);
 
 
     // Вспомогательный метод

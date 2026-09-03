@@ -290,9 +290,7 @@ std::pair<float, float> Level3::getBossSpawn() {
 }
 
 std::unique_ptr<Character> Level3::createBoss(float x, float y, float attackSpeedMult) {
-    // TODO(evol): return std::make_unique<BossPhantom>(x, y, attackSpeedMult);
-    (void)x; (void)y; (void)attackSpeedMult;
-    return nullptr;  // временная заглушка, пока класса босса нет
+    return std::make_unique<BossDeadNight>(x, y, attackSpeedMult);
 }
 
 std::pair<float, float> Level3::getMinionSpawn(int index) const {
