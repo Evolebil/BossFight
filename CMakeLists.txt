@@ -100,6 +100,7 @@ add_executable(BossFight main.cpp
     characters/ground_minion.h
     characters/ground_minion.cpp
     characters/archer_minion.h characters/archer_minion.cpp
+    toolchain-mingw64.cmake
 
 
 )
@@ -128,6 +129,11 @@ target_link_libraries(BossFight PRIVATE
 # На Linux часто нужно pthread
 find_package(Threads REQUIRED)
 target_link_libraries(BossFight PRIVATE Threads::Threads)
+
+# Уменьшаем число нужных DLL на Windows — статически линкуем рантайм компилятора
+if (MINGW)
+    target_link_options(BossFight PRIVATE -static-libgcc -static-libstdc++)
+endif()
 
 # ───────────────────────────────────────────────
 # Копируем assets/ в папку с exe после сборки

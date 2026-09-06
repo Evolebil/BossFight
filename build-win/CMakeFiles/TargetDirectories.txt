@@ -1,0 +1,7 @@
+/home/evol/Documents/BossFight/build-win/CMakeFiles/BossFight.dir
+/home/evol/Documents/BossFight/build-win/CMakeFiles/edit_cache.dir
+/home/evol/Documents/BossFight/build-win/CMakeFiles/rebuild_cache.dir
+/home/evol/Documents/BossFight/build-win/CMakeFiles/list_install_components.dir
+/home/evol/Documents/BossFight/build-win/CMakeFiles/install.dir
+/home/evol/Documents/BossFight/build-win/CMakeFiles/install/local.dir
+/home/evol/Documents/BossFight/build-win/CMakeFiles/install/strip.dir
