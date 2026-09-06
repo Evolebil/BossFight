@@ -446,13 +446,22 @@ float BossArcher::checkPlayerDamage(SDL_Rect playerBox, float /*deltaTime*/) {
     }
 
     // Стрелы
+    // Стрелы
     for (auto& arrow : arrows) {
         if (!arrow.active) continue;
+
+        const bool isVertical = (arrow.velY != 0.0f && arrow.velX == 0.0f);
+
+        const int hitboxW = isVertical ? ARROW_HITBOX_H : ARROW_HITBOX_W;
+        const int hitboxH = isVertical ? ARROW_HITBOX_W : ARROW_HITBOX_H;
+
         SDL_Rect arrowBox = {
-            (int)(arrow.x - ARROW_HITBOX_W / 2),
-            (int)(arrow.y - ARROW_HITBOX_H / 2),
-            ARROW_HITBOX_W, ARROW_HITBOX_H
+            (int)(arrow.x - hitboxW / 2),
+            (int)(arrow.y - hitboxH / 2),
+            hitboxW,
+            hitboxH
         };
+
         if (rectsOverlap(playerBox, arrowBox)) {
             arrow.active = false;
             totalDamage += ArcherArrow::DAMAGE;
@@ -564,11 +573,19 @@ void BossArcher::renderHitboxes(SDL_Renderer* renderer) {
     SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
     for (const auto& arrow : arrows) {
         if (!arrow.active) continue;
+
+        const bool isVertical = (arrow.velY != 0.0f && arrow.velX == 0.0f);
+
+        const int hitboxW = isVertical ? ARROW_HITBOX_H : ARROW_HITBOX_W;
+        const int hitboxH = isVertical ? ARROW_HITBOX_W : ARROW_HITBOX_H;
+
         SDL_Rect arrowHb = {
-            (int)(arrow.x - ARROW_HITBOX_W / 2) - cx,
-            (int)(arrow.y - ARROW_HITBOX_H / 2) - cy,
-            ARROW_HITBOX_W, ARROW_HITBOX_H
+            (int)(arrow.x - hitboxW / 2) - cx,
+            (int)(arrow.y - hitboxH / 2) - cy,
+            hitboxW,
+            hitboxH
         };
+
         SDL_RenderDrawRect(renderer, &arrowHb);
     }
 

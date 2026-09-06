@@ -106,7 +106,7 @@ void BossDeadNight::updateFlyingTop(float deltaTime, float playerX, float player
         if (x < minX) { x = minX; flyDirX = 1.0f; }
         if (x > maxX) { x = maxX; flyDirX = -1.0f; }
     }
-    y = topY; // держим высоту фиксированной
+    y = getPhaseTopY(); // держим высоту фиксированной — растёт с фазой
 
     // Таймер выживания (30 сек) — после него внешняя система может начать спавнить миньонов
     if (!survivalPassed) {
@@ -136,10 +136,13 @@ void BossDeadNight::updateDescending(float deltaTime) {
 }
 
 void BossDeadNight::updateAscending(float deltaTime) {
-    const float dy = topY - y;
+    // phase к этому моменту уже увеличена (см. onPhaseHpThresholdReached) —
+    // летим на высоту НОВОЙ фазы
+    const float targetY = getPhaseTopY();
+    const float dy = targetY - y;
     const float step = ASCEND_SPEED * deltaTime;
     if (std::abs(dy) <= step) {
-        y = topY;
+        y = targetY;
         resetForNextPhaseTop();
         forceState(DeadNightState::FLYING_TOP);
     } else {
@@ -152,6 +155,11 @@ void BossDeadNight::resetForNextPhaseTop() {
     survivalPassed  = false;
     minionsKilled   = 0;
     fireballTimer   = FIREBALL_COOLDOWN;
+}
+
+float BossDeadNight::getPhaseTopY() const {
+    // topY — высота фазы 1 (запомнена при спавне), каждая следующая фаза — на 1 тайл выше
+    return topY - (int)phase * TILE_SIZE;
 }
 
 // ============================================================
@@ -255,11 +263,16 @@ void BossDeadNight::spawnFireball(float playerX, float playerY) {
     float len = std::sqrt(dx * dx + dy * dy);
     if (len < 1.0f) len = 1.0f;
 
-    fb.velX = (dx / len) * FIREBALL_SPEED;
-    fb.velY = (dy / len) * FIREBALL_SPEED;
+    // Базовая скорость × сложность (attackSpeedMult, как у остальных боссов)
+    // × множитель текущей фазы (ТЗ: ×1.5 за фазу, кумулятивно)
+    const float speed = FIREBALL_SPEED * attackSpeedMult * PHASE_FIREBALL_SPEED_MULT[(int)phase];
+
+    fb.velX = (dx / len) * speed;
+    fb.velY = (dy / len) * speed;
 
     fb.active   = true;
     fb.exploded = false;
+    fireballs.push_back(fb);
     fireballs.push_back(fb);
 }
 

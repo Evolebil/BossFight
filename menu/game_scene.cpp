@@ -92,6 +92,18 @@ void GameScene::initPositions() {
     camera   = std::make_unique<Camera>(mapW, mapH);
     g_camera = camera.get();
     g_camera->snapTo(px, py);
+
+    // --- Враги уровня 3 (Смерть Ночи) ---
+    groundMinions.clear();
+    archers.clear();
+    minionSpawnTimer = MINION_SPAWN_INTERVAL;
+
+    if (auto* lv3 = dynamic_cast<Level3*>(level.get())) {
+        for (int i = 0; i < lv3->getMinionCount(); i++) {
+            auto [ax, ay] = lv3->getMinionSpawn(i);
+            archers.push_back(std::make_unique<ArcherMinion>(ax, ay, 1));
+        }
+    }
 }
 
 // ============================================================
@@ -125,6 +137,8 @@ void GameScene::handleInput(SDL_Event& event, int mx, int my,
                         samurai->showHitboxes = next;
                     if (auto* archer = dynamic_cast<BossArcher*>(boss.get()))
                         archer->showHitboxes = next;
+                    if (auto* deadnight = dynamic_cast<BossDeadNight*>(boss.get()))
+                        deadnight->showHitboxes = next;
                 }
                 break;
             // Консольная команда — набираем текст в любой момент игры
@@ -242,7 +256,8 @@ void GameScene::update(float deltaTime) {
             }
         }
 
-        if (auto* deadnight = dynamic_cast<BossDeadNight*>(boss.get())) {
+        auto* deadnight = dynamic_cast<BossDeadNight*>(boss.get());
+        if (deadnight) {
             float dmg = deadnight->checkPlayerDamage(pb, deltaTime) * dmgMult;
             if (dmg > 0.0f) {
                 player->takeDamage(dmg);
@@ -250,10 +265,31 @@ void GameScene::update(float deltaTime) {
             }
         }
 
+        // Лучники и наземные миньоны уровня 3 — только пока жив BossDeadNight
+        if (deadnight) {
+            for (auto& archerMinion : archers) {
+                archerMinion->setPhase(deadnight->getPhaseNumber());
+                archerMinion->update(deltaTime, player->getX(), player->getY());
+                float dmg = archerMinion->checkPlayerDamage(pb) * dmgMult;
+                if (dmg > 0.0f) {
+                    player->takeDamage(dmg);
+                    playerTookDamage = true;
+                }
+            }
+
+            for (auto& m : groundMinions) {
+                float dmg = m->checkPlayerDamage(pb) * dmgMult;
+                if (dmg > 0.0f) {
+                    player->takeDamage(dmg);
+                    playerTookDamage = true;
+                }
+            }
+
+            updateGroundMinions(deltaTime);
+        }
+
         // Урон от шипов уровня 2 (Level2::isSpike)
         if (auto* lv2 = dynamic_cast<Level2*>(level.get())) {
-            SDL_Rect pb = player->getHitbox();
-            // Проверяем 4 угла хитбокса игрока
             bool onSpike =
                 lv2->isSpike(pb.x,          pb.y + pb.h - 1) ||
                 lv2->isSpike(pb.x + pb.w-1, pb.y + pb.h - 1) ||
@@ -262,12 +298,6 @@ void GameScene::update(float deltaTime) {
 
             if (onSpike)
                 player->takeDamage(Level2::SPIKE_DAMAGE_PER_SEC * deltaTime);
-        }
-
-        // Урон от шипов уровня 2 (Level2::isSpike)
-        if (auto* lv2 = dynamic_cast<Level2*>(level.get())) {
-            // Наземные миньоны уровня 3 — спавн, движение, дверь
-            updateGroundMinions(deltaTime);
         }
 
         // Урон по боссу от игрока
@@ -289,28 +319,16 @@ void GameScene::update(float deltaTime) {
             } else if (auto* archer = dynamic_cast<BossArcher*>(boss.get())) {
                 if (rectsOverlap(atk, archer->getHitbox()))
                     archer->takeDamage(dmgToBoss);
-            } else if (auto* deadnight = dynamic_cast<BossDeadNight*>(boss.get())) {
+            } else if (deadnight) {
                 if (rectsOverlap(atk, deadnight->getHitbox()))
                     deadnight->takeDamage(dmgToBoss);
             }
 
-            // Тот же замах может задеть наземного миньона
-            if (auto* dn = dynamic_cast<BossDeadNight*>(boss.get())) {
-                for (auto& m : groundMinions) {
-                    if (!m.active) continue;
-                    SDL_Rect mBox = {
-                        (int)(m.x - GroundMinion::WIDTH / 2),
-                        (int)(m.y - GroundMinion::HEIGHT / 2),
-                        (int)GroundMinion::WIDTH, (int)GroundMinion::HEIGHT
-                    };
-                    if (rectsOverlap(atk, mBox)) {
-                        m.hp -= dmgToBoss;
-                        if (m.hp <= 0.0f) {
-                            m.active = false;
-                            dn->registerMinionKilled();
-                        }
-                    }
-                }
+            // Тот же замах может задеть наземного миньона.
+            // Засчитывание убийства (ровно один раз) — в updateGroundMinions().
+            for (auto& m : groundMinions) {
+                if (!m->isDead() && rectsOverlap(atk, m->getHitbox()))
+                    m->takeDamage(dmgToBoss);
             }
         }
     }
@@ -325,10 +343,21 @@ void GameScene::update(float deltaTime) {
                 (int)MagicProjectile::SIZE,
                 (int)MagicProjectile::SIZE
             };
+
             SDL_Rect bossHb = boss->getHitbox();
             if (rectsOverlap(projBox, bossHb)) {
                 boss->takeDamage(MagicProjectile::DAMAGE);
                 proj.active = false;
+                continue;
+            }
+
+            // Тот же снаряд может задеть наземного миньона
+            for (auto& m : groundMinions) {
+                if (!m->isDead() && rectsOverlap(projBox, m->getHitbox())) {
+                    m->takeDamage(MagicProjectile::DAMAGE);
+                    proj.active = false;
+                    break;
+                }
             }
         }
     }
@@ -354,7 +383,7 @@ void GameScene::update(float deltaTime) {
             // Лучник — настоящая победа
             finalDead = archer->isDeathAnimFinished();
 
-        } else if (auto* deadnight = dynamic_cast<BossDeadNight*>(boss.get())) {
+        } else if (auto* deadnight2 = dynamic_cast<BossDeadNight*>(boss.get())) {
             // Смерть Ночи — финальный босс, победа сразу по смерти
             // TODO: заменить на !isDeathAnimFinished когда будет анимация смерти + взрывы
             finalDead = true;
@@ -398,46 +427,35 @@ void GameScene::updateGroundMinions(float deltaTime) {
         if (minionSpawnTimer <= 0.0f) {
             minionSpawnTimer = MINION_SPAWN_INTERVAL;
 
-            GroundMinion m;
-            m.x = ox + Level3::MINION_WALK_SPAWN_COL * TILE_SIZE + TILE_SIZE / 2.0f;
-            m.y = oy + Level3::GROUND_FLOOR_ROW * TILE_SIZE - GroundMinion::HEIGHT / 2.0f;
-            m.hp = GroundMinion::MAX_HP;
-            m.active = true;
-            groundMinions.push_back(m);
+            const float spawnX = ox + Level3::MINION_SPAWN_COL * TILE_SIZE + TILE_SIZE / 2.0f;
+            const float spawnY = oy + Level3::MINION_SPAWN_ROW * TILE_SIZE + TILE_SIZE / 2.0f;
+            const float doorX  = ox + Level3::DOOR_COL * TILE_SIZE + TILE_SIZE / 2.0f;
+
+            groundMinions.push_back(std::make_unique<GroundMinion>(
+                spawnX, spawnY, doorX, deadnight->getPhaseNumber()));
         }
     }
 
-    // Движение к двери
-    const float doorX = ox + Level3::DOOR_COL * TILE_SIZE + TILE_SIZE / 2.0f;
     for (auto& m : groundMinions) {
-        if (!m.active) continue;
-        m.x -= GroundMinion::BASE_SPEED * deltaTime;
-        if (m.x <= doorX) {
-            m.active = false; // дошёл до двери — исчезает, счётчик НЕ увеличиваем
-        }
+        m->update(deltaTime);
+
+        // Ровно одно засчитывание убийства за реальную смерть от урона
+        if (m->consumeKillEvent())
+            deadnight->registerMinionKilled();
     }
 
     groundMinions.erase(
         std::remove_if(groundMinions.begin(), groundMinions.end(),
-                       [](const GroundMinion& m) { return !m.active; }),
+                       [](const std::unique_ptr<GroundMinion>& m) { return m->shouldRemove(); }),
         groundMinions.end());
 }
 
 void GameScene::renderGroundMinions(SDL_Renderer* renderer) {
-    if (groundMinions.empty()) return;
-    const int cx = camera ? (int)camera->getOffsetX() : 0;
-    const int cy = camera ? (int)camera->getOffsetY() : 0;
+    for (auto& m : groundMinions) m->render(renderer);
+}
 
-    SDL_SetRenderDrawColor(renderer, 150, 30, 200, 255); // фиолетовый — заглушка
-    for (const auto& m : groundMinions) {
-        if (!m.active) continue;
-        SDL_Rect r = {
-            (int)(m.x - GroundMinion::WIDTH / 2) - cx,
-            (int)(m.y - GroundMinion::HEIGHT / 2) - cy,
-            (int)GroundMinion::WIDTH, (int)GroundMinion::HEIGHT
-        };
-        SDL_RenderFillRect(renderer, &r);
-    }
+void GameScene::renderArchers(SDL_Renderer* renderer) {
+    for (auto& a : archers) a->render(renderer);
 }
 
 // ============================================================
@@ -486,6 +504,7 @@ void GameScene::render(SDL_Renderer* renderer) {
 
     if (player) player->render(renderer);
     if (boss)   boss->render(renderer);
+    renderArchers(renderer);
     renderGroundMinions(renderer);
     drawHealthBars(renderer);
 
@@ -692,7 +711,7 @@ void GameScene::drawHealthBars(SDL_Renderer* renderer) {
             const int killed   = deadnight->getMinionsKilled();
             const int required = deadnight->getMinionsRequired();
             const float mpct   = required > 0 ? (float)killed / (float)required : 0.0f;
-            const int purpleY  = HUD_BAR_Y + HUD_BAR_H + 15; // TODO: подобрать отступ
+            const int purpleY  = HUD_BAR_Y + HUD_BAR_H + HUD_MINION_BAR_GAP_Y;
 
             drawText(renderer, Config::getFont(), "Миньоны",
                      W - HUD_BOSS_X_OFF, purpleY - 20, {200, 200, 200, 255});

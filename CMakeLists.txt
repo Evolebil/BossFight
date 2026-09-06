@@ -97,6 +97,9 @@ add_executable(BossFight main.cpp
     levels/level3.cpp
     characters/boss_deadnight.h
     characters/boss_deadnight.cpp
+    characters/ground_minion.h
+    characters/ground_minion.cpp
+    characters/archer_minion.h characters/archer_minion.cpp
 
 
 )

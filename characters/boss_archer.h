@@ -120,7 +120,7 @@ private:
     static constexpr float MELEE_RANGE         = 80.0f;
     static constexpr float SWORD_HIT_W         = 100.0f;
     static constexpr float SWORD_HIT_H         = 80.0f;
-    static constexpr int   SWORD_HIT_FRAME     = 2;       ///< Кадр засчитывания хита
+    static constexpr int SWORD_HIT_FRAME = 4;       ///< Кадр засчитывания хита
     static constexpr float BASE_SWORD_COOLDOWN = 0.8f;    ///< Уменьшено с 2.0
     static constexpr float BASE_SHOOT_COOLDOWN = 0.8f;    ///< Уменьшено с 1.5
 

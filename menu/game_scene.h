@@ -20,6 +20,8 @@
 #include "../characters/boss_samurai.h"
 #include "../characters/boss_archer.h"
 #include "../characters/boss_deadnight.h"
+#include "../characters/ground_minion.h"
+#include "../characters/archer_minion.h"
 
 // Forward declarations
 class Player;
@@ -36,22 +38,6 @@ enum class ResultState { PLAYING, VICTORY, DEFEAT };
  * @brief Управляет игровым процессом: обновляет Player и BossGolem,
  *        проверяет урон, считает звёзды, рисует HUD.
  */
-
-/**
- * @struct GroundMinion
- * @brief Наземный миньон уровня 3 — заглушка (фиолетовый квадрат), идёт к двери.
- */
-struct GroundMinion {
-    float x = 0.0f, y = 0.0f;
-    float hp = 50.0f;
-    bool  active = true;
-
-    static constexpr float WIDTH      = 40.0f;
-    static constexpr float HEIGHT     = 60.0f;
-    static constexpr float MAX_HP     = 50.0f;  // 2 удара базовой атакой игрока (25×2)
-    static constexpr float BASE_SPEED = 80.0f;  // TODO: скорость фазы 1, подобрать
-};
-
 class GameScene : public Scene {
 private:
     // ============================================================
@@ -95,11 +81,11 @@ private:
     static constexpr int HUD_MAX_LIVES    = 10;  // больше 10 жизней не рисуем
 
     static constexpr int HUD_BOSS_X_OFF   = 220; // отступ HP босса от правого края
+    static constexpr int HUD_MINION_BAR_GAP_Y = 15; // отступ фиолетовой полосы от HP босса
 
     // Подсказки (отступ снизу экрана)
     static constexpr int HUD_HINT_HB_Y    = 30;
     static constexpr int HUD_HINT_ESC_Y   = 55;
-
 
     static constexpr float MINION_SPAWN_INTERVAL = 2.0f;
 
@@ -167,7 +153,10 @@ private:
     std::unique_ptr<Character> boss;
     std::unique_ptr<ILevel>    level;
     std::unique_ptr<Camera>    camera;  // ← Camera теперь объявлен через include
-    std::vector<GroundMinion> groundMinions;
+
+    // Враги уровня 3 (Смерть Ночи)
+    std::vector<std::unique_ptr<GroundMinion>> groundMinions;
+    std::vector<std::unique_ptr<ArcherMinion>> archers;
     float minionSpawnTimer = 0.0f;
 
     int   currentLevel    = 0;
@@ -214,7 +203,7 @@ private:
 
     void updateGroundMinions(float deltaTime);
     void renderGroundMinions(SDL_Renderer* renderer);
-
+    void renderArchers(SDL_Renderer* renderer);
 
     // Вспомогательный метод
     GameSaveState buildSaveState() const;

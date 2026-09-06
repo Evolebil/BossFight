@@ -26,14 +26,14 @@ private:
     // КОНСТАНТЫ ФИЗИКИ
     // ============================================================
 
-    static constexpr float JUMP_VELOCITY_MIN  = -277.0f;  // минимум — высота 1 тайл (32px): v=√(2·GRAVITY·32)
-    static constexpr float JUMP_VELOCITY_MAX  = -650.0f;  // максимум — как было раньше (JUMP_VELOCITY)
-    static constexpr float JUMP_MAX_HOLD_TIME = 0.3f;     // сек — сколько удерживать для полной высоты
+    static constexpr float JUMP_VELOCITY_MIN  = -200.0f;  // минимум — высота 1 тайл (32px): v=√(2·GRAVITY·32)
+    static constexpr float JUMP_VELOCITY_MAX  = -500.0f;  // максимум — как было раньше (JUMP_VELOCITY)
+    static constexpr float JUMP_MAX_HOLD_TIME = 0.4f;     // сек — сколько удерживать для полной высоты
 
     // Инерция: торможение после отпускания, скольжение ≈ 1 тайл (32px) от MOVE_SPEED.
     // a = v² / (2·d) = 200² / (2·32) ≈ 625
-    static constexpr float FRICTION_DECEL     = 625.0f;   // px/s²
-    static constexpr float MOVE_SPEED       = 200.0f;
+    static constexpr float FRICTION_DECEL     = 1000.0f;   // px/s²
+    static constexpr float MOVE_SPEED       = 220.0f;
     static constexpr float HITBOX_W         = 35.0f;   // ← было в конструкторе
     static constexpr float HITBOX_H         = 40.0f;   // ← было в конструкторе
     static constexpr float BASE_HP          = 100.0f;  // ← было в конструкторе
@@ -67,8 +67,6 @@ private:
     // ============================================================
     // КОНСТАНТЫ ЗАЩИТЫ
     // ============================================================
-
-    static constexpr float DEFEND_DAMAGE_REDUCTION = 0.99f;
     static constexpr float DEFEND_COOLDOWN_MAX     = 1.0f;
 
     // ============================================================

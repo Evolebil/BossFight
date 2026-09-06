@@ -388,10 +388,17 @@ void Player::update(float deltaTime) {
 void Player::takeDamage(float damage) {
     if (isDead) return;
 
-    if (isDefending) damage *= (1.0f - DEFEND_DAMAGE_REDUCTION);
+    // Щит полностью поглощает попадание.
+    if (isDefending) {
+        isDefending = false;
+        defendCooldown = DEFEND_COOLDOWN_MAX;
+        defendAnim.reset();
+        return;
+    }
 
     hp -= damage;
-    if (hp < 0.0f) hp = 0.0f;
+    if (hp < 0.0f)
+        hp = 0.0f;
 
     if (hp <= 0.0f) {
         isDead         = true;
@@ -400,12 +407,8 @@ void Player::takeDamage(float damage) {
         isDefending    = false;
         isHurt         = false;
         deathAnim.reset();
-    } else if (damage > 0.0f) {
-        if (isDefending) {
-            isDefending    = false;
-            defendCooldown = DEFEND_COOLDOWN_MAX;
-            defendAnim.reset();
-        }
+    }
+    else if (damage > 0.0f) {
         isHurt         = true;
         isAttacking    = false;
         isCastingMagic = false;

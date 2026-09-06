@@ -83,6 +83,8 @@ private:
     static constexpr float FIREBALL_DAMAGE        = 25.0f;  // TODO: согласовать
     static constexpr float FIREBALL_COOLDOWN      = 2.0f;   // TODO: подобрать
     static constexpr float FIREBALL_EXPLODE_LIFETIME = 0.3f; ///< сколько кадров висит взрыв
+    // Множитель скорости файрбола относительно фазы 1 (ТЗ: ×1.5 за фазу, кумулятивно)
+    static constexpr float PHASE_FIREBALL_SPEED_MULT[4] = {1.0f, 1.5f, 2.25f, 3.375f};
 
     // ============================================================
     // КОНСТАНТЫ — ЦИКЛ ФАЗЫ (ТЗ, зафиксировано)
@@ -179,6 +181,7 @@ private:
 
     void onPhaseHpThresholdReached(); ///< вызывается из takeDamage
     void resetForNextPhaseTop();      ///< сброс таймера/счётчика при возврате наверх
+    [[nodiscard]] float getPhaseTopY() const; ///< высота "наверху" для текущей фазы (+1 тайл за фазу)
 
     void renderFireballs(SDL_Renderer* renderer, int camX, int camY);
     void renderHitboxes(SDL_Renderer* renderer, int camX, int camY);

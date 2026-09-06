@@ -67,9 +67,10 @@ public:
 
     static constexpr int MINION_COUNT = 4;
 
-    static constexpr int GROUND_FLOOR_ROW      = 27; // ряд пола для наземных миньонов
-    static constexpr int MINION_WALK_SPAWN_COL = 24; // TODO: подтвердить колонку спавна
-    static constexpr int DOOR_COL              = 3;  // колонка двери (odb-тайлы)
+    // --- Наземный миньон (не путать с лучниками выше) ---
+    static constexpr int MINION_SPAWN_COL = 36; // на верхней площадке, рядом со спавном босса (row18/19)
+    static constexpr int MINION_SPAWN_ROW = 18; // TODO: подтвердить — одна клетка над полом row19 (гравитация досадит)
+    static constexpr int DOOR_COL         = 3;  // колонка двери (см. LEVEL3_DECO odb-тайлы, row25-26)
 
     void drawMap(SDL_Renderer* renderer, int camX = 0, int camY = 0) override;
     bool isSolid(int pixelX, int pixelY) override;
