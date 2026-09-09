@@ -512,7 +512,7 @@ CMAKE_VERBOSE_MAKEFILE-ADVANCED:INTERNAL=1
 //Deprecated.  Use -W[no-]deprecated instead.
 CMAKE_WARN_DEPRECATED:INTERNAL=ON
 //Details about finding PkgConfig
-FIND_PACKAGE_MESSAGE_DETAILS_PkgConfig:INTERNAL=[/usr/bin/x86_64-w64-mingw32-pkg-config][v3.0.6()]
+FIND_PACKAGE_MESSAGE_DETAILS_PkgConfig:INTERNAL=[/usr/bin/x86_64-w64-mingw32-pkg-config][v3.0.7()]
 //Details about finding Threads
 FIND_PACKAGE_MESSAGE_DETAILS_Threads:INTERNAL=[TRUE][v()]
 //ADVANCED property for variable: PKG_CONFIG_ARGN

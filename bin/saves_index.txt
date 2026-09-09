@@ -1,3 +1,0 @@
-next_number 19
-count 1
-entry 18 save18_Проба.txt Проба

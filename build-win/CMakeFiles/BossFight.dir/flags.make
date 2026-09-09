@@ -6,5 +6,5 @@ CXX_DEFINES =
 
 CXX_INCLUDES = @CMakeFiles/BossFight.dir/includes_CXX.rsp
 
-CXX_FLAGS = -O3 -DNDEBUG -std=gnu++20
+CXX_FLAGS =  -static-libgcc -static-libstdc++ -static-libgcc -static-libstdc++ -O3 -DNDEBUG -std=gnu++20
 

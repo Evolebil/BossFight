@@ -52,8 +52,12 @@ static Config::Controls controls = {
     3                      // magicMouseButton  — ПКМ
 };
 
+
 // Приоритетный список шрифтов с полным Unicode
+// Относительный путь — первый и работает одинаково на Linux/Windows,
+// т.к. шрифт лежит прямо в assets/ игры, не зависит от системных путей.
 static const char* fontPaths[] = {
+    "assets/fonts/DejaVuSans.ttf",
     "/usr/share/fonts/noto/NotoSansCJK-Regular.ttc",
     "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
@@ -63,6 +67,7 @@ static const char* fontPaths[] = {
 };
 
 static const char* boldFontPaths[] = {
+    "assets/fonts/DejaVuSans-Bold.ttf",
     "/usr/share/fonts/noto/NotoSansCJK-Bold.ttc",
     "/usr/share/fonts/noto-cjk/NotoSansCJK-Bold.ttc",
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
