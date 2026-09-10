@@ -4,19 +4,6 @@
  *        над ареной + уязвимая ближнебойная стадия на земле.
  * @author evol
  * @date 2026-09-03
- *
- * ЗАГЛУШКА ГРАФИКИ: спрайты ещё не готовы. render() рисует красный
- * прямоугольник вместо тела, оранжевый квадрат вместо файрбола.
- * Анимации подключим позже отдельным патчем.
- *
- * ЦИКЛ ФАЗЫ:
- *   FLYING_TOP (неуязвим, файрболы вниз) --30 сек--> начинают спавниться
- *   миньоны (спавн миньонов НЕ реализован в этом файле — это отдельная
- *   система GroundMinion, будет подключена позже через registerMinionKilled()).
- *   Когда 5/5 миньонов убито снаружи вызывается onFiveMinionsKilled() →
- *   DESCENDING → ARENA_IDLE/DASHING/MELEE_ATTACK/RETREATING (уязвим) →
- *   после потери 25% MAX HP → ASCENDING → снова FLYING_TOP, phase++,
- *   прогресс миньонов и таймер сбрасываются.
  */
 #pragma once
 #include "boss.h"
@@ -32,6 +19,8 @@ struct Fireball {
     bool  exploded = false;
     float explodeTimer = 0.0f;  ///< сколько ещё показывать взрыв
     bool  damageDealt   = false;
+
+    Animation explodeAnim{false}; // своя анимация взрыва у каждого файрбола
 };
 
 class BossDeadNight : public Boss {
@@ -39,62 +28,97 @@ private:
     // ============================================================
     // КОНСТАНТЫ — ХИТБОКС И HP
     // ============================================================
-    static constexpr float HITBOX_W = 80.0f;   // TODO: подогнать под спрайт
-    static constexpr float HITBOX_H = 100.0f;  // TODO: подогнать под спрайт
-    static constexpr float BASE_HP  = 1200.0f; // TODO: согласовать число
+    static constexpr float HITBOX_W = 80.0f;
+    static constexpr float HITBOX_H = 100.0f;
+    static constexpr float BASE_HP  = 1200.0f;
 
     // ============================================================
-    // КОНСТАНТЫ — БЛИЖНИЙ БОЙ (посчитано по ТЗ)
+    // КОНСТАНТЫ — БЛИЖНИЙ БОЙ
     // ============================================================
-    // 1.5x урона самурая (DAMAGE_SWORD самурая = 20.0f)
     static constexpr float DAMAGE_MELEE = 30.0f;
-    // Хитбокс ближней атаки: тело x2 по длине, выдвинут в сторону игрока
     static constexpr float MELEE_HIT_W = HITBOX_W * 2.0f;
     static constexpr float MELEE_HIT_H = HITBOX_H;
-    // TODO: урон рывка не зафиксирован в ТЗ отдельно — временно = DAMAGE_MELEE
     static constexpr float DAMAGE_DASH = DAMAGE_MELEE;
 
     // ============================================================
-    // КОНСТАНТЫ — РЫВКИ (3 рывка -> отступление -> ожидание)
+    // КОНСТАНТЫ — РЫВКИ
     // ============================================================
     static constexpr int   DASH_COUNT_PER_CYCLE   = 3;
-    static constexpr float DASH_SPEED             = 700.0f; // TODO: подобрать
-    static constexpr float DASH_DURATION          = 0.25f;  // TODO: подобрать
-    static constexpr float DASH_BETWEEN_COOLDOWN  = 0.5f;   // TODO: подобрать
-    static constexpr float RETREAT_SPEED          = 300.0f; // TODO: подобрать
-    static constexpr float RETREAT_DURATION       = 0.4f;   // TODO: подобрать
-    // Ожидание между циклами рывков — уменьшается с фазой ("рывки чаще")
-    static constexpr float RETREAT_WAIT_BY_PHASE[4] = {5.0f, 4.0f, 3.0f, 2.0f}; // TODO: подобрать
+    static constexpr float DASH_SPEED             = 700.0f;
+    static constexpr float DASH_DURATION          = 0.25f;
+    static constexpr float DASH_BETWEEN_COOLDOWN  = 0.5f;
+    static constexpr float RETREAT_SPEED          = 300.0f;
+    static constexpr float RETREAT_DURATION       = 0.4f;
+    static constexpr float RETREAT_WAIT_BY_PHASE[4] = {5.0f, 4.0f, 3.0f, 2.0f};
 
     // ============================================================
-    // КОНСТАНТЫ — ПОЛЁТ НАВЕРХУ / СПУСК / ПОДЪЁМ
+    // КОНСТАНТЫ — ПОЛЁТ
     // ============================================================
-    static constexpr float FLY_SPEED     = 60.0f;  // TODO: подобрать ("летает медленно")
-    static constexpr float ASCEND_SPEED  = 200.0f; // TODO: подобрать
-    static constexpr float TOP_MARGIN    = 40.0f;  ///< отступ от краёв карты при полёте
-    static constexpr int FLY_RANGE_MARGIN_TILES = 3; // TODO: подобрать запас с краёв
+    static constexpr float FLY_SPEED     = 60.0f;
+    static constexpr float ASCEND_SPEED  = 200.0f;
+    static constexpr float TOP_MARGIN    = 40.0f;
+    static constexpr int   FLY_RANGE_MARGIN_TILES = 3;
+
     // ============================================================
     // КОНСТАНТЫ — ФАЙРБОЛ
     // ============================================================
-    static constexpr float FIREBALL_SPRITE_SIZE = 64.0f;                    // TODO: под реальный спрайт
-    static constexpr float FIREBALL_HIT_SIZE     = FIREBALL_SPRITE_SIZE / 2.0f;
+    static constexpr float FIREBALL_SPRITE_W      = 48.0f;
+    static constexpr float FIREBALL_SPRITE_H      = 32.0f;
+    static constexpr float FIREBALL_HIT_SIZE      = FIREBALL_SPRITE_W / 2.0f;
     static constexpr float FIREBALL_EXPLODE_RADIUS = FIREBALL_HIT_SIZE * 3.0f;
-    static constexpr float FIREBALL_SPEED         = 350.0f; // TODO: подобрать
-    static constexpr float FIREBALL_DAMAGE        = 25.0f;  // TODO: согласовать
-    static constexpr float FIREBALL_COOLDOWN      = 2.0f;   // TODO: подобрать
-    static constexpr float FIREBALL_EXPLODE_LIFETIME = 0.3f; ///< сколько кадров висит взрыв
-    // Множитель скорости файрбола относительно фазы 1 (ТЗ: ×1.5 за фазу, кумулятивно)
-    static constexpr float PHASE_FIREBALL_SPEED_MULT[4] = {1.0f, 1.5f, 2.25f, 3.375f};
+    static constexpr float FIREBALL_SPEED         = 350.0f;
+    static constexpr float FIREBALL_DAMAGE        = 25.0f;
+    static constexpr float FIREBALL_COOLDOWN      = 2.0f;
+    static constexpr float FIREBALL_EXPLODE_LIFETIME = 0.3f;
+
+    // Explosion_bomb.png 256×256 → 64×64 кадр → 4×4 = 16 кадров, one-shot
+    static constexpr int   EXPLODE_FRAME_SIZE = 64;
+    static constexpr int   EXPLODE_FRAMES_X = 4;
+    static constexpr int   EXPLODE_FRAMES_Y = 4;
+    static constexpr float EXPLODE_FRAME_DUR = FIREBALL_EXPLODE_LIFETIME / (EXPLODE_FRAMES_X * EXPLODE_FRAMES_Y);
 
     // ============================================================
-    // КОНСТАНТЫ — ЦИКЛ ФАЗЫ (ТЗ, зафиксировано)
+    // КОНСТАНТЫ — ЦИКЛ ФАЗЫ
     // ============================================================
     static constexpr float SURVIVAL_TIME    = 30.0f;
     static constexpr int   MINIONS_REQUIRED = 5;
-    // Порог HP (доля от MAX), по достижении которого фаза завершается
     static constexpr float PHASE_HP_THRESHOLD[4] = {0.75f, 0.50f, 0.25f, 0.0f};
 
     static constexpr float STATE_CHANGE_COOLDOWN = 0.2f;
+
+    // ============================================================
+    // КОНСТАНТЫ — АНИМАЦИИ (кадр 100×100)
+    // ============================================================
+    static constexpr int FRAME_SIZE = 100;
+
+    // attacking.png 600×300 → 6×3 = 18 кадров. Длительность всей анимации
+    // = DASH_DURATION (рывок должен визуально совпадать с реальным рывком)
+    static constexpr int   ATTACKING_FRAMES_X = 6;
+    static constexpr int   ATTACKING_FRAMES_Y = 3;
+    static constexpr int   ATTACKING_TOTAL_FRAMES = ATTACKING_FRAMES_X * ATTACKING_FRAMES_Y;
+    static constexpr float ATTACKING_FRAME_DUR = DASH_DURATION / ATTACKING_TOTAL_FRAMES;
+
+    // death.png 1000×200 → 10×2 = 20 кадров, one-shot
+    static constexpr int   DEATH_FRAMES_X = 10;
+    static constexpr int   DEATH_FRAMES_Y = 2;
+    static constexpr float DEATH_FRAME_DUR = 0.08f; // TODO: подобрать
+
+    // idle.png (полёт наверху) 500×100 → 5×1 = 5 кадров, loop
+    static constexpr int   IDLE_FLY_FRAMES_X = 5;
+    static constexpr int   IDLE_FLY_FRAMES_Y = 1;
+    static constexpr float IDLE_FLY_FRAME_DUR = 0.1f; // TODO: подобрать
+
+    // idle2.png (на земле) 400×200 → 4×2 = 8 кадров, loop
+    static constexpr int   IDLE_GROUND_FRAMES_X = 4;
+    static constexpr int   IDLE_GROUND_FRAMES_Y = 2;
+    static constexpr float IDLE_GROUND_FRAME_DUR = 0.1f; // TODO: подобрать
+
+    // skill1.png (файрбол) 600×200 → 6×2 = 12 кадров, one-shot.
+    // Базовая длительность кадра — масштабируется attackSpeedMult в update()
+    // (быстрее сложность/фаза → быстрее анимация), поэтому тут фиксированная база.
+    static constexpr int   SKILL1_FRAMES_X = 6;
+    static constexpr int   SKILL1_FRAMES_Y = 2;
+    static constexpr float SKILL1_BASE_FRAME_DUR = 0.05f; // TODO: подобрать базу
 
     // ============================================================
     // ПОЛЯ
@@ -106,32 +130,42 @@ private:
     float stateTimer          = 0.0f;
     float lastStateChangeTime = 0.0f;
 
-    // --- Верхняя стадия ---
-    float topY               = 0.0f;   ///< Y-позиция "наверху" (запоминается при спавне)
+    float topY               = 0.0f;
     float flyDirX             = 1.0f;
-    float survivalTimer       = 0.0f;  ///< тикает до SURVIVAL_TIME
-    bool  survivalPassed      = false; ///< true = миньоны уже могут спавниться (внешняя система)
+    float survivalTimer       = 0.0f;
+    bool  survivalPassed      = false;
     float fireballTimer       = 0.0f;
     int flyMinCol = 0;
     int flyMaxCol = 0;
 
-    // --- Прогресс миньонов (счёт ведёт внешняя система через registerMinionKilled) ---
     int  minionsKilled = 0;
 
-    // --- Рывки ---
     int   dashesDoneInCycle = 0;
-    float dashTimer         = 0.0f; ///< обратный отсчёт текущего действия (рывок/отступление/ожидание)
+    float dashTimer         = 0.0f;
     float dashDirX           = 1.0f;
     bool  dashHitDealt       = false;
 
-    // --- Ближняя атака ---
     bool meleeHitDealt = false;
 
-    // --- Файрболы ---
     std::vector<Fireball> fireballs;
 
-    // --- Текстуры (пока не используются — заглушка) ---
-    SDL_Texture* spritesheet_placeholder = nullptr;
+    // --- Анимации ---
+    SDL_Texture* texAttacking  = nullptr;
+    SDL_Texture* texDeath      = nullptr;
+    SDL_Texture* texIdleFly    = nullptr;
+    SDL_Texture* texIdleGround = nullptr;
+    SDL_Texture* texSkill1     = nullptr;
+    SDL_Texture* texProjectile = nullptr;
+    SDL_Texture* texExplosion  = nullptr;
+
+    Animation attackingAnim{false};
+    Animation deathAnim{false};
+    Animation idleFlyAnim{true};
+    Animation idleGroundAnim{true};
+    Animation skill1Anim{false};
+
+    void loadAnimations();
+    void initExplodeAnim(Animation& anim);
 
 public:
     BossDeadNight(float spawnX, float spawnY, float attackSpeedMult = 1.0f);
@@ -148,11 +182,9 @@ public:
 
     [[nodiscard]] float checkPlayerDamage(SDL_Rect playerBox, float deltaTime);
 
-    // --- API для внешней системы миньонов/дверей (миньоны — отдельная задача) ---
-    void registerMinionKilled();       ///< вызывать когда игрок убил наземного миньона
-    void registerMinionReachedDoor();  ///< миньон дошёл до двери — просто лог, счётчик не трогаем
+    void registerMinionKilled();
+    void registerMinionReachedDoor();
 
-    // --- Геттеры для HUD ---
     [[nodiscard]] int  getMinionsKilled()   const { return minionsKilled; }
     [[nodiscard]] int  getMinionsRequired() const { return MINIONS_REQUIRED; }
     [[nodiscard]] bool isVulnerable()       const {
@@ -161,7 +193,7 @@ public:
                currentState != DeadNightState::ASCENDING   &&
                currentState != DeadNightState::DEATH;
     }
-    [[nodiscard]] int  getPhaseNumber() const { return (int)phase + 1; } // 1..4
+    [[nodiscard]] int  getPhaseNumber() const { return (int)phase + 1; }
     [[nodiscard]] bool getSurvivalPassed() const { return survivalPassed; }
     [[nodiscard]] float getSurvivalTimeLeft() const { return std::max(0.0f, SURVIVAL_TIME - survivalTimer); }
 
@@ -179,9 +211,9 @@ private:
     void spawnFireball(float playerX, float playerY);
     void updateFireballs(float deltaTime);
 
-    void onPhaseHpThresholdReached(); ///< вызывается из takeDamage
-    void resetForNextPhaseTop();      ///< сброс таймера/счётчика при возврате наверх
-    [[nodiscard]] float getPhaseTopY() const; ///< высота "наверху" для текущей фазы (+1 тайл за фазу)
+    void onPhaseHpThresholdReached();
+    void resetForNextPhaseTop();
+    [[nodiscard]] float getPhaseTopY() const;
 
     void renderFireballs(SDL_Renderer* renderer, int camX, int camY);
     void renderHitboxes(SDL_Renderer* renderer, int camX, int camY);

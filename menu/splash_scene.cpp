@@ -49,10 +49,20 @@ void SplashScene::render(SDL_Renderer* renderer) {  // ✅ SplashScene::
     }
     
     // Лучи (8 штук, толстые)
+    // Вращение по часовой стрелке: быстро в начале, медленно к концу (ease-out).
+    // Полный оборот (360°) укладывается ровно в длительность заставки (3 сек,
+    // см. переход в update()). В экранных координатах Y растёт вниз, поэтому
+    // просто нарастающий угол уже даёт визуально вращение по часовой стрелке.
+    constexpr float ROTATION_DURATION = 5.0f;
+    float t = std::clamp(splashTime / ROTATION_DURATION, 0.0f, 1.0f);
+    float eased = 1.0f - (1.0f - t) * (1.0f - t) * (1.0f - t); // ease-out cubic
+    float rotationOffset = eased * 2.0f * (float)M_PI;
+
+    // Лучи (8 штук, толстые)
     int numRays = 8;
     int rayLength = 150;
     for (int i = 0; i < numRays; i++) {
-        float angle = (i * 2 * M_PI) / numRays;
+        float angle = (i * 2 * M_PI) / numRays + rotationOffset;
         int x1 = centerX + (int)(cos(angle) * (radius + 10));
         int y1 = centerY + (int)(sin(angle) * (radius + 10));
         int x2 = centerX + (int)(cos(angle) * (radius + rayLength));

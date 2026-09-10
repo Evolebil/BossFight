@@ -49,6 +49,46 @@
 #include <iostream>
 
 // ============================================================
+// 16-РИЧНОЕ КОДИРОВАНИЕ ФАЙЛА
+// ============================================================
+// Не криптография — просто обфускация. Не даёт открыть сохранение
+// в блокноте и вручную подправить значения. От целенаправленного
+// взлома не защищает.
+
+static std::string toHex(const std::string& data) {
+    static const char* hexDigits = "0123456789abcdef";
+    std::string out;
+    out.reserve(data.size() * 2);
+    for (unsigned char c : data) {
+        out.push_back(hexDigits[c >> 4]);
+        out.push_back(hexDigits[c & 0x0F]);
+    }
+    return out;
+}
+
+// false = не hex (нечётная длина или запрещённый символ) — сигнал о повреждённом файле
+static bool fromHex(const std::string& hex, std::string& out) {
+    if (hex.size() % 2 != 0) return false;
+    out.clear();
+    out.reserve(hex.size() / 2);
+
+    auto hexVal = [](char c) -> int {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+        if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+        return -1;
+    };
+
+    for (size_t i = 0; i < hex.size(); i += 2) {
+        int hi = hexVal(hex[i]);
+        int lo = hexVal(hex[i + 1]);
+        if (hi < 0 || lo < 0) return false;
+        out.push_back(static_cast<char>((hi << 4) | lo));
+    }
+    return true;
+}
+
+// ============================================================
 // ВСПОМОГАТЕЛЬНЫЕ (приватные)
 // ============================================================
 
@@ -61,118 +101,155 @@ std::string SaveManager::makeFilename(int number, const std::string& name) const
     return std::string(SAVE_DIR) + "save" + std::to_string(number) + "_" + safeName + ".txt";
 }
 
+int SaveManager::findFreeSaveNumber() const {
+    // Минимальный свободный положительный номер, а не растущий счётчик —
+    // после удаления сохранения его номер снова становится доступен.
+    int n = 1;
+    while (true) {
+        bool taken = false;
+        for (const auto& e : entries) {
+            if (e.number == n) { taken = true; break; }
+        }
+        if (!taken) return n;
+        n++;
+    }
+}
+
 void SaveManager::writeAutosaveFile(const GameSaveState& state) {
-    std::ofstream f(AUTOSAVE_FILE);
+    std::ostringstream oss;
+
+    // --- Объекты ---
+    oss << "player_x "          << state.player.x           << "\n";
+    oss << "player_y "          << state.player.y           << "\n";
+    oss << "player_facing "     << (state.player.facingRight ? 1 : 0) << "\n";
+    oss << "player_hp "         << state.player.hp          << "\n";
+    oss << "player_move_speed " << state.playerMoveSpeed    << "\n";
+    oss << "boss_x "            << state.boss.x             << "\n";
+    oss << "boss_y "            << state.boss.y             << "\n";
+    oss << "boss_facing "       << (state.boss.facingRight ? 1 : 0) << "\n";
+    oss << "boss_hp "           << state.boss.hp            << "\n";
+    oss << "boss_max_hp "       << state.bossMaxHP          << "\n";
+    oss << "boss_phase "        << state.bossPhase          << "\n";
+
+    // --- Прогресс ---
+    oss << "level_timer "   << state.levelTimer         << "\n";
+    oss << "current_level " << state.currentLevel       << "\n";
+    oss << "lives_left "    << state.livesLeft          << "\n";
+    oss << "best_stars_0 "  << state.bestStars[0]       << "\n";
+    oss << "best_stars_1 "  << state.bestStars[1]       << "\n";
+    oss << "best_stars_2 "  << state.bestStars[2]       << "\n";
+    oss << "difficulty "    << state.difficulty         << "\n";
+
+    std::ofstream f(AUTOSAVE_FILE, std::ios::binary);
     if (!f.is_open()) {
         std::cerr << "[SaveManager] Не могу открыть " << AUTOSAVE_FILE << "\n";
         return;
     }
-
-    // --- Объекты ---
-    f << "player_x "      << state.player.x           << "\n";
-    f << "player_y "      << state.player.y           << "\n";
-    f << "player_facing " << (state.player.facingRight ? 1 : 0) << "\n";
-    f << "player_hp "     << state.player.hp          << "\n";
-    f << "boss_x "        << state.boss.x             << "\n";
-    f << "boss_y "        << state.boss.y             << "\n";
-    f << "boss_facing "   << (state.boss.facingRight ? 1 : 0) << "\n";
-    f << "boss_hp "       << state.boss.hp            << "\n";
-    f << "boss_phase "    << state.bossPhase          << "\n";
-
-    // --- Прогресс ---
-    f << "level_timer "   << state.levelTimer         << "\n";
-    f << "current_level " << state.currentLevel       << "\n";
-    f << "lives_left "    << state.livesLeft          << "\n";
-    f << "best_stars_0 "  << state.bestStars[0]       << "\n";
-    f << "best_stars_1 "  << state.bestStars[1]       << "\n";
-    f << "best_stars_2 "  << state.bestStars[2]       << "\n";
-    f << "difficulty "    << state.difficulty         << "\n";
+    f << toHex(oss.str());
 }
 
 void SaveManager::writeSaveFile(const std::string& path,
                                 const GameSaveState& state,
                                 const std::string& saveName) {
-    std::ofstream f(path);
+    std::ostringstream oss;
+
+    // Заголовок
+    oss << "# Boss Fight Save — " << saveName << "\n";
+
+    // --- Всё из autosave ---
+    oss << "player_x "          << state.player.x           << "\n";
+    oss << "player_y "          << state.player.y           << "\n";
+    oss << "player_facing "     << (state.player.facingRight ? 1 : 0) << "\n";
+    oss << "player_hp "         << state.player.hp          << "\n";
+    oss << "player_move_speed " << state.playerMoveSpeed    << "\n";
+    oss << "boss_x "            << state.boss.x             << "\n";
+    oss << "boss_y "            << state.boss.y             << "\n";
+    oss << "boss_facing "       << (state.boss.facingRight ? 1 : 0) << "\n";
+    oss << "boss_hp "           << state.boss.hp            << "\n";
+    oss << "boss_max_hp "       << state.bossMaxHP          << "\n";
+    oss << "boss_phase "        << state.bossPhase          << "\n";
+    oss << "level_timer "       << state.levelTimer         << "\n";
+    oss << "current_level "     << state.currentLevel       << "\n";
+    oss << "lives_left "        << state.livesLeft          << "\n";
+    oss << "best_stars_0 "      << state.bestStars[0]       << "\n";
+    oss << "best_stars_1 "      << state.bestStars[1]       << "\n";
+    oss << "best_stars_2 "      << state.bestStars[2]       << "\n";
+    oss << "difficulty "        << state.difficulty         << "\n";
+
+    // --- Управление (только в именованных) ---
+    oss << "attack_mouse "  << state.attackMouse        << "\n";
+    oss << "magic_mouse "   << state.magicMouse         << "\n";
+    oss << "jump_key "      << state.jumpKey            << "\n";
+    oss << "left_key "      << state.leftKey            << "\n";
+    oss << "right_key "     << state.rightKey           << "\n";
+    oss << "crouch_key "    << state.crouchKey          << "\n";
+    oss << "interact_key "  << state.interactKey        << "\n";
+    oss << "dash_key "      << state.dashKey            << "\n";
+    oss << "shield_key "    << state.shieldKey          << "\n";
+
+    std::ofstream f(path, std::ios::binary);
     if (!f.is_open()) {
         std::cerr << "[SaveManager] Не могу создать " << path << "\n";
         return;
     }
-
-    // Заголовок
-    f << "# Boss Fight Save — " << saveName << "\n";
-
-    // --- Всё из autosave ---
-    f << "player_x "      << state.player.x           << "\n";
-    f << "player_y "      << state.player.y           << "\n";
-    f << "player_facing " << (state.player.facingRight ? 1 : 0) << "\n";
-    f << "player_hp "     << state.player.hp          << "\n";
-    f << "boss_x "        << state.boss.x             << "\n";
-    f << "boss_y "        << state.boss.y             << "\n";
-    f << "boss_facing "   << (state.boss.facingRight ? 1 : 0) << "\n";
-    f << "boss_hp "       << state.boss.hp            << "\n";
-    f << "boss_phase "    << state.bossPhase          << "\n";
-    f << "level_timer "   << state.levelTimer         << "\n";
-    f << "current_level " << state.currentLevel       << "\n";
-    f << "lives_left "    << state.livesLeft          << "\n";
-    f << "best_stars_0 "  << state.bestStars[0]       << "\n";
-    f << "best_stars_1 "  << state.bestStars[1]       << "\n";
-    f << "best_stars_2 "  << state.bestStars[2]       << "\n";
-    f << "difficulty "    << state.difficulty         << "\n";
-
-    // --- Управление (только в именованных) ---
-    f << "attack_mouse "  << state.attackMouse        << "\n";
-    f << "magic_mouse "   << state.magicMouse         << "\n";
-    f << "jump_key "      << state.jumpKey            << "\n";
-    f << "left_key "      << state.leftKey            << "\n";
-    f << "right_key "     << state.rightKey           << "\n";
-    f << "crouch_key "    << state.crouchKey          << "\n";
-    f << "interact_key "  << state.interactKey        << "\n";
-    f << "dash_key "      << state.dashKey            << "\n";
-    f << "shield_key "    << state.shieldKey          << "\n";
+    f << toHex(oss.str());
 }
 
 bool SaveManager::readSaveFile(const std::string& path, GameSaveState& out) {
-    std::ifstream f(path);
+    std::ifstream f(path, std::ios::binary);
     if (!f.is_open()) {
         std::cerr << "[SaveManager] Файл не найден: " << path << "\n";
         return false;
     }
 
+    std::string hexContent((std::istreambuf_iterator<char>(f)),
+                           std::istreambuf_iterator<char>());
+
+    std::string content;
+    if (!fromHex(hexContent, content)) {
+        // Файл повреждён или отредактирован вручную (не валидный hex) —
+        // безопасно отказываемся грузить, без краша.
+        std::cerr << "[SaveManager] Повреждённый файл сохранения: " << path << "\n";
+        return false;
+    }
+
+    std::istringstream stream(content);
+
     std::string key;
-    while (f >> key) {
+    while (stream >> key) {
         if (key == "#") {
-            // Пропускаем строку-комментарий
             std::string line;
-            std::getline(f, line);
+            std::getline(stream, line);
             continue;
         }
 
-        // Читаем значение после ключа
-        if      (key == "player_x")      f >> out.player.x;
-        else if (key == "player_y")      f >> out.player.y;
-        else if (key == "player_facing") { int v; f >> v; out.player.facingRight = (v == 1); }
-        else if (key == "player_hp")     f >> out.player.hp;
-        else if (key == "boss_x")        f >> out.boss.x;
-        else if (key == "boss_y")        f >> out.boss.y;
-        else if (key == "boss_facing")   { int v; f >> v; out.boss.facingRight = (v == 1); }
-        else if (key == "boss_hp")       f >> out.boss.hp;
-        else if (key == "boss_phase")    f >> out.bossPhase;
-        else if (key == "level_timer")   f >> out.levelTimer;
-        else if (key == "current_level") f >> out.currentLevel;
-        else if (key == "lives_left")    f >> out.livesLeft;
-        else if (key == "best_stars_0")  f >> out.bestStars[0];
-        else if (key == "best_stars_1")  f >> out.bestStars[1];
-        else if (key == "best_stars_2")  f >> out.bestStars[2];
-        else if (key == "difficulty")    f >> out.difficulty;
-        else if (key == "attack_mouse")  f >> out.attackMouse;
-        else if (key == "magic_mouse")   f >> out.magicMouse;
-        else if (key == "jump_key")      f >> out.jumpKey;
-        else if (key == "left_key")      f >> out.leftKey;
-        else if (key == "right_key")     f >> out.rightKey;
-        else if (key == "crouch_key")    f >> out.crouchKey;
-        else if (key == "interact_key")  f >> out.interactKey;
-        else if (key == "dash_key")      f >> out.dashKey;
-        else if (key == "shield_key")    f >> out.shieldKey;
+        if      (key == "player_x")          stream >> out.player.x;
+        else if (key == "player_y")          stream >> out.player.y;
+        else if (key == "player_facing")     { int v; stream >> v; out.player.facingRight = (v == 1); }
+        else if (key == "player_hp")         stream >> out.player.hp;
+        else if (key == "player_move_speed") stream >> out.playerMoveSpeed;
+        else if (key == "boss_x")            stream >> out.boss.x;
+        else if (key == "boss_y")            stream >> out.boss.y;
+        else if (key == "boss_facing")       { int v; stream >> v; out.boss.facingRight = (v == 1); }
+        else if (key == "boss_hp")           stream >> out.boss.hp;
+        else if (key == "boss_max_hp")       stream >> out.bossMaxHP;
+        else if (key == "boss_phase")        stream >> out.bossPhase;
+        else if (key == "level_timer")       stream >> out.levelTimer;
+        else if (key == "current_level")     stream >> out.currentLevel;
+        else if (key == "lives_left")        stream >> out.livesLeft;
+        else if (key == "best_stars_0")      stream >> out.bestStars[0];
+        else if (key == "best_stars_1")      stream >> out.bestStars[1];
+        else if (key == "best_stars_2")      stream >> out.bestStars[2];
+        else if (key == "difficulty")        stream >> out.difficulty;
+        else if (key == "attack_mouse")      stream >> out.attackMouse;
+        else if (key == "magic_mouse")       stream >> out.magicMouse;
+        else if (key == "jump_key")          stream >> out.jumpKey;
+        else if (key == "left_key")          stream >> out.leftKey;
+        else if (key == "right_key")         stream >> out.rightKey;
+        else if (key == "crouch_key")        stream >> out.crouchKey;
+        else if (key == "interact_key")      stream >> out.interactKey;
+        else if (key == "dash_key")          stream >> out.dashKey;
+        else if (key == "shield_key")        stream >> out.shieldKey;
         // Неизвестные ключи — пропускаем
     }
     return true;
@@ -235,7 +312,7 @@ int SaveManager::createNamedSave(const std::string& name) {
 
     // Создаём запись
     SaveEntry entry;
-    entry.number   = nextSaveNumber++;
+    entry.number   = findFreeSaveNumber();  // ← стало
     entry.name     = name;
     entry.filename = makeFilename(entry.number, name);
     entries.push_back(entry);

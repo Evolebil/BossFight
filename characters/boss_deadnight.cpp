@@ -10,14 +10,12 @@
 #include "../levels/level3.h"
 extern ILevel* g_currentLevel;
 
-
 BossDeadNight::BossDeadNight(float spawnX, float spawnY, float attackSpeedMult)
     : Boss(spawnX, spawnY, HITBOX_W, HITBOX_H, BASE_HP, attackSpeedMult)
 {
     topY = spawnY;
     fireballTimer = FIREBALL_COOLDOWN;
 
-    // Границы полёта — над крайними точками спавна лучников, с запасом
     int minCol = LEVEL3_MINION_SPAWNS[0].col;
     int maxCol = LEVEL3_MINION_SPAWNS[0].col;
     for (int i = 1; i < Level3::MINION_COUNT; i++) {
@@ -26,6 +24,49 @@ BossDeadNight::BossDeadNight(float spawnX, float spawnY, float attackSpeedMult)
     }
     flyMinCol = minCol - FLY_RANGE_MARGIN_TILES;
     flyMaxCol = maxCol + FLY_RANGE_MARGIN_TILES;
+
+    loadAnimations();
+}
+
+// ============================================================
+// ЗАГРУЗКА АНИМАЦИЙ
+// ============================================================
+
+void BossDeadNight::loadAnimations() {
+    texAttacking  = TextureManager::getTexture("assets/boss_3/attacking.png");
+    texDeath      = TextureManager::getTexture("assets/boss_3/death.png");
+    texIdleFly    = TextureManager::getTexture("assets/boss_3/idle.png");
+    texIdleGround = TextureManager::getTexture("assets/boss_3/idle2.png");
+    texSkill1     = TextureManager::getTexture("assets/boss_3/skill1.png");
+    texProjectile = TextureManager::getTexture("assets/boss_3/projectile.png");
+    texExplosion  = TextureManager::getTexture("assets/bomb/Explosion_bomb.png");
+
+    for (int row = 0; row < ATTACKING_FRAMES_Y; row++)
+        for (int col = 0; col < ATTACKING_FRAMES_X; col++)
+            attackingAnim.addFrame(col * FRAME_SIZE, row * FRAME_SIZE, FRAME_SIZE, FRAME_SIZE, ATTACKING_FRAME_DUR);
+
+    for (int row = 0; row < DEATH_FRAMES_Y; row++)
+        for (int col = 0; col < DEATH_FRAMES_X; col++)
+            deathAnim.addFrame(col * FRAME_SIZE, row * FRAME_SIZE, FRAME_SIZE, FRAME_SIZE, DEATH_FRAME_DUR);
+
+    for (int row = 0; row < IDLE_FLY_FRAMES_Y; row++)
+        for (int col = 0; col < IDLE_FLY_FRAMES_X; col++)
+            idleFlyAnim.addFrame(col * FRAME_SIZE, row * FRAME_SIZE, FRAME_SIZE, FRAME_SIZE, IDLE_FLY_FRAME_DUR);
+
+    for (int row = 0; row < IDLE_GROUND_FRAMES_Y; row++)
+        for (int col = 0; col < IDLE_GROUND_FRAMES_X; col++)
+            idleGroundAnim.addFrame(col * FRAME_SIZE, row * FRAME_SIZE, FRAME_SIZE, FRAME_SIZE, IDLE_GROUND_FRAME_DUR);
+
+    for (int row = 0; row < SKILL1_FRAMES_Y; row++)
+        for (int col = 0; col < SKILL1_FRAMES_X; col++)
+            skill1Anim.addFrame(col * FRAME_SIZE, row * FRAME_SIZE, FRAME_SIZE, FRAME_SIZE, SKILL1_BASE_FRAME_DUR);
+}
+
+void BossDeadNight::initExplodeAnim(Animation& anim) {
+    for (int row = 0; row < EXPLODE_FRAMES_Y; row++)
+        for (int col = 0; col < EXPLODE_FRAMES_X; col++)
+            anim.addFrame(col * EXPLODE_FRAME_SIZE, row * EXPLODE_FRAME_SIZE,
+                          EXPLODE_FRAME_SIZE, EXPLODE_FRAME_SIZE, EXPLODE_FRAME_DUR);
 }
 
 // ============================================================
@@ -58,32 +99,46 @@ void BossDeadNight::update(float deltaTime, float playerX, float playerY, bool /
     stateTimer += deltaTime;
 
     if (currentState == DeadNightState::DEATH) {
-        return; // TODO: анимация смерти + взрывы подключим позже
+        deathAnim.update(deltaTime);
+        return;
     }
 
     if (hp <= 0.0f && currentState != DeadNightState::DEATH) {
         forceState(DeadNightState::DEATH);
+        deathAnim.reset();
         fireballs.clear();
         return;
     }
 
     updateFireballs(deltaTime);
 
+    // Анимация файрбола (skill1) — играет поверх idle, пока не закончится
+    if (!skill1Anim.isFinished()) {
+        skill1Anim.update(deltaTime * attackSpeedMult);
+    }
+
     switch (currentState) {
     case DeadNightState::FLYING_TOP:
         updateFlyingTop(deltaTime, playerX, playerY);
+        idleFlyAnim.update(deltaTime);
         break;
     case DeadNightState::DESCENDING:
         updateDescending(deltaTime);
+        idleFlyAnim.update(deltaTime);
         break;
     case DeadNightState::ASCENDING:
         updateAscending(deltaTime);
+        idleFlyAnim.update(deltaTime);
+        break;
+    case DeadNightState::DASHING:
+        updateArena(deltaTime, playerX, playerY);
+        attackingAnim.update(deltaTime);
         break;
     case DeadNightState::ARENA_IDLE:
-    case DeadNightState::DASHING:
     case DeadNightState::MELEE_ATTACK:
     case DeadNightState::RETREATING:
         updateArena(deltaTime, playerX, playerY);
+        idleGroundAnim.update(deltaTime);
         break;
     default:
         break;
@@ -91,11 +146,10 @@ void BossDeadNight::update(float deltaTime, float playerX, float playerY, bool /
 }
 
 // ============================================================
-// ВЕРХНЯЯ СТАДИЯ — неуязвим, летает, кидает файрболы
+// ВЕРХНЯЯ СТАДИЯ
 // ============================================================
 
 void BossDeadNight::updateFlyingTop(float deltaTime, float playerX, float playerY) {
-    // Полёт влево-вправо, отскок от краёв карты
     x += flyDirX * FLY_SPEED * deltaTime;
 
     if (g_currentLevel) {
@@ -106,15 +160,13 @@ void BossDeadNight::updateFlyingTop(float deltaTime, float playerX, float player
         if (x < minX) { x = minX; flyDirX = 1.0f; }
         if (x > maxX) { x = maxX; flyDirX = -1.0f; }
     }
-    y = getPhaseTopY(); // держим высоту фиксированной — растёт с фазой
+    y = getPhaseTopY();
 
-    // Таймер выживания (30 сек) — после него внешняя система может начать спавнить миньонов
     if (!survivalPassed) {
         survivalTimer += deltaTime;
         if (survivalTimer >= SURVIVAL_TIME) survivalPassed = true;
     }
 
-    // Файрболы вниз, независимо от таймера выживания
     fireballTimer -= deltaTime;
     if (fireballTimer <= 0.0f) {
         spawnFireball(playerX, playerY);
@@ -123,8 +175,7 @@ void BossDeadNight::updateFlyingTop(float deltaTime, float playerX, float player
 }
 
 // ============================================================
-// СПУСК / ПОДЪЁМ — реюзаем гравитацию Character для спуска,
-// ручной полёт для подъёма (симметрично FLYING_TOP)
+// СПУСК / ПОДЪЁМ
 // ============================================================
 
 void BossDeadNight::updateDescending(float deltaTime) {
@@ -136,8 +187,6 @@ void BossDeadNight::updateDescending(float deltaTime) {
 }
 
 void BossDeadNight::updateAscending(float deltaTime) {
-    // phase к этому моменту уже увеличена (см. onPhaseHpThresholdReached) —
-    // летим на высоту НОВОЙ фазы
     const float targetY = getPhaseTopY();
     const float dy = targetY - y;
     const float step = ASCEND_SPEED * deltaTime;
@@ -158,12 +207,11 @@ void BossDeadNight::resetForNextPhaseTop() {
 }
 
 float BossDeadNight::getPhaseTopY() const {
-    // topY — высота фазы 1 (запомнена при спавне), каждая следующая фаза — на 1 тайл выше
     return topY - (int)phase * TILE_SIZE;
 }
 
 // ============================================================
-// АРЕНА — ближний бой, циклы рывков
+// АРЕНА
 // ============================================================
 
 void BossDeadNight::updateArena(float deltaTime, float playerX, float playerY) {
@@ -180,7 +228,7 @@ void BossDeadNight::updateArena(float deltaTime, float playerX, float playerY) {
 }
 
 void BossDeadNight::updateDashCycle(float deltaTime, float playerX, float playerY) {
-    const int phaseIdx = (int)phase; // 0..3
+    const int phaseIdx = (int)phase;
 
     switch (currentState) {
     case DeadNightState::ARENA_IDLE: {
@@ -188,23 +236,22 @@ void BossDeadNight::updateDashCycle(float deltaTime, float playerX, float player
         if (dashTimer > 0.0f) return;
 
         if (dashesDoneInCycle >= DASH_COUNT_PER_CYCLE) {
-            // Цикл из 3 рывков завершён — отступление
-            dashDirX = (playerX > x) ? -1.0f : 1.0f; // отходим ОТ игрока
+            dashDirX = (playerX > x) ? -1.0f : 1.0f;
             forceState(DeadNightState::RETREATING);
             dashTimer = RETREAT_DURATION;
             return;
         }
 
-        // Ближняя дистанция — бьём мечом, иначе рывок к игроку
         const float distX = std::abs(playerX - x);
         if (distX <= HITBOX_W) {
             meleeHitDealt = false;
             forceState(DeadNightState::MELEE_ATTACK);
-            dashTimer = 0.4f; // TODO: длительность замаха, подобрать
+            dashTimer = 0.4f;
         } else {
             dashDirX = (playerX > x) ? 1.0f : -1.0f;
             dashHitDealt = false;
             forceState(DeadNightState::DASHING);
+            attackingAnim.reset(); // рывок стартует — анимация с начала
             dashTimer = DASH_DURATION;
         }
         break;
@@ -253,27 +300,25 @@ void BossDeadNight::updateDashCycle(float deltaTime, float playerX, float player
 // ============================================================
 
 void BossDeadNight::spawnFireball(float playerX, float playerY) {
+    skill1Anim.reset(); // анимация каста запускается заново при каждом броске
+
     Fireball fb;
     fb.x = x;
     fb.y = y;
 
-    // Вектор точно на игрока в момент броска (не самонаводится, как снаряды голема)
     float dx = playerX - x;
     float dy = playerY - y;
     float len = std::sqrt(dx * dx + dy * dy);
     if (len < 1.0f) len = 1.0f;
 
-    // Базовая скорость × сложность (attackSpeedMult, как у остальных боссов)
-    // × множитель текущей фазы (ТЗ: ×1.5 за фазу, кумулятивно)
-    const float speed = FIREBALL_SPEED * attackSpeedMult * PHASE_FIREBALL_SPEED_MULT[(int)phase];
-
+    const float speed = FIREBALL_SPEED * attackSpeedMult;
     fb.velX = (dx / len) * speed;
     fb.velY = (dy / len) * speed;
 
     fb.active   = true;
     fb.exploded = false;
     fireballs.push_back(fb);
-    fireballs.push_back(fb);
+    initExplodeAnim(fireballs.back().explodeAnim);
 }
 
 void BossDeadNight::updateFireballs(float deltaTime) {
@@ -286,12 +331,13 @@ void BossDeadNight::updateFireballs(float deltaTime) {
             fb.x += fb.velX * deltaTime;
             fb.y += fb.velY * deltaTime;
 
-            // Попадание в пол — взрыв (используем isSolid уровня, как и коллизии игрока)
             if (g_currentLevel->isSolid((int)fb.x, (int)fb.y)) {
                 fb.exploded     = true;
                 fb.explodeTimer = FIREBALL_EXPLODE_LIFETIME;
+                fb.explodeAnim.reset();
             }
         } else {
+            fb.explodeAnim.update(deltaTime);
             fb.explodeTimer -= deltaTime;
             if (fb.explodeTimer <= 0.0f) fb.active = false;
         }
@@ -310,7 +356,6 @@ void BossDeadNight::updateFireballs(float deltaTime) {
 float BossDeadNight::checkPlayerDamage(SDL_Rect playerBox, float /*deltaTime*/) {
     float total = 0.0f;
 
-    // --- Файрболы: прямое попадание в полёте ИЛИ радиус взрыва ---
     for (auto& fb : fireballs) {
         if (!fb.active) continue;
 
@@ -322,6 +367,7 @@ float BossDeadNight::checkPlayerDamage(SDL_Rect playerBox, float /*deltaTime*/) 
             if (rectsOverlap(playerBox, fbBox)) {
                 fb.exploded     = true;
                 fb.explodeTimer = FIREBALL_EXPLODE_LIFETIME;
+                fb.explodeAnim.reset();
                 total += FIREBALL_DAMAGE;
             }
         } else if (!fb.damageDealt) {
@@ -336,7 +382,6 @@ float BossDeadNight::checkPlayerDamage(SDL_Rect playerBox, float /*deltaTime*/) 
         }
     }
 
-    // --- Ближняя атака ---
     if (currentState == DeadNightState::MELEE_ATTACK && !meleeHitDealt) {
         const int hx = facingRight
                            ? (int)(x + width / 2)
@@ -347,7 +392,6 @@ float BossDeadNight::checkPlayerDamage(SDL_Rect playerBox, float /*deltaTime*/) 
         meleeHitDealt = true;
     }
 
-    // --- Рывок (контакт телом) ---
     if (currentState == DeadNightState::DASHING && !dashHitDealt) {
         if (rectsOverlap(playerBox, getHitbox())) {
             total += DAMAGE_DASH;
@@ -359,11 +403,11 @@ float BossDeadNight::checkPlayerDamage(SDL_Rect playerBox, float /*deltaTime*/) 
 }
 
 // ============================================================
-// TAKE DAMAGE — блокируем урон пока не уязвим, следим за порогами фаз
+// TAKE DAMAGE
 // ============================================================
 
 void BossDeadNight::takeDamage(float damage) {
-    if (!isVulnerable()) return; // наверху / в полёте — неуязвим
+    if (!isVulnerable()) return;
 
     hp -= damage;
     if (hp < 0.0f) hp = 0.0f;
@@ -372,24 +416,20 @@ void BossDeadNight::takeDamage(float damage) {
 }
 
 void BossDeadNight::onPhaseHpThresholdReached() {
-    const int phaseIdx = (int)phase; // 0..3
+    const int phaseIdx = (int)phase;
     const float threshold = maxHP * PHASE_HP_THRESHOLD[phaseIdx];
 
-    if (hp > threshold) return; // порог ещё не достигнут
+    if (hp > threshold) return;
 
-    if (phase == DeadNightPhase::PHASE_4) {
-        // 0% HP в последней фазе — смерть обрабатывается в update() по hp<=0
-        return;
-    }
+    if (phase == DeadNightPhase::PHASE_4) return;
 
-    // Переход в следующую фазу: улетаем наверх
     phase = (DeadNightPhase)((int)phase + 1);
     fireballs.clear();
     forceState(DeadNightState::ASCENDING);
 }
 
 // ============================================================
-// РЕГИСТРАЦИЯ МИНЬОНОВ (вызывается извне, когда появится система миньонов)
+// РЕГИСТРАЦИЯ МИНЬОНОВ
 // ============================================================
 
 void BossDeadNight::registerMinionKilled() {
@@ -402,9 +442,7 @@ void BossDeadNight::registerMinionKilled() {
     }
 }
 
-void BossDeadNight::registerMinionReachedDoor() {
-    // Миньон просто исчезает, счётчик не трогаем — по ТЗ п.9
-}
+void BossDeadNight::registerMinionReachedDoor() {}
 
 // ============================================================
 // RENDER
@@ -416,19 +454,48 @@ void BossDeadNight::render(SDL_Renderer* renderer) {
 
     renderFireballs(renderer, cx, cy);
 
-    // ЗАГЛУШКА: красный прямоугольник вместо тела
-    SDL_SetRenderDrawColor(renderer, 200, 30, 30, 255);
-    SDL_Rect rect = {
+    // Выбор текущего кадра/текстуры под реальное состояние
+    SDL_Texture* tex = texIdleFly;
+    SDL_Rect src = idleFlyAnim.getCurrentFrame();
+
+    if (currentState == DeadNightState::DEATH) {
+        tex = texDeath;
+        src = deathAnim.getCurrentFrame();
+    } else if (!skill1Anim.isFinished() && currentState == DeadNightState::FLYING_TOP) {
+        // Файрбол-каст перекрывает обычный полёт, пока анимация не доиграна
+        tex = texSkill1;
+        src = skill1Anim.getCurrentFrame();
+    } else if (currentState == DeadNightState::DASHING) {
+        tex = texAttacking;
+        src = attackingAnim.getCurrentFrame();
+    } else if (currentState == DeadNightState::ARENA_IDLE ||
+               currentState == DeadNightState::MELEE_ATTACK ||
+               currentState == DeadNightState::RETREATING) {
+        tex = texIdleGround;
+        src = idleGroundAnim.getCurrentFrame();
+    } else {
+        // FLYING_TOP (без каста), DESCENDING, ASCENDING — летит
+        tex = texIdleFly;
+        src = idleFlyAnim.getCurrentFrame();
+    }
+
+    SDL_Rect dst = {
         (int)(x - width / 2) - cx,
         (int)(y - height / 2) - cy,
         (int)width, (int)height
     };
-    SDL_RenderFillRect(renderer, &rect);
 
-    // Полупрозрачная рамка, когда неуязвим — визуальная подсказка
+    if (tex) {
+        SDL_RendererFlip flip = facingRight ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL;
+        SDL_RenderCopyEx(renderer, tex, &src, &dst, 0, nullptr, flip);
+    } else {
+        SDL_SetRenderDrawColor(renderer, 200, 30, 30, 255);
+        SDL_RenderFillRect(renderer, &dst);
+    }
+
     if (!isVulnerable()) {
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 150);
-        SDL_RenderDrawRect(renderer, &rect);
+        SDL_RenderDrawRect(renderer, &dst);
     }
 
     if (showHitboxes) renderHitboxes(renderer, cx, cy);
@@ -439,22 +506,37 @@ void BossDeadNight::renderFireballs(SDL_Renderer* renderer, int camX, int camY) 
         if (!fb.active) continue;
 
         if (!fb.exploded) {
-            SDL_SetRenderDrawColor(renderer, 255, 120, 0, 255);
-            SDL_Rect r = {
-                (int)(fb.x - FIREBALL_HIT_SIZE / 2) - camX,
-                (int)(fb.y - FIREBALL_HIT_SIZE / 2) - camY,
-                (int)FIREBALL_HIT_SIZE, (int)FIREBALL_HIT_SIZE
-            };
-            SDL_RenderFillRect(renderer, &r);
+            if (texProjectile) {
+                const double angle = std::atan2(fb.velY, fb.velX) * 180.0 / M_PI;
+                SDL_Rect dst = {
+                    (int)(fb.x - FIREBALL_SPRITE_W / 2) - camX,
+                    (int)(fb.y - FIREBALL_SPRITE_H / 2) - camY,
+                    (int)FIREBALL_SPRITE_W, (int)FIREBALL_SPRITE_H
+                };
+                SDL_RenderCopyEx(renderer, texProjectile, nullptr, &dst, angle, nullptr, SDL_FLIP_NONE);
+            } else {
+                SDL_SetRenderDrawColor(renderer, 255, 120, 0, 255);
+                SDL_Rect r = {
+                    (int)(fb.x - FIREBALL_HIT_SIZE / 2) - camX,
+                    (int)(fb.y - FIREBALL_HIT_SIZE / 2) - camY,
+                    (int)FIREBALL_HIT_SIZE, (int)FIREBALL_HIT_SIZE
+                };
+                SDL_RenderFillRect(renderer, &r);
+            }
         } else {
-            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-            SDL_SetRenderDrawColor(renderer, 255, 80, 0, 160);
-            SDL_Rect r = {
-                (int)(fb.x - FIREBALL_EXPLODE_RADIUS) - camX,
-                (int)(fb.y - FIREBALL_EXPLODE_RADIUS) - camY,
-                (int)(FIREBALL_EXPLODE_RADIUS * 2), (int)(FIREBALL_EXPLODE_RADIUS * 2)
+            SDL_Rect src = fb.explodeAnim.getCurrentFrame();
+            SDL_Rect dst = {
+                (int)(fb.x - EXPLODE_FRAME_SIZE / 2) - camX,
+                (int)(fb.y - EXPLODE_FRAME_SIZE / 2) - camY,
+                EXPLODE_FRAME_SIZE, EXPLODE_FRAME_SIZE
             };
-            SDL_RenderFillRect(renderer, &r);
+            if (texExplosion) {
+                SDL_RenderCopy(renderer, texExplosion, &src, &dst);
+            } else {
+                SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderDrawColor(renderer, 255, 80, 0, 160);
+                SDL_RenderFillRect(renderer, &dst);
+            }
         }
     }
 }

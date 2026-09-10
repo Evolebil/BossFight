@@ -85,6 +85,17 @@ public:
     // Восстановление HP из сохранения (не лечение — прямая установка)
     void setHP(float val) { hp = std::clamp(val, 0.0f, maxHP); }
 
+    [[nodiscard]] float getVelocityX() const { return velocityX; }
+
+    // Восстановление MAX HP из сохранения. Вызывать ДО setHP() —
+    // иначе клэмп в setHP() отработает по старому maxHP.
+    void setMaxHP(float val) { maxHP = val; }
+
+    // Восстановление горизонтальной скорости из сохранения — нужно для
+    // инерции движения (см. Player::FRICTION_DECEL), иначе после загрузки
+    // скольжение теряется и персонаж стартует с нулевой скорости.
+    void setVelocityX(float val) { velocityX = val; }
+
     // --- Взаимодействие ---
     // NOTE: virtual — босс переопределяет (учитывает defense)
     virtual void takeDamage(float damage);

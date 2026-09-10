@@ -80,11 +80,15 @@ void GameScene::initPositions() {
         GameSaveState saved;
         if (SaveManager::get().loadAutosave(saved)) {
             if (saved.player.hp > 0.0f) player->setHP(saved.player.hp);
+            player->setVelocityX(saved.playerMoveSpeed);
+
+            // setMaxHP — до setHP босса, иначе клэмп в setHP отработает по дефолтному maxHP
+            if (boss && saved.bossMaxHP > 0.0f) boss->setMaxHP(saved.bossMaxHP);
+
             if (auto* golem = dynamic_cast<BossGolem*>(boss.get())) {
                 if (saved.boss.hp > 0.0f) golem->setHP(saved.boss.hp);
-                if (saved.bossPhase == 1) golem->forcePhase2();   // ← новый метод
+                if (saved.bossPhase == 1) golem->forcePhase2();
             }
-
         }
     }
 
@@ -742,20 +746,20 @@ SceneType GameScene::getNextScene() {
 GameSaveState GameScene::buildSaveState() const {
     GameSaveState s;
 
-    // Позиции и HP игрока
     if (player) {
         s.player.x           = player->getX();
         s.player.y           = player->getY();
         s.player.hp          = player->getHP();
         s.player.facingRight = player->getFacingRight();
+        s.playerMoveSpeed    = player->getVelocityX();
     }
 
-    // Позиции и HP босса
     if (boss) {
         s.boss.x           = boss->getX();
         s.boss.y           = boss->getY();
-        s.boss.hp          = boss->getHP();
+        s.boss.hp           = boss->getHP();
         s.boss.facingRight = boss->getFacingRight();
+        s.bossMaxHP         = boss->getMaxHP();
     }
 
     if (auto* golem = dynamic_cast<BossGolem*>(boss.get())) {

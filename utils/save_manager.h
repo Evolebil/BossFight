@@ -46,7 +46,9 @@ struct GameSaveState {
     // --- Объекты ---
     ObjectState player;
     ObjectState boss;
-    int         bossPhase = 0;   // 0 = PHASE_1, 1 = PHASE_2 (DYING/PAUSING/TRANSITIONING не сохраняем)
+    int         bossPhase       = 0;    // 0 = PHASE_1, 1 = PHASE_2
+    float       bossMaxHP       = 0.0f; // максимальное (не текущее!) HP босса
+    float       playerMoveSpeed = 0.0f; // горизонтальная скорость игрока (инерция)
 
     // --- Прогресс текущего забега ---
     float levelTimer    = 0.0f;   // сколько времени прошло
@@ -216,4 +218,5 @@ private:
     bool readSaveFile(const std::string& path, GameSaveState& outState);
     void writeSaveFile(const std::string& path, const GameSaveState& state, const std::string& saveName);
     [[nodiscard]] std::string makeFilename(int number, const std::string& name) const;
+    [[nodiscard]] int findFreeSaveNumber() const;   // ← новое
 };
