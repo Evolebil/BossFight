@@ -175,10 +175,11 @@ void SaveManager::writeSaveFile(const std::string& path,
     oss << "best_stars_1 "      << state.bestStars[1]       << "\n";
     oss << "best_stars_2 "      << state.bestStars[2]       << "\n";
     oss << "difficulty "        << state.difficulty         << "\n";
-
+\
     // --- Управление (только в именованных) ---
-    oss << "attack_mouse "  << state.attackMouse        << "\n";
-    oss << "magic_mouse "   << state.magicMouse         << "\n";
+    oss << "attack_is_mouse " << (state.attackIsMouse ? 1 : 0) << "\n";
+    oss << "attack_value "    << state.attackValue        << "\n";
+    oss << "magic_mouse "     << state.magicMouse         << "\n";
     oss << "jump_key "      << state.jumpKey            << "\n";
     oss << "left_key "      << state.leftKey            << "\n";
     oss << "right_key "     << state.rightKey           << "\n";
@@ -241,8 +242,9 @@ bool SaveManager::readSaveFile(const std::string& path, GameSaveState& out) {
         else if (key == "best_stars_1")      stream >> out.bestStars[1];
         else if (key == "best_stars_2")      stream >> out.bestStars[2];
         else if (key == "difficulty")        stream >> out.difficulty;
-        else if (key == "attack_mouse")      stream >> out.attackMouse;
-        else if (key == "magic_mouse")       stream >> out.magicMouse;
+        else if (key == "attack_is_mouse") { int v; stream >> v; out.attackIsMouse = (v == 1); }
+        else if (key == "attack_value")     stream >> out.attackValue;
+        else if (key == "magic_mouse")      stream >> out.magicMouse;
         else if (key == "jump_key")          stream >> out.jumpKey;
         else if (key == "left_key")          stream >> out.leftKey;
         else if (key == "right_key")         stream >> out.rightKey;
@@ -436,8 +438,10 @@ void SaveManager::saveIndex() {
 
 void SaveManager::fillControlsFromConfig(GameSaveState& state) {
     const Config::Controls& c = Config::getControls();
-    state.attackMouse  = c.attackMouseButton;
-    state.magicMouse   = c.magicMouseButton;
+    state.attackIsMouse = c.attackBinding.isMouse;
+    state.attackValue   = c.attackBinding.isMouse ? c.attackBinding.mouseButton
+                                                : static_cast<int>(c.attackBinding.key);
+    state.magicMouse    = c.magicMouseButton;
     state.jumpKey      = c.jump;
     state.leftKey      = c.left;
     state.rightKey     = c.right;
@@ -449,7 +453,9 @@ void SaveManager::fillControlsFromConfig(GameSaveState& state) {
 
 void SaveManager::applyControlsToConfig(const GameSaveState& state) {
     Config::Controls& c = Config::getControls();
-    c.attackMouseButton = state.attackMouse;
+    c.attackBinding.isMouse = state.attackIsMouse;
+    if (state.attackIsMouse) c.attackBinding.mouseButton = state.attackValue;
+    else                     c.attackBinding.key         = static_cast<SDL_Scancode>(state.attackValue);
     c.magicMouseButton  = state.magicMouse;
     c.jump     = static_cast<SDL_Scancode>(state.jumpKey);
     c.left     = static_cast<SDL_Scancode>(state.leftKey);

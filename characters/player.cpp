@@ -95,9 +95,14 @@ void Player::processInput() {
     if (InputManager::isKeyPressed(controls.jump)) wantsToJump = true;
     isJumpKeyHeld = InputManager::isKeyDown(controls.jump);
 
+    // Атака привязана к клавиатуре ИЛИ мыши (controls.attackBinding). Проверяем
+    // "зажатие", а не "нажатие" — пока кнопка держится, атака повторяется сама,
+    // как только заканчивается кулдаун (attackTimer).
     if (!isAttacking && !isCastingMagic && !isHurt && !isDefending && attackTimer <= 0.0f) {
-        if (InputManager::isMousePressed(controls.attackMouseButton))
-            wantsToAttack = true;
+        const bool attackHeld = controls.attackBinding.isMouse
+                                    ? InputManager::isMouseDown(controls.attackBinding.mouseButton)
+                                    : InputManager::isKeyDown(controls.attackBinding.key);
+        if (attackHeld) wantsToAttack = true;
     }
 
     if (!isAttacking && !isCastingMagic && !isHurt && !isDefending) {

@@ -59,7 +59,8 @@ struct GameSaveState {
     int bestStars[3]    = {0, 0, 0};  // максимум звёзд по уровням
 
     // --- Управление (копируется из Config::Controls) ---
-    int   attackMouse   = 1;
+    bool  attackIsMouse = true;  // true = attackValue это кнопка мыши, false = скан-код клавиши
+    int   attackValue   = 1;
     int   magicMouse    = 3;
     int   jumpKey       = SDL_SCANCODE_SPACE;
     int   leftKey       = SDL_SCANCODE_A;

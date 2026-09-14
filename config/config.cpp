@@ -7,8 +7,22 @@
 #include "config.h"
 #include "../config/common.h"
 
-int Config::windowWidth  = 1280;
-int Config::windowHeight = 720;
+SDL_Window* g_gameWindow = nullptr;
+
+int Config::windowWidth     = 1280;
+int Config::windowHeight    = 720;
+int Config::resolutionIndex = 0;
+
+namespace {
+struct ResolutionPreset { int w, h; };
+constexpr ResolutionPreset RESOLUTION_PRESETS[] = {
+    {1280, 720},
+    {1600, 900},
+    {1920, 1080},
+    };
+constexpr int RESOLUTION_PRESET_COUNT =
+    sizeof(RESOLUTION_PRESETS) / sizeof(RESOLUTION_PRESETS[0]);
+}
 
 float Config::brightness  = 1.0f;
 float Config::soundVolume = 0.5f;
@@ -39,16 +53,18 @@ static Config::Difficulty difficulties[] = {
 // Управление по умолчанию
 // SDL мышь: 1=ЛКМ, 2=СКМ, 3=ПКМ
 static Config::Controls controls = {
-    SDL_SCANCODE_RSHIFT,   // attack (клавиша — не используется, атака через мышь)
     SDL_SCANCODE_Q,        // shoot  (не используется)
     SDL_SCANCODE_SPACE,    // jump
     SDL_SCANCODE_A,        // left
     SDL_SCANCODE_D,        // right
     SDL_SCANCODE_S,        // crouch
-    SDL_SCANCODE_E,        // interact
+    SDL_SCANCODE_E,        // interact (скрыто в настройках)
     SDL_SCANCODE_LSHIFT,   // dash — рывок
     SDL_SCANCODE_F,        // shield — щит
-    1,                     // attackMouseButton — ЛКМ
+    SDL_SCANCODE_R,        // restart — быстрый рестарт
+    SDL_SCANCODE_X,        // quickSave — быстрое сохранение
+    SDL_SCANCODE_Z,        // quickLoad — быстрая загрузка
+    {true, SDL_SCANCODE_UNKNOWN, 1},  // attackBinding — по умолчанию ЛКМ
     3                      // magicMouseButton  — ПКМ
 };
 
@@ -151,6 +167,28 @@ void Config::updateScale(SDL_Window* window) {
     SDL_GetWindowSize(window, &realW, &realH);
     scaleX = (float)realW  / (float)windowWidth;
     scaleY = (float)realH / (float)windowHeight;
+}
+
+int Config::getResolutionPresetCount() { return RESOLUTION_PRESET_COUNT; }
+
+void Config::getResolutionPreset(int idx, int& outW, int& outH) {
+    idx = std::clamp(idx, 0, RESOLUTION_PRESET_COUNT - 1);
+    outW = RESOLUTION_PRESETS[idx].w;
+    outH = RESOLUTION_PRESETS[idx].h;
+}
+
+void Config::setResolutionIndex(int idx) {
+    resolutionIndex = std::clamp(idx, 0, RESOLUTION_PRESET_COUNT - 1);
+    windowWidth  = RESOLUTION_PRESETS[resolutionIndex].w;
+    windowHeight = RESOLUTION_PRESETS[resolutionIndex].h;
+}
+
+void Config::applyWindowResize(SDL_Window* window, SDL_Renderer* renderer) {
+    if (!window || !renderer) return;
+    SDL_SetWindowSize(window, windowWidth, windowHeight);
+    SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+    SDL_RenderSetLogicalSize(renderer, windowWidth, windowHeight);
+    updateScale(window);
 }
 
 bool Config::saveProgress() {

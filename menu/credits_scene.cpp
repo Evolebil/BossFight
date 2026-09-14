@@ -41,15 +41,29 @@ void CreditsScene::render(SDL_Renderer* renderer) {
              {255, 230, 150, 255}, true, Config::getTitleFont());
     
     // Текст
-    drawText(renderer, Config::getFont(), "Игра создана:", 0, 250, 
+    // Текст
+    drawText(renderer, Config::getFont(), "Игра создана:", 0, 160,
              {255, 255, 255, 255}, true);
-    drawText(renderer, Config::getFont(), "evol - Программист и Дизайнер", 0, 300, 
+    drawText(renderer, Config::getFont(), "evol (Бобров Владислав Витальевич)", 0, 200,
              {200, 200, 255, 255}, true);
-    drawText(renderer, Config::getFont(), "Claude - AI Ассистент", 0, 350, 
+    drawText(renderer, Config::getFont(), "Программист и Дизайнер", 0, 230,
+             {180, 180, 220, 255}, true);
+
+    drawText(renderer, Config::getFont(), "AI-ассистенты:", 0, 280,
+             {255, 230, 150, 255}, true);
+    drawText(renderer, Config::getFont(), "Claude, Copilot - Код", 0, 315,
              {200, 200, 255, 255}, true);
-    drawText(renderer, Config::getFont(), "SDL2 - Графическая библиотека", 0, 420, 
+    drawText(renderer, Config::getFont(), "ChatGPT, DeepSeek - Идеи и ТЗ", 0, 345,
+             {200, 200, 255, 255}, true);
+    drawText(renderer, Config::getFont(), "Grok, Kimi - Тестирование", 0, 375,
+             {200, 200, 255, 255}, true);
+    drawText(renderer, Config::getFont(), "Open-Code Qwen - КАЛЛкодинг", 0, 405,
+             {200, 200, 255, 255}, true);
+
+    drawText(renderer, Config::getFont(), "Спрайты: Medieval King Pack 2 (luizmelo, itch.io)", 0, 460,
              {150, 150, 150, 255}, true);
-    
+    drawText(renderer, Config::getFont(), "SDL2 - Графическая библиотека", 0, 490,
+             {150, 150, 150, 255}, true);
     drawButton(renderer, Config::getFont(), backBtn);
 }
 

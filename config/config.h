@@ -7,6 +7,17 @@
 #pragma once
 #include "../config/common.h"
 
+// Глобальное окно — нужно сценам (Settings) для fullscreen и смены разрешения,
+// аналогично уже существующим глобальным g_camera/g_currentLevel
+extern SDL_Window* g_gameWindow;
+
+// Привязка одной кнопки к клавиатуре ИЛИ мыши — нужно только атаке (см. ниже)
+struct InputBinding {
+    bool         isMouse     = true;
+    SDL_Scancode key         = SDL_SCANCODE_UNKNOWN;
+    int          mouseButton = 1;
+};
+
 struct SaveData {
     int levelStars[3];
     int selectedLevel;
@@ -34,6 +45,7 @@ private:
     static TTF_Font* titleFont;
 
     static int selectedLevel;
+    static int resolutionIndex;
 
 public:
     static bool init();
@@ -59,6 +71,14 @@ public:
     static float getScaleX()      { return scaleX; }
     static float getScaleY()      { return scaleY; }
 
+    // --- Разрешение экрана (базовые пресеты) ---
+    static void setResolutionIndex(int idx);
+    static int  getResolutionIndex() { return resolutionIndex; }
+    static int  getResolutionPresetCount();
+    static void getResolutionPreset(int idx, int& outW, int& outH);
+    // В SDL_WINDOW_FULLSCREEN_DESKTOP реальный размер не меняется — ограничение SDL
+    static void applyWindowResize(SDL_Window* window, SDL_Renderer* renderer);
+
     static int getCurrentDifficulty()      { return currentDifficulty; }
     static int getLevelStars(int level)    { return levelStars[level]; }
 
@@ -83,18 +103,20 @@ public:
     static const Difficulty* getDifficulties();
     static int getDifficultyCount() { return 6; }
 
-    // Управление — добавлены дэш, щит и магия
+    // Управление — добавлены дэш, щит, магия и быстрые клавиши рестарта/сейва/лоада
     struct Controls {
-        SDL_Scancode attack;        // ближняя атака (клавиша)
         SDL_Scancode shoot;         // дальняя атака (клавиша, не используется)
         SDL_Scancode jump;
         SDL_Scancode left;
         SDL_Scancode right;
         SDL_Scancode crouch;
-        SDL_Scancode interact;
+        SDL_Scancode interact;      // скрыто в настройках, оставлено для совместимости сохранений
         SDL_Scancode dash;          // рывок
         SDL_Scancode shield;        // щит
-        int attackMouseButton;      // ближняя атака (мышь) — ЛКМ = 1
+        SDL_Scancode restart;       // быстрый рестарт уровня
+        SDL_Scancode quickSave;     // быстрое сохранение
+        SDL_Scancode quickLoad;     // быстрая загрузка
+        InputBinding attackBinding; // ближняя атака — клавиатура ИЛИ мышь
         int magicMouseButton;       // магия (мышь) — ПКМ = 3
     };
 

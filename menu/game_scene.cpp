@@ -155,6 +155,23 @@ void GameScene::handleInput(SDL_Event& event, int mx, int my,
             default:
                 break;
             }
+
+            // Быстрые клавиши (настраиваются в Settings): рестарт / сейв / лоад
+            const Config::Controls& qc = Config::getControls();
+            if (event.key.keysym.scancode == qc.restart) {
+                if (soundMgr) soundMgr->playClick();
+                nextScene = SceneType::RESTART_GAME;
+            } else if (event.key.keysym.scancode == qc.quickSave) {
+                saveGame();
+            } else if (event.key.keysym.scancode == qc.quickLoad) {
+                GameSaveState saved;
+                if (SaveManager::get().loadAutosave(saved) && saved.currentLevel == currentLevel) {
+                    if (soundMgr) soundMgr->playClick();
+                    Config::setSelectedLevel(currentLevel);
+                    Config::setLoadFromSave(true);
+                    nextScene = SceneType::RESTART_GAME;
+                }
+            }
         }
     }
 
@@ -737,7 +754,11 @@ void GameScene::drawHealthBars(SDL_Renderer* renderer) {
     }
 }
 
-void GameScene::saveGame() {}
+void GameScene::saveGame() {
+    // Общая точка сохранения — используется и кнопкой паузы, и быстрой клавишей X
+    SaveManager::get().saveOnExit(buildSaveState());
+    if (soundMgr) soundMgr->playClick();
+}
 
 SceneType GameScene::getNextScene() {
     return nextScene;

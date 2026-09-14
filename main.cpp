@@ -68,6 +68,8 @@ int main(int /*argc*/, char* /*argv*/[]) {
         return 1;
     }
 
+    g_gameWindow = window;  // нужно Settings-сцене для fullscreen/смены разрешения
+
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     if (!renderer) {
         std::cerr << "Ошибка создания рендерера: " << SDL_GetError() << "\n";

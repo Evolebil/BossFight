@@ -1,6 +1,6 @@
 /**
  * @file settings_scene.h
- * @brief Экран настроек
+ * @brief Экран настроек — вкладки: Управление / Видео / Аудио
  * @author evol
  * @date 2026-02-20
  */
@@ -12,6 +12,8 @@
 
 class SoundManager;
 
+enum class SettingsTab { CONTROLS, VIDEO, AUDIO };
+
 class SettingsScene : public Scene {
 private:
     SceneType     nextScene;
@@ -20,16 +22,23 @@ private:
     SDL_Scancode* keyBeingRebound;
     int*          mouseButtonBeingRebound;
 
-    float tempBrightness;
+    SettingsTab currentTab = SettingsTab::CONTROLS;
+
     float tempSoundVolume;
     float tempMusicVolume;
-    float tempSensitivity;
 
-    Slider brightnessSlider;
+    // Вкладка "Аудио"
     Slider soundSlider;
     Slider musicSlider;
-    Slider sensitivitySlider;
+
+    // Вкладка "Видео"
+    Button fullscreenBtn;
+    Button resolutionBtn;
+
     Button backBtn;
+    Button tabControlsBtn;
+    Button tabVideoBtn;
+    Button tabAudioBtn;
 
     struct ControlButton {
         std::string   label;
@@ -40,6 +49,14 @@ private:
         bool          wasHovered;
     };
     std::vector<ControlButton> controlButtons;
+
+    // "Ближняя атака" — единственная кнопка с гибкой привязкой
+    // (клавиатура ИЛИ мышь, Config::InputBinding), поэтому обрабатывается
+    // отдельно от controlButtons (там тип привязки фиксирован заранее).
+    SDL_Rect attackBtnRect{};
+    bool     attackBtnHovered     = false;
+    bool     attackBtnWasHovered  = false;
+    bool     waitingForAttackBind = false;
 
 public:
     SettingsScene();

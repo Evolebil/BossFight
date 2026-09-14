@@ -11,6 +11,9 @@ private:
 public:
     // Инициализация (устанавливает рендерер)
     static void init(SDL_Renderer* rend);
+
+    // Текущий рендерер — нужен Settings для SDL_RenderSetLogicalSize при смене разрешения
+    static SDL_Renderer* getRenderer() { return renderer; }
     
     // Загрузка текстуры из файла
     static SDL_Texture* loadTexture(const std::string& path);
