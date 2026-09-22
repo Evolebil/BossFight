@@ -67,6 +67,8 @@ SavesScene::SavesScene() {
     // Загружаем индекс и строим кнопки
     SaveManager::get().loadIndex();
     rebuildSlots();
+
+    if (soundMgr) soundMgr->playMusic("menu_music");
 }
 
 // ============================================================

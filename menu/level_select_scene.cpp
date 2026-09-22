@@ -37,6 +37,8 @@ LevelSelectScene::LevelSelectScene()
             std::to_string(i + 1)
             ));
     }
+
+    if (soundMgr) soundMgr->playMusic("menu_music");
 }
 
 void LevelSelectScene::handleInput(SDL_Event& event, int mx, int my,

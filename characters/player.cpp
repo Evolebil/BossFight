@@ -89,8 +89,20 @@ void Player::processInput() {
     const bool left  = InputManager::isKeyDown(controls.left);
     const bool right = InputManager::isKeyDown(controls.right);
 
-    if (left  && !right) { moveInputDir = -1; facingRight = false; }
-    if (right && !left)  { moveInputDir =  1; facingRight = true;  }
+    if (left  && !right) moveInputDir = -1;
+    if (right && !left)  moveInputDir =  1;
+
+    // Направление взгляда теперь следует за курсором, а не за WASD — так можно
+    // бить ближней атакой в любую сторону стоя на месте, не двигаясь. Экранные
+    // координаты сравниваем напрямую: смещение камеры одинаково для игрока и
+    // курсора, при вычитании оно сокращается — полный перевод в мировые не нужен.
+    {
+        int rawX, rawY;
+        InputManager::getMousePos(rawX, rawY);
+        const float cursorScreenX = (float)rawX / Config::getScaleX();
+        const float playerScreenX = g_camera ? g_camera->worldToScreenX(x) : x;
+        facingRight = cursorScreenX > playerScreenX;
+    }
 
     if (InputManager::isKeyPressed(controls.jump)) wantsToJump = true;
     isJumpKeyHeld = InputManager::isKeyDown(controls.jump);
@@ -105,8 +117,12 @@ void Player::processInput() {
         if (attackHeld) wantsToAttack = true;
     }
 
+    // Магия теперь тоже на удержании: отдельный кулдаун не нужен — пока
+    // isCastingMagic == true, повторный каст и так заблокирован условием выше
+    // (анимация не закончилась), поэтому держащееся нажатие само даёт эффект
+    // "закастовал снова, как только освободился", а не спам одним кликом.
     if (!isAttacking && !isCastingMagic && !isHurt && !isDefending) {
-        if (InputManager::isMousePressed(controls.magicMouseButton) &&
+        if (InputManager::isMouseDown(controls.magicMouseButton) &&
             mana >= MANA_COST_MAGIC) {
             wantsToCastMagic = true;
 

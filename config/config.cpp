@@ -9,20 +9,8 @@
 
 SDL_Window* g_gameWindow = nullptr;
 
-int Config::windowWidth     = 1280;
-int Config::windowHeight    = 720;
-int Config::resolutionIndex = 0;
-
-namespace {
-struct ResolutionPreset { int w, h; };
-constexpr ResolutionPreset RESOLUTION_PRESETS[] = {
-    {1280, 720},
-    {1600, 900},
-    {1920, 1080},
-    };
-constexpr int RESOLUTION_PRESET_COUNT =
-    sizeof(RESOLUTION_PRESETS) / sizeof(RESOLUTION_PRESETS[0]);
-}
+int Config::windowWidth  = 1280;
+int Config::windowHeight = 720;
 
 float Config::brightness  = 1.0f;
 float Config::soundVolume = 0.5f;
@@ -167,28 +155,6 @@ void Config::updateScale(SDL_Window* window) {
     SDL_GetWindowSize(window, &realW, &realH);
     scaleX = (float)realW  / (float)windowWidth;
     scaleY = (float)realH / (float)windowHeight;
-}
-
-int Config::getResolutionPresetCount() { return RESOLUTION_PRESET_COUNT; }
-
-void Config::getResolutionPreset(int idx, int& outW, int& outH) {
-    idx = std::clamp(idx, 0, RESOLUTION_PRESET_COUNT - 1);
-    outW = RESOLUTION_PRESETS[idx].w;
-    outH = RESOLUTION_PRESETS[idx].h;
-}
-
-void Config::setResolutionIndex(int idx) {
-    resolutionIndex = std::clamp(idx, 0, RESOLUTION_PRESET_COUNT - 1);
-    windowWidth  = RESOLUTION_PRESETS[resolutionIndex].w;
-    windowHeight = RESOLUTION_PRESETS[resolutionIndex].h;
-}
-
-void Config::applyWindowResize(SDL_Window* window, SDL_Renderer* renderer) {
-    if (!window || !renderer) return;
-    SDL_SetWindowSize(window, windowWidth, windowHeight);
-    SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
-    SDL_RenderSetLogicalSize(renderer, windowWidth, windowHeight);
-    updateScale(window);
 }
 
 bool Config::saveProgress() {

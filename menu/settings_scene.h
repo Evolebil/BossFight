@@ -33,7 +33,6 @@ private:
 
     // Вкладка "Видео"
     Button fullscreenBtn;
-    Button resolutionBtn;
 
     Button backBtn;
     Button tabControlsBtn;

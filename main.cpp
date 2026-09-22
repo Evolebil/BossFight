@@ -34,15 +34,40 @@ static void loadSounds(SoundManager& mgr) {
     mgr.loadSound("golem_move",    "assets/sound/move_golem.mp3");
 }
 
+static void loadMusicTracks(SoundManager& mgr) {
+    mgr.loadMusic("menu_music",   "assets/musik/Menu.wav");
+    mgr.loadMusic("level3_music", "assets/musik/Boss_3_Theme.wav");
+    // level1_music / level2_music — добавить сюда, когда появятся файлы
+}
+
 // ============================================================
 // MAIN
 // ============================================================
 
 int main(int /*argc*/, char* /*argv*/[]) {
+#ifndef _WIN32
+    // На некоторых Linux-системах SDL по умолчанию пытается выбрать pulse/pipewire
+    // драйвер и молча остаётся без звука, даже если аудиосистема в порядке.
+    // ALSA работает предсказуемо почти везде на Linux (pulse/pipewire и сами
+    // обычно работают поверх неё) — форсируем её как дефолт, но только если
+    // пользователь явно не задал свой драйвер через SDL_AUDIODRIVER
+    // (overrideExisting=0 это гарантирует). На Windows такого драйвера нет
+    // вообще, поэтому здесь ничего не форсируем — пусть SDL выбирает сам.
+    SDL_setenv("SDL_AUDIODRIVER", "alsa", 0);
+#endif
+
     // === ИНИЦИАЛИЗАЦИЯ SDL ===
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
+    // Видео и аудио инициализируем раздельно: без окна игра бессмысленна,
+    // но без звука она всё ещё может работать (просто тихо). Раньше здесь
+    // была одна общая проверка — падение аудио (недоступная ALSA, отсутствие
+    // звуковой карты и т.д.) гасило игру целиком, даже не открыв окно.
+    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         std::cerr << "SDL ошибка: " << SDL_GetError() << "\n";
         return 1;
+    }
+    if (SDL_InitSubSystem(SDL_INIT_AUDIO) < 0) {
+        std::cerr << "WARNING: аудиоподсистема SDL не инициализирована: "
+                  << SDL_GetError() << " — игра продолжит работу без звука\n";
     }
 
     // === ИНИЦИАЛИЗАЦИЯ CONFIG (шрифты) ===
@@ -93,6 +118,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
         std::cerr << "WARNING: звуковая система не инициализирована\n";
     }
     loadSounds(*g_soundMgr);
+    loadMusicTracks(*g_soundMgr);
     g_soundMgr->soundVolume = Config::getSoundVolume();
     g_soundMgr->musicVolume = Config::getMusicVolume();
 

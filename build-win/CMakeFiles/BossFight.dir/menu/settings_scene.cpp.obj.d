@@ -432,4 +432,5 @@ CMakeFiles/BossFight.dir/menu/settings_scene.cpp.obj: \
  /home/evol/Documents/BossFight/menu/../config/config.h \
  /home/evol/Documents/BossFight/menu/splash_scene.h \
  /home/evol/Documents/BossFight/menu/../backgrounds/forest_bg.h \
- /home/evol/Documents/BossFight/menu/../utils/sound_manager.h
+ /home/evol/Documents/BossFight/menu/../utils/sound_manager.h \
+ /home/evol/Documents/BossFight/menu/../utils/texture_manager.h

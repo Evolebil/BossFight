@@ -430,6 +430,7 @@ CMakeFiles/BossFight.dir/characters/ground_minion.cpp.obj: \
  /usr/x86_64-w64-mingw32/include/c++/16.2.0/bits/stl_multiset.h \
  /home/evol/Documents/BossFight/characters/../utils/animation.h \
  /home/evol/Documents/BossFight/characters/../utils/collision_system.h \
+ /home/evol/Documents/BossFight/characters/../utils/texture_manager.h \
  /home/evol/Documents/BossFight/characters/../levels/ilevel.h \
  /home/evol/Documents/BossFight/characters/../levels/../config/config.h \
  /home/evol/Documents/BossFight/characters/../utils/camera.h \

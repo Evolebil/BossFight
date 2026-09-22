@@ -26,6 +26,8 @@ MainMenuScene::MainMenuScene()
     creditsBtn.centerX(W);
     savesBtn.centerX(W);
     quitBtn.centerX(W);
+
+    if (soundMgr) soundMgr->playMusic("menu_music");
 }
 
 void MainMenuScene::handleInput(SDL_Event& /*event*/, int mx, int my,

@@ -45,7 +45,6 @@ private:
     static TTF_Font* titleFont;
 
     static int selectedLevel;
-    static int resolutionIndex;
 
 public:
     static bool init();
@@ -70,14 +69,6 @@ public:
     static bool getIsFullscreen() { return isFullscreen; }
     static float getScaleX()      { return scaleX; }
     static float getScaleY()      { return scaleY; }
-
-    // --- Разрешение экрана (базовые пресеты) ---
-    static void setResolutionIndex(int idx);
-    static int  getResolutionIndex() { return resolutionIndex; }
-    static int  getResolutionPresetCount();
-    static void getResolutionPreset(int idx, int& outW, int& outH);
-    // В SDL_WINDOW_FULLSCREEN_DESKTOP реальный размер не меняется — ограничение SDL
-    static void applyWindowResize(SDL_Window* window, SDL_Renderer* renderer);
 
     static int getCurrentDifficulty()      { return currentDifficulty; }
     static int getLevelStars(int level)    { return levelStars[level]; }

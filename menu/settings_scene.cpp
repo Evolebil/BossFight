@@ -31,10 +31,9 @@ constexpr int CONTROLS_START_Y = 215;
 constexpr int WAITING_HINT_Y   = 685;
 
 // Вкладка "Видео"
-constexpr int VIDEO_BTN_W       = 300;
-constexpr int VIDEO_BTN_H       = 60;
-constexpr int VIDEO_FULLSCREEN_Y = 250;
-constexpr int VIDEO_RESOLUTION_Y = 340;
+constexpr int VIDEO_BTN_W        = 300;
+constexpr int VIDEO_BTN_H        = 60;
+constexpr int VIDEO_FULLSCREEN_Y = 300;
 
 // Вкладка "Аудио"
 constexpr int SLIDER_W       = 400;
@@ -57,7 +56,6 @@ SettingsScene::SettingsScene()
     soundSlider(0, SOUND_SLIDER_Y, SLIDER_W, "Звук",   &tempSoundVolume, 1),
     musicSlider(0, MUSIC_SLIDER_Y, SLIDER_W, "Музыка", &tempMusicVolume, 2),
     fullscreenBtn(0, VIDEO_FULLSCREEN_Y, VIDEO_BTN_W, VIDEO_BTN_H, "Полный экран"),
-    resolutionBtn(0, VIDEO_RESOLUTION_Y, VIDEO_BTN_W, VIDEO_BTN_H, ""),
     backBtn(20, 20, 100, 50, "Назад"),
     tabControlsBtn(0, TAB_BTN_Y, TAB_BTN_W, TAB_BTN_H, "Управление"),
     tabVideoBtn   (0, TAB_BTN_Y, TAB_BTN_W, TAB_BTN_H, "Видео"),
@@ -69,7 +67,6 @@ SettingsScene::SettingsScene()
     musicSlider.track.x = (W - SLIDER_W) / 2; musicSlider.updateHandle();
 
     fullscreenBtn.centerX(W);
-    resolutionBtn.centerX(W);
 
     const int totalTabsW = 3 * TAB_BTN_W + 2 * TAB_BTN_GAP;
     const int tabsStartX = (W - totalTabsW) / 2;
@@ -99,6 +96,8 @@ SettingsScene::SettingsScene()
                        };
 
     attackBtnRect = {cbX, nextY(), CONTROLS_BTN_W, CONTROLS_BTN_H};
+
+    if (soundMgr) soundMgr->playMusic("menu_music");
 }
 
 // ============================================================
@@ -197,11 +196,6 @@ void SettingsScene::handleInput(SDL_Event& event, int mx, int my,
     } else if (currentTab == SettingsTab::VIDEO) {
         if (updateButton(fullscreenBtn, mx, my, clicked, soundMgr)) {
             Config::toggleFullscreen(g_gameWindow);
-        }
-        if (updateButton(resolutionBtn, mx, my, clicked, soundMgr)) {
-            int nextIdx = (Config::getResolutionIndex() + 1) % Config::getResolutionPresetCount();
-            Config::setResolutionIndex(nextIdx);
-            Config::applyWindowResize(g_gameWindow, TextureManager::getRenderer());
         }
 
     } else if (currentTab == SettingsTab::AUDIO) {
@@ -305,11 +299,6 @@ void SettingsScene::render(SDL_Renderer* renderer) {
     } else if (currentTab == SettingsTab::VIDEO) {
         fullscreenBtn.text = Config::getIsFullscreen() ? "Полный экран: Вкл" : "Полный экран: Выкл";
         drawButton(renderer, Config::getFont(), fullscreenBtn);
-
-        int rw, rh;
-        Config::getResolutionPreset(Config::getResolutionIndex(), rw, rh);
-        resolutionBtn.text = "Разрешение: " + std::to_string(rw) + "x" + std::to_string(rh);
-        drawButton(renderer, Config::getFont(), resolutionBtn);
 
     } else if (currentTab == SettingsTab::AUDIO) {
         drawSlider(renderer, Config::getFont(), soundSlider, soundMgr);

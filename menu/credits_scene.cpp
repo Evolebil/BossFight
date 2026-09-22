@@ -7,10 +7,12 @@
 
 // Убрать весь класс CreditsScene { ... } и заменить на:
 
-CreditsScene::CreditsScene() 
+CreditsScene::CreditsScene()
     : nextScene(SceneType::CREDITS),
-      soundMgr(getSoundManager()),
-      backBtn(20, 20, 100, 50, "Назад") {}
+    soundMgr(getSoundManager()),
+    backBtn(20, 20, 100, 50, "Назад") {
+    if (soundMgr) soundMgr->playMusic("menu_music");
+}
 
 void CreditsScene::handleInput(SDL_Event& event, int mouseX, int mouseY, bool mouseClicked, bool mouseDown) {
     backBtn.isHovered = backBtn.contains(mouseX, mouseY);

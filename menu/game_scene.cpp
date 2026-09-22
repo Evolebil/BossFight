@@ -43,6 +43,8 @@ void GameScene::initPositions() {
     level          = createLevel(currentLevel);
     g_currentLevel = level.get();
 
+    if (soundMgr) soundMgr->playMusic(level->getMusicName());
+
     auto [px, py] = level->getPlayerSpawn();
     auto [bx, by] = level->getBossSpawn();
 
@@ -125,7 +127,10 @@ std::pair<float, float> GameScene::getPlayerSpawnPos() {
 void GameScene::handleInput(SDL_Event& event, int mx, int my,
                             bool clicked, bool /*mouseDown*/) {
     if (resultState == ResultState::PLAYING) {
-        if (event.type == SDL_KEYDOWN) {
+        // repeat != 0 — это авто-повтор SDL на удержании клавиши, а не новое
+        // нажатие. Без этой проверки ESC "мигал" (toggle срабатывал на каждый
+        // повтор, пока клавиша зажата), H дёргал хитбоксы, а R/X/Z спамили бы.
+        if (event.type == SDL_KEYDOWN && event.key.repeat == 0) {
             switch (event.key.keysym.scancode) {
             case SDL_SCANCODE_ESCAPE:
                 isPaused = !isPaused;

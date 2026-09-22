@@ -6,6 +6,7 @@ class SoundManager {
 private:
     std::map<std::string, Mix_Chunk*> sounds;
     std::map<std::string, Mix_Music*> music;
+    std::string currentMusicName;  // чтобы не перезапускать один и тот же трек заново
     
 public:
     float soundVolume;

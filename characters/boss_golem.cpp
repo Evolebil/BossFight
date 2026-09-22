@@ -790,6 +790,19 @@ float BossGolem::checkPlayerDamage(SDL_Rect playerBox, float deltaTime) {
         }
     }
 
+    // Снаряды (жёлтый) — хитбокс тот же, что проверяется в checkPlayerDamage()
+    SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+    for (const auto& proj : projectiles) {
+        if (!proj.active) continue;
+        SDL_Rect projBox = {
+            (int)(proj.x - PROJ_HIT_SIZE / 2) - cx,
+            (int)(proj.y - PROJ_HIT_SIZE / 2) - cy,
+            PROJ_HIT_SIZE, PROJ_HIT_SIZE
+        };
+        SDL_RenderDrawRect(renderer, &projBox);
+    }
+
+    // Лазер (жёлтый)
     if (laser.active && laserFullyCharged) {
         const int W    = Config::getWindowWidth();
         int laserH     = (int)laser.height;

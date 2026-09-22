@@ -67,10 +67,15 @@ void SoundManager::playSound(const std::string& name) {
 }
 
 void SoundManager::playMusic(const std::string& name) {
+    // Тот же трек уже играет — не перезапускаем с начала (иначе музыка будет
+    // дёргаться при каждом переходе между сценами меню)
+    if (currentMusicName == name && Mix_PlayingMusic()) return;
+
     auto it = music.find(name);
     if (it != music.end()) {
         Mix_VolumeMusic((int)(MIX_MAX_VOLUME * musicVolume));
         Mix_PlayMusic(it->second, -1); // -1 = бесконечный повтор
+        currentMusicName = name;
     }
 }
 
