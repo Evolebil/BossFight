@@ -13,6 +13,7 @@ private:
     Button diffBtn;
     Button resetBtn;
     std::vector<Button> levelBtns;
+    std::vector<Button> infoBtns;  // "?" — подсказка по тактике босса, справа от кнопки уровня
     // Диалог "Загрузить / Новая игра"
     bool              showLoadDialog = false;
     int               dialogLevel    = -1;       // какой уровень нажали

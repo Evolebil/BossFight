@@ -790,19 +790,6 @@ float BossGolem::checkPlayerDamage(SDL_Rect playerBox, float deltaTime) {
         }
     }
 
-    // Снаряды (жёлтый) — хитбокс тот же, что проверяется в checkPlayerDamage()
-    SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
-    for (const auto& proj : projectiles) {
-        if (!proj.active) continue;
-        SDL_Rect projBox = {
-            (int)(proj.x - PROJ_HIT_SIZE / 2) - cx,
-            (int)(proj.y - PROJ_HIT_SIZE / 2) - cy,
-            PROJ_HIT_SIZE, PROJ_HIT_SIZE
-        };
-        SDL_RenderDrawRect(renderer, &projBox);
-    }
-
-    // Лазер (жёлтый)
     if (laser.active && laserFullyCharged) {
         const int W    = Config::getWindowWidth();
         int laserH     = (int)laser.height;
@@ -1114,6 +1101,31 @@ void BossGolem::renderHitboxes(SDL_Renderer* renderer, int spriteX, int spriteY,
         SDL_RenderDrawRect(renderer, &dashBox);
     }
 
+    // Снаряды: жёлтый — хитбокс из checkPlayerDamage() (PROJ_HIT_SIZE),
+    // голубой — реальные границы спрайта (PROJ_RENDER_SIZE, тот же
+    // прямоугольник, что рисует renderProjectiles()). Разница между ними —
+    // ориентир, насколько можно увеличить PROJ_HIT_SIZE, не выходя за
+    // пределы картинки снаряда (assets/boss1/arm.png, кадр 102×102).
+    for (const auto& proj : projectiles) {
+        if (!proj.active) continue;
+
+        SDL_SetRenderDrawColor(renderer, 0, 220, 255, 255);
+        SDL_Rect spriteBox = {
+            (int)(proj.x - PROJ_RENDER_SIZE / 2) - cx,
+            (int)(proj.y - PROJ_RENDER_SIZE / 2) - cy,
+            PROJ_RENDER_SIZE, PROJ_RENDER_SIZE
+        };
+        SDL_RenderDrawRect(renderer, &spriteBox);
+
+        SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+        SDL_Rect projBox = {
+            (int)(proj.x - PROJ_HIT_SIZE / 2) - cx,
+            (int)(proj.y - PROJ_HIT_SIZE / 2) - cy,
+            PROJ_HIT_SIZE, PROJ_HIT_SIZE
+        };
+        SDL_RenderDrawRect(renderer, &projBox);
+    }
+
     // Лазер (жёлтый)
     if (laser.active && laserFullyCharged) {
         const int W = Config::getWindowWidth();
@@ -1139,7 +1151,6 @@ void BossGolem::renderHitboxes(SDL_Renderer* renderer, int spriteX, int spriteY,
     int endX = facingRight ? (int)(x + HITBOX_LINE_LEN) : (int)(x - HITBOX_LINE_LEN);
     SDL_RenderDrawLine(renderer, (int)x - cx, (int)y - cy, endX - cx, (int)y - cy);
 }
-
 void BossGolem::forcePhase2() {
     // Переводим босса сразу во вторую фазу без анимации смерти/возрождения
     phase           = BossPhase::PHASE_2;
