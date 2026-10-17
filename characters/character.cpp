@@ -7,6 +7,9 @@
 
 #include "character.h"
 
+Character* g_playerCharacter = nullptr;
+Character* g_bossCharacter   = nullptr;
+
 Character::Character(float spawnX, float spawnY, float w, float h, float health)
     : x(spawnX), y(spawnY),
     velocityX(0), velocityY(0),
@@ -41,6 +44,14 @@ void Character::applyGravityAndCollisions(float deltaTime, bool ignorePlatforms)
 
 void Character::applyCollisionsX() {
     CollisionSystem::resolveX(x, y, velocityX, width, height);
+
+    // Взаимная коллизия игрок↔босс — работают друг для друга как стена:
+    // если кто-то из них реально движется в сторону другого, его движение
+    // просто останавливается на границе. Никто никого не толкает.
+    if (this == g_playerCharacter && g_bossCharacter && g_bossCharacter->isAlive())
+        CollisionSystem::resolveEntityX(x, y, velocityX, width, height, g_bossCharacter->getHitbox());
+    else if (this == g_bossCharacter && g_playerCharacter && g_playerCharacter->isAlive())
+        CollisionSystem::resolveEntityX(x, y, velocityX, width, height, g_playerCharacter->getHitbox());
 }
 
 void Character::renderDebugBounds(SDL_Renderer* renderer, float spriteW, float spriteH) const {

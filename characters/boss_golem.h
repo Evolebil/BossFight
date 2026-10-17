@@ -72,6 +72,7 @@ private:
     // --- Размеры и HP ---
     static constexpr float HITBOX_W              = 100.0f;
     static constexpr float HITBOX_H              = 100.0f;
+    static constexpr float HALF_HITBOX_W         = HITBOX_W / 2.0f;   // ← новое
     static constexpr float BASE_HP               = 1000.0f;
 
     // --- Урон ---
@@ -84,9 +85,11 @@ private:
     static constexpr float DAMAGE_SPIKE          = 35.0f;
 
     // --- Дистанции (в клетках) ---
-    static constexpr float RANGE_MELEE           = 2.0f;
+    // Было 2.0f — при физической блокировке игрок не может подойти ближе,
+    // чем сумма половин хитбоксов босса и игрока (~67.5px = 2.1 клетки),
+    // поэтому порог поднят с запасом, иначе ближняя атака почти никогда
+    // не срабатывала бы вплотную.
     static constexpr float RANGE_RANGED          = 99.0f;
-    static constexpr float RANGE_LASER           = 6.0f;
 
     // --- Скорости ---
     static constexpr float PROJECTILE_SPEED      = 400.0f;
@@ -145,8 +148,8 @@ private:
     static constexpr float PROJ_ANIM_SPEED       = 0.18f;
 
     // --- Спрайтшит лазера ---
-    static constexpr int   LASER_FRAME_W         = 308;
-    static constexpr int   LASER_FRAME_H         = 108;
+    static constexpr int   LASER_FRAME_W         = 300;   // было 308
+    static constexpr int   LASER_FRAME_H         = 100;   // было 108
     static constexpr int   LASER_CHARGE_FRAMES   = 8;
     static constexpr int   LASER_BEAM_FRAMES     = 6;
     static constexpr float LASER_CHARGE_SPEED    = 0.07f;
@@ -159,10 +162,10 @@ private:
     static constexpr int   CHARGE_RENDER_SIZE    = 96;
     static constexpr int   DASH_HIT_W            = 80;
     static constexpr int   DASH_HIT_H            = 80;
+    static constexpr float HALF_DASH_HIT_H       = DASH_HIT_H / 2.0f;  // ← новое
     static constexpr int   HITBOX_LINE_LEN       = 40;
-    static constexpr float MELEE_WIDTH_MULT      = 1.0f;
+    static constexpr float MELEE_WIDTH_MULT      = 2.0f;
     static constexpr float MELEE_HEIGHT_MULT     = 0.85f;
-    static constexpr float MELEE_OFFSET_X        = 0.1f;
 
     // --- Лазер параметры ---
     static constexpr float LASER_HEIGHT_DEFAULT  = 80.0f;
@@ -233,7 +236,7 @@ private:
 
     // --- Анимации ---
     std::map<BossState, Animation> animations;
-    Animation reviveAnim{false, true};
+    Animation reviveAnim{false, false};   // не loop, не pingPong — играет один раз и стоп
 
     // --- Боевые параметры ---
     float moveSpeed = 0.0f;
@@ -321,6 +324,18 @@ private:
     void renderProjectiles(SDL_Renderer* renderer);
     void renderLaser(SDL_Renderer* renderer);
     void renderSpikes(SDL_Renderer* renderer);
+
+    // Хитбокс снаряда смещён от центра по направлению полёта (velX/velY),
+    // а не центрирован на позиции — иначе при полёте по диагонали визуально
+    // "мажет" мимо спрайта снаряда. См. checkPlayerDamage/renderHitboxes.
+    [[nodiscard]] SDL_Rect getProjectileHitbox(const Projectile& proj) const;
+
+    // Проверяет, попадает ли точка (playerX, playerY) в фактический
+    // прямоугольник ближней атаки (тот же расчёт, что в checkPlayerDamage),
+    // а не абстрактное расстояние между центрами — иначе выбор атаки
+    // не совпадал с её реальным хитбоксом.
+    [[nodiscard]] bool isPlayerInMeleeRange(float playerX, float playerY) const;
+
     mutable int currentSpriteW = 0;
     mutable int currentSpriteH = 0;
     [[nodiscard]] SDL_Rect getCurrentFrame() const;

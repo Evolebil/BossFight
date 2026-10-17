@@ -32,12 +32,28 @@ static void loadSounds(SoundManager& mgr) {
     mgr.loadSound("melee_attack",  "assets/sound/mellee_attak_player.mp3");
     mgr.loadSound("ranged_attack", "assets/sound/ranged_attack_player.mp3");
     mgr.loadSound("golem_move",    "assets/sound/move_golem.mp3");
+    mgr.loadSound("jump",        "assets/sound/jamp.wav");
+    mgr.loadSound("land",        "assets/sound/isGrounded_true.wav");
+    mgr.loadSound("magic_cast",  "assets/sound/magic.wav");
+    mgr.loadSound("dash",        "assets/sound/dash.mp3");
+    mgr.loadSound("shield",      "assets/sound/Shield.wav");
+    mgr.loadSound("player_hurt", "assets/sound/damade_on_player.wav");
+    mgr.loadSound("golem_block",    "assets/sound/BLOCK_BOSS_GOLEM.wav");
+    mgr.loadSound("golem_slam",     "assets/sound/the-fall-of-a-huge-object-and-split-into-smithereens.wav");
+    mgr.loadSound("golem_teleport", "assets/sound/krugovorot-vihr.mp3");
+    mgr.loadSound("golem_death",    "assets/sound/the-sound-of-crumbling-rock.wav");
+    mgr.loadSound("golem_revive",   "assets/sound/ec75ae3b628d993.mp3");
+    mgr.loadSound("golem_dash",     "assets/sound/short-powerful-swing.wav");
 }
 
+// main.cpp
 static void loadMusicTracks(SoundManager& mgr) {
     mgr.loadMusic("menu_music",   "assets/musik/Menu.wav");
     mgr.loadMusic("level3_music", "assets/musik/Boss_3_Theme.wav");
-    // level1_music / level2_music — добавить сюда, когда появятся файлы
+
+    mgr.loadMusic("level1_music",        "assets/musik/level1_music_face1.mp3"); // фаза 1
+    mgr.loadMusic("level1_music_phase2", "assets/musik/level1_music_face2.mp3"); // фаза 2
+    // level2_music — добавить сюда, когда появится файл
 }
 
 // ============================================================

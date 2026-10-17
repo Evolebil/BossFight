@@ -109,3 +109,25 @@ void CollisionSystem::resolveY(float x, float& y, float& velocityY,
         }
     }
 }
+
+// ============================================================
+// resolveEntityX — коллизия с другим персонажем (игрок ↔ босс)
+// ============================================================
+
+void CollisionSystem::resolveEntityX(float& x, float y, float& velocityX,
+                                     float width, float height, const SDL_Rect& otherBox) {
+    if (velocityX == 0.0f) return;
+
+    const float hw = width  / 2.0f;
+    const float hh = height / 2.0f;
+
+    SDL_Rect box = { (int)(x - hw), (int)(y - hh), (int)width, (int)height };
+    if (!rectsOverlap(box, otherBox)) return;
+
+    if (velocityX < 0)
+        x = static_cast<float>(otherBox.x + otherBox.w) + hw;
+    else
+        x = static_cast<float>(otherBox.x) - hw;
+
+    velocityX = 0.0f;
+}

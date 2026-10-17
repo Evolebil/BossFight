@@ -51,6 +51,13 @@ bool SoundManager::loadMusic(const std::string& name, const std::string& path) {
     return true;
 }
 
+void SoundManager::setMusicVolume(float volume) {
+    musicVolume = std::clamp(volume, 0.0f, 1.0f);
+    // Mix_VolumeMusic действует на музыку, которая играет прямо сейчас;
+    // без этого вызова новое значение подхватится только при следующем старте трека.
+    Mix_VolumeMusic((int)(MIX_MAX_VOLUME * musicVolume));
+}
+
 void SoundManager::playSound(const std::string& name) {
     auto it = sounds.find(name);
     if (it != sounds.end()) {

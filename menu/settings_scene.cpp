@@ -208,7 +208,7 @@ void SettingsScene::handleInput(SDL_Event& event, int mx, int my,
         Config::setMusicVolume(tempMusicVolume);
         if (soundMgr) {
             soundMgr->soundVolume = Config::getSoundVolume();
-            soundMgr->musicVolume = Config::getMusicVolume();
+            soundMgr->setMusicVolume(Config::getMusicVolume());   // было: soundMgr->musicVolume = ...
         }
     }
 }

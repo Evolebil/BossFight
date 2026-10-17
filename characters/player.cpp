@@ -8,6 +8,7 @@
 #include "../utils/texture_manager.h"
 #include "../utils/input_manager.h"
 #include "../levels/ilevel.h"
+#include "../utils/sound_manager.h"
 
 // Глобальный указатель на текущий уровень — используется для проверки лестницы.
 // Объявлен и назначается в levels/ilevel.cpp, тот же самый что читает CollisionSystem.
@@ -157,7 +158,7 @@ void Player::startAttack() {
     isAttacking     = true;
     attackTimer     = attackCooldown;
     attackHitActive = false;
-
+    if (auto* snd = getSoundManager()) snd->playSound("melee_attack");
     if (attackCombo == 0) {
         attack1Anim.reset();
         attackDamage   = DAMAGE_ATTACK1;
@@ -183,6 +184,7 @@ void Player::castMagic() {
     isCastingMagic = true;
     mana -= MANA_COST_MAGIC;
     if (mana < 0.0f) mana = 0.0f;
+    if (auto* snd = getSoundManager()) snd->playSound("magic_cast");
 
     magicAnim.reset();
 
@@ -254,6 +256,7 @@ void Player::update(float deltaTime) {
         isGrounded     = false;
         isJumpCharging = true;
         jumpChargeTime = 0.0f;
+        if (auto* snd = getSoundManager()) snd->playSound("jump");
     }
 
     if (isJumpCharging) {
@@ -276,6 +279,7 @@ void Player::update(float deltaTime) {
         isDashing    = true;
         dashTimer    = DASH_DURATION;
         dashCooldown = DASH_COOLDOWN_MAX;
+        if (auto* snd = getSoundManager()) snd->playSound("dash");
         if (isDefending) {
             isDefending = false;
             defendAnim.reset();
@@ -308,6 +312,9 @@ void Player::update(float deltaTime) {
 
     if (!isAttacking && !isCastingMagic && !isHurt) {
         if (wantsToDefend) {
+            if (!isDefending) {
+                if (auto* snd = getSoundManager()) snd->playSound("shield");
+            }
             isDefending = true;
             if (defendAnim.isGoingForward()) defendAnim.update(deltaTime);
         } else if (isDefending) {
@@ -325,11 +332,16 @@ void Player::update(float deltaTime) {
         platformDropTimer -= deltaTime;
         y += PLATFORM_DROP_PUSH;// ← форсируем выход из тайла платформы каждый кадр пока таймер идёт
     }
+    const bool wasGrounded = isGrounded;
 
     // Обычная физика — как и без лестницы, гравитацию никогда не выключаем
     x += velocityX * deltaTime;
     applyCollisionsX();
     applyGravityAndCollisions(deltaTime, platformDropTimer > 0.0f);
+
+    if (!wasGrounded && isGrounded) {
+        if (auto* snd = getSoundManager()) snd->playSound("land");
+    }
 
     // ── ЛЕСТНИЦА (треугольный slope-коллайдер) ──────────────────
     // Гипотенуза пандуса обращена к ступенькам. Проверяем ПРАВЫЙ НИЖНИЙ угол
@@ -433,6 +445,7 @@ void Player::takeDamage(float damage) {
         isHurt         = true;
         isAttacking    = false;
         isCastingMagic = false;
+        if (auto* snd = getSoundManager()) snd->playSound("player_hurt");
         hurtAnim.reset();
     }
 }

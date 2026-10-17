@@ -25,36 +25,23 @@
  */
 class CollisionSystem {
 public:
-    /**
-     * @brief Разрешает коллизии по оси X.
-     *
-     * Вызывать ПОСЛЕ x += velocityX * dt, ПЕРЕД resolveY.
-     *
-     * @param x         Позиция центра персонажа по X (изменяется при коллизии)
-     * @param velocityX Скорость по X (обнуляется при коллизии)
-     * @param width     Ширина хитбокса
-     * @param height    Высота хитбокса
-     */
     static void resolveX(float& x, float y, float& velocityX, float width, float height);
 
-    /**
-     * @brief Разрешает коллизии по оси Y.
-     *
-     * Вызывать ПОСЛЕ y += velocityY * dt и ПОСЛЕ resolveX.
-     *
-     * @param x          Позиция центра по X (только чтение)
-     * @param y          Позиция центра по Y (изменяется при коллизии)
-     * @param velocityY  Скорость по Y (обнуляется при коллизии)
-     * @param width      Ширина хитбокса
-     * @param height     Высота хитбокса
-     * @param isGrounded Флаг "на земле" (выставляется этим методом)
-     */
     static void resolveY(float x, float& y, float& velocityY,
                          float width, float height, bool& isGrounded,
                          bool ignorePlatforms = false);
 
+    /**
+     * @brief Останавливает движение по X о хитбокс другого персонажа —
+     *        та же логика, что и resolveX с тайлами. Если velocityX == 0 —
+     *        объект не двигается, ничего не делаем (не толкаем того, кто
+     *        просто стоит). Если объект реально едет в сторону otherBox —
+     *        гасим его движение на границе. otherBox никогда не трогаем.
+     */
+    static void resolveEntityX(float& x, float y, float& velocityX,
+                               float width, float height, const SDL_Rect& otherBox);
+
 private:
-    // Конструктор закрыт — класс полностью статический, создавать объекты не нужно
     CollisionSystem() = delete;
 };
 #endif // COLLISION_SYSTEM_H

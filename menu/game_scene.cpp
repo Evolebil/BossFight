@@ -72,8 +72,10 @@ void GameScene::initPositions() {
 
     player = std::make_unique<Player>(px, py, diff.playerHP);
     player->setMapSize(mapW, mapH);
+    g_playerCharacter = player.get();          // ← добавить
 
     boss = level->createBoss(bx, by, diff.projectileSpeed);
+    g_bossCharacter = boss.get();               // ← добавить
     if (auto* golem = dynamic_cast<BossGolem*>(boss.get()))
         golem->setMapSize(mapW, mapH);
 
@@ -243,8 +245,11 @@ void GameScene::update(float deltaTime) {
     if (boss && player) {
         // Вызываем update через интерфейс Character
         // Для боссов с расширенным update (BossGolem) используем dynamic_cast
-        if (auto* golem = dynamic_cast<BossGolem*>(boss.get()))
+        if (auto* golem = dynamic_cast<BossGolem*>(boss.get())) {
             golem->update(deltaTime, player->getX(), player->getY());
+            if (soundMgr && golem->getPhase() == BossPhase::PHASE_2)
+                soundMgr->playMusic("level1_music_phase2");
+        }
         else if (auto* samurai = dynamic_cast<BossSamurai*>(boss.get())) {
             samurai->update(deltaTime, player->getX(), player->getY(), player->getFacingRight());
         } else if (auto* deadnight = dynamic_cast<BossDeadNight*>(boss.get())) {
@@ -403,6 +408,7 @@ void GameScene::update(float deltaTime) {
                 const Config::Difficulty& diff =
                     Config::getDifficulties()[Config::getCurrentDifficulty()];
                 boss = std::make_unique<BossArcher>(bx, by, diff.projectileSpeed);
+                g_bossCharacter = boss.get();  // ← ОБЯЗАТЕЛЬНО, иначе указатель на убитого самурая = краш
             }
 
         } else if (auto* archer = dynamic_cast<BossArcher*>(boss.get())) {
@@ -492,6 +498,7 @@ void GameScene::respawnPlayer() {
     auto [px, py] = getPlayerSpawnPos();
     const Config::Difficulty& diff = Config::getDifficulties()[Config::getCurrentDifficulty()];
     player = std::make_unique<Player>(px, py, diff.playerHP);
+    g_playerCharacter = player.get();  // ← добавить, иначе после первой смерти указатель битый
     // Сохраняем флаг хитбоксов при респавне
     if (auto* golem = dynamic_cast<BossGolem*>(boss.get()))
         player->showHitboxes = golem->showHitboxes;

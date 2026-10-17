@@ -17,21 +17,14 @@
 #include "../utils/animation.h"
 #include "../utils/collision_system.h"
 
-/**
- * @class Character
- * @brief Абстрактный базовый класс персонажа.
- *
- * Содержит:
- * - Позицию и физику (x, y, velocityX, velocityY, гравитация)
- * - Здоровье (hp, maxHP)
- * - Хитбокс (width, height)
- * - Направление взгляда (facingRight)
- * - Спрайтшит (spritesheet)
- *
- * Дочерние классы ОБЯЗАНЫ реализовать:
- * - update(float deltaTime)  — своя логика обновления
- * - render(SDL_Renderer*)    — своя отрисовка
- */
+class Character;  // ← forward declaration, добавить эту строку
+
+// Глобальные указатели на игрока и текущего босса — ТОЛЬКО для взаимной
+// физической коллизии между ними (см. Character::applyCollisionsX).
+// Не путать с g_camera/g_currentLevel — существуют только во время боя.
+extern Character* g_playerCharacter;
+extern Character* g_bossCharacter;
+
 class Character {
 protected:
     // --- Позиция и физика ---

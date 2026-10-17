@@ -21,6 +21,8 @@ public:
     bool loadSound(const std::string& name, const std::string& path);
     bool loadMusic(const std::string& name, const std::string& path);
     
+    void setMusicVolume(float volume);   // применяет громкость сразу, к уже играющему треку
+
     // Воспроизведение
     void playSound(const std::string& name);
     void playMusic(const std::string& name);
