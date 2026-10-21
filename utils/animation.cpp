@@ -16,7 +16,8 @@ void Animation::update(float deltaTime) {
 
     currentTime += deltaTime;
     if (currentTime < frames[currentFrame].duration) return;
-    currentTime = 0;
+    // Переносим остаток, а не обнуляем: иначе анимация шла медленнее при низком FPS
+    currentTime -= frames[currentFrame].duration;
 
     if (pingPong) {
         if (goingForward) {

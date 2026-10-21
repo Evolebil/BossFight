@@ -11,43 +11,40 @@
 SceneManager::SceneManager(SDL_Renderer* rend)
     : currentScene(nullptr), currentSceneType(SceneType::SPLASH), renderer(rend) {}
 
-SceneManager::~SceneManager() {
-    delete currentScene;
-}
-
 void SceneManager::loadScene(SceneType type) {
-    // Удаляем старую сцену
-    delete currentScene;
-    currentScene = nullptr;
+    // Старую сцену удаляем ДО создания новой: GameScene в конструкторе
+    // перезаписывает глобальные указатели (g_currentLevel, g_camera, …),
+    // а деструктор старой их обнуляет
+    currentScene.reset();
 
     // Создаём новую сцену
     switch(type) {
     case SceneType::SPLASH:
-        currentScene = new SplashScene();
+        currentScene = std::make_unique<SplashScene>();
         break;
 
     case SceneType::MAIN_MENU:
-        currentScene = new MainMenuScene();
+        currentScene = std::make_unique<MainMenuScene>();
         break;
 
     case SceneType::LEVEL_SELECT:
-        currentScene = new LevelSelectScene();
+        currentScene = std::make_unique<LevelSelectScene>();
         break;
 
     case SceneType::SETTINGS:
-        currentScene = new SettingsScene();
+        currentScene = std::make_unique<SettingsScene>();
         break;
 
     case SceneType::CREDITS:
-        currentScene = new CreditsScene();
+        currentScene = std::make_unique<CreditsScene>();
         break;
     case SceneType::SAVES:
-        currentScene = new SavesScene();
+        currentScene = std::make_unique<SavesScene>();
         break;
 
     case SceneType::GAME:
     case SceneType::RESTART_GAME:
-        currentScene = new GameScene();
+        currentScene = std::make_unique<GameScene>();
         // Оба случая живут под типом GAME — чтобы следующий RESTART_GAME снова сработал
         currentSceneType = SceneType::GAME;
         return;

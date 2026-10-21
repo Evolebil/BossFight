@@ -179,7 +179,7 @@ private:
 
 public:
     GameScene();
-    ~GameScene() override = default;
+    ~GameScene() override;
 
     void handleInput(SDL_Event& event, int mouseX, int mouseY,
                      bool mouseClicked, bool mouseDown) override;

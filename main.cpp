@@ -166,6 +166,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // === ТЕКСТУРЫ ===
     TextureManager::init(renderer);
 
+    // Свой блок — менеджер сцен (и текущая сцена) удаляется ДО очистки
+    // текстур, звука и SDL ниже, а не после SDL_Quit при выходе из main
+    {
     // === МЕНЕДЖЕР СЦЕН ===
     SceneManager sceneManager(renderer);
     sceneManager.loadScene(SceneType::SPLASH);
@@ -182,8 +185,11 @@ int main(int /*argc*/, char* /*argv*/[]) {
     while (running && !sceneManager.shouldQuit()) {
         const Uint32 frameStart = SDL_GetTicks();
 
-        // Deltatime — время прошедшее с прошлого кадра
-        float deltaTime = (frameStart - lastTime) / 1000.0f;
+        // Deltatime — время прошедшее с прошлого кадра.
+        // Ограничиваем сверху: после подвисания (перетаскивание окна, загрузка)
+        // огромный шаг проносил персонажей сквозь пол и платформы за один кадр
+        constexpr float MAX_DELTA_TIME = 0.05f;
+        float deltaTime = std::min((frameStart - lastTime) / 1000.0f, MAX_DELTA_TIME);
         lastTime = frameStart;
 
         // Сбрасываем одноразовый клик
@@ -226,10 +232,14 @@ int main(int /*argc*/, char* /*argv*/[]) {
         const Uint32 frameTime = SDL_GetTicks() - frameStart;
         if (frameTime < 16) SDL_Delay(16 - frameTime);
     }
+    }  // ← здесь удаляется sceneManager
 
     // === ОЧИСТКА ===
     TextureManager::cleanup();
-    // g_soundMgr удаляется автоматически (unique_ptr)
+    // Звук — явно и до SDL_Quit: раньше unique_ptr освобождал чанки и закрывал
+    // аудио уже после SDL_Quit, при выходе из main
+    g_soundMgr = nullptr;
+    soundMgrPtr.reset();
     Config::cleanup();
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);

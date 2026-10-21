@@ -17,24 +17,28 @@ void TextureManager::init(SDL_Renderer* rend) {
 }
 
 SDL_Texture* TextureManager::loadTexture(const std::string& path) {
-    // Проверяем, не загружена ли уже
-    if (textures.find(path) != textures.end()) {
-        return textures[path];
+    // Проверяем, не загружена ли уже (один поиск вместо find + operator[])
+    if (auto it = textures.find(path); it != textures.end()) {
+        return it->second;
     }
-    
+
     // Загружаем поверхность
     SDL_Surface* surface = IMG_Load(path.c_str());
     if (!surface) {
         std::cout << "Ошибка загрузки изображения " << path << ": " << IMG_GetError() << std::endl;
+        // Запоминаем неудачу: иначе отсутствующий файл заново читался бы с диска
+        // (и спамил в консоль) при каждом обращении — например, каждый кадр в рендере
+        textures[path] = nullptr;
         return nullptr;
     }
-    
+
     // Создаём текстуру
     SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
-    
+
     if (!texture) {
         std::cout << "Ошибка создания текстуры из " << path << ": " << SDL_GetError() << std::endl;
+        textures[path] = nullptr;
         return nullptr;
     }
     
@@ -71,7 +75,7 @@ void TextureManager::draw(SDL_Texture* texture, SDL_Rect* srcRect, SDL_Rect* dst
 
 void TextureManager::cleanup() {
     for (auto& pair : textures) {
-        SDL_DestroyTexture(pair.second);
+        if (pair.second) SDL_DestroyTexture(pair.second);
     }
     textures.clear();
     IMG_Quit();

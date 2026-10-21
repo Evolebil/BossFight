@@ -10,6 +10,7 @@ SoundManager::SoundManager()
 
 SoundManager::~SoundManager() {
     cleanup();
+    if (g_soundManager == this) g_soundManager = nullptr;  // getSoundManager() не должен вернуть удалённый объект
 }
 
 bool SoundManager::init() {
@@ -112,8 +113,9 @@ void SoundManager::cleanup() {
         if (pair.second) Mix_FreeMusic(pair.second);
     }
     music.clear();
-    
+
     Mix_CloseAudio();
+    Mix_Quit();  // выгружает MP3-декодер, загруженный Mix_Init в init()
 }
 
 SoundManager* getSoundManager() {

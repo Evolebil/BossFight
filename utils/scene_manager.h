@@ -23,13 +23,13 @@ public:
 // Менеджер сцен
 class SceneManager {
 private:
-    Scene* currentScene;
+    std::unique_ptr<Scene> currentScene;
     SceneType currentSceneType;
     SDL_Renderer* renderer;
-    
+
 public:
     SceneManager(SDL_Renderer* rend);
-    ~SceneManager();
+    ~SceneManager() = default;
     
     // Загрузить новую сцену
     void loadScene(SceneType type);

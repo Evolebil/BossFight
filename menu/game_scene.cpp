@@ -36,6 +36,15 @@ GameScene::GameScene()
     initPositions();
 }
 
+GameScene::~GameScene() {
+    // Глобальные указатели смотрят на объекты этой сцены — после её удаления
+    // они висели бы на освобождённой памяти до следующего боя
+    g_currentLevel    = nullptr;
+    g_camera          = nullptr;
+    g_playerCharacter = nullptr;
+    g_bossCharacter   = nullptr;
+}
+
 // ============================================================
 //  ИНИЦИАЛИЗАЦИЯ ПОЗИЦИЙ
 // ============================================================
@@ -51,11 +60,12 @@ void GameScene::initPositions() {
     const Config::Difficulty& diff = Config::getDifficulties()[Config::getCurrentDifficulty()];
     livesLeft = diff.respawns;
 
-    // Загружаем autosave ТОЛЬКО если флаг выставлен (пользователь выбрал "Загрузить")
+    // Загружаем autosave ТОЛЬКО если флаг выставлен (пользователь выбрал "Загрузить").
+    // Файл читаем один раз — ниже те же данные нужны для HP и фазы босса.
+    GameSaveState saved;
+    const bool savedOk = loadFromSave && SaveManager::get().loadAutosave(saved);
     if (loadFromSave) {
-        GameSaveState saved;
-        const bool ok = SaveManager::get().loadAutosave(saved)
-                        && saved.currentLevel == currentLevel;
+        const bool ok = savedOk && saved.currentLevel == currentLevel;
         if (ok) {
             px = saved.player.x;
             py = saved.player.y;
@@ -80,9 +90,9 @@ void GameScene::initPositions() {
         golem->setMapSize(mapW, mapH);
 
     // Восстанавливаем HP только при загрузке
+    // Раньше здесь не сверялся уровень: autosave с другого уровня подставлял чужие HP и фазу
     if (loadFromSave) {
-        GameSaveState saved;
-        if (SaveManager::get().loadAutosave(saved)) {
+        if (savedOk && saved.currentLevel == currentLevel) {
             if (saved.player.hp > 0.0f) player->setHP(saved.player.hp);
             player->setVelocityX(saved.playerMoveSpeed);
 

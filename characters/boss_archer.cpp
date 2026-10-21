@@ -817,7 +817,9 @@ void BossArcher::recalcPath(float playerX, float playerY) {
 
     while (!q.empty() && nodes.size() < 6000) {
         int idx = q.front(); q.pop();
-        const auto& cur = nodes[idx];
+        // Копия, не ссылка: tryAdd ниже делает nodes.push_back, вектор может
+        // перевыделить память — ссылка указывала бы на освобождённый блок
+        const BFSNode cur = nodes[idx];
 
         if (cur.col == goalCol && cur.row == goalRow) { goalIdx = idx; break; }
 
