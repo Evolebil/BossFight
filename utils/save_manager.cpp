@@ -19,9 +19,8 @@
  * level_timer <float>
  * current_level <int>
  * lives_left <int>
- * best_stars_0 <int>
- * best_stars_1 <int>
- * best_stars_2 <int>
+ * best_stars_<сложность>_<уровень> <int>   (старые файлы: best_stars_<уровень> —
+ *                                          читаются как звёзды сохранённой сложности)
  * difficulty <int>
  * [управление]  ← только в именованных файлах
  * attack_mouse <int>
@@ -47,6 +46,7 @@
 #include <sstream>
 #include <filesystem>  // C++17 — удаление файлов
 #include <iostream>
+#include <cstdio>
 
 // ============================================================
 // 16-РИЧНОЕ КОДИРОВАНИЕ ФАЙЛА
@@ -115,6 +115,19 @@ int SaveManager::findFreeSaveNumber() const {
     }
 }
 
+// Звёзды всех сложностей: best_stars_<сложность>_<уровень>
+static void writeBestStars(std::ostringstream& oss, const GameSaveState& state) {
+    for (int d = 0; d < DIFFICULTY_COUNT; d++)
+        for (int l = 0; l < LEVEL_COUNT; l++)
+            oss << "best_stars_" << d << "_" << l << " " << state.bestStars[d][l] << "\n";
+}
+
+static void fillBestStarsFromConfig(GameSaveState& state) {
+    for (int d = 0; d < DIFFICULTY_COUNT; d++)
+        for (int l = 0; l < LEVEL_COUNT; l++)
+            state.bestStars[d][l] = Config::getLevelStars(d, l);
+}
+
 void SaveManager::writeAutosaveFile(const GameSaveState& state) {
     std::ostringstream oss;
 
@@ -135,9 +148,7 @@ void SaveManager::writeAutosaveFile(const GameSaveState& state) {
     oss << "level_timer "   << state.levelTimer         << "\n";
     oss << "current_level " << state.currentLevel       << "\n";
     oss << "lives_left "    << state.livesLeft          << "\n";
-    oss << "best_stars_0 "  << state.bestStars[0]       << "\n";
-    oss << "best_stars_1 "  << state.bestStars[1]       << "\n";
-    oss << "best_stars_2 "  << state.bestStars[2]       << "\n";
+    writeBestStars(oss, state);
     oss << "difficulty "    << state.difficulty         << "\n";
 
     std::ofstream f(AUTOSAVE_FILE, std::ios::binary);
@@ -171,9 +182,7 @@ void SaveManager::writeSaveFile(const std::string& path,
     oss << "level_timer "       << state.levelTimer         << "\n";
     oss << "current_level "     << state.currentLevel       << "\n";
     oss << "lives_left "        << state.livesLeft          << "\n";
-    oss << "best_stars_0 "      << state.bestStars[0]       << "\n";
-    oss << "best_stars_1 "      << state.bestStars[1]       << "\n";
-    oss << "best_stars_2 "      << state.bestStars[2]       << "\n";
+    writeBestStars(oss, state);
     oss << "difficulty "        << state.difficulty         << "\n";
 \
     // --- Управление (только в именованных) ---
@@ -216,6 +225,12 @@ bool SaveManager::readSaveFile(const std::string& path, GameSaveState& out) {
 
     std::istringstream stream(content);
 
+    // Старые сохранения не знали о сложностях — их звёзды отдадим той
+    // сложности, что записана в файле (известна только после разбора)
+    int  legacyStars[LEVEL_COUNT] = {};
+    bool hasLegacyStars = false;
+    bool hasNewStars    = false;
+
     std::string key;
     while (stream >> key) {
         if (key == "#") {
@@ -238,9 +253,20 @@ bool SaveManager::readSaveFile(const std::string& path, GameSaveState& out) {
         else if (key == "level_timer")       stream >> out.levelTimer;
         else if (key == "current_level")     stream >> out.currentLevel;
         else if (key == "lives_left")        stream >> out.livesLeft;
-        else if (key == "best_stars_0")      stream >> out.bestStars[0];
-        else if (key == "best_stars_1")      stream >> out.bestStars[1];
-        else if (key == "best_stars_2")      stream >> out.bestStars[2];
+        else if (key.rfind("best_stars_", 0) == 0) {
+            int value = 0;
+            stream >> value;
+            int first = -1, second = -1;
+            const int parsed = std::sscanf(key.c_str(), "best_stars_%d_%d", &first, &second);
+            if (parsed == 2) {
+                if (first >= 0 && first < DIFFICULTY_COUNT && second >= 0 && second < LEVEL_COUNT)
+                    out.bestStars[first][second] = value;
+                hasNewStars = true;
+            } else if (parsed == 1 && first >= 0 && first < LEVEL_COUNT) {
+                legacyStars[first] = value;  // старый формат best_stars_<уровень>
+                hasLegacyStars = true;
+            }
+        }
         else if (key == "difficulty")        stream >> out.difficulty;
         else if (key == "attack_is_mouse") { int v; stream >> v; out.attackIsMouse = (v == 1); }
         else if (key == "attack_value")     stream >> out.attackValue;
@@ -253,6 +279,11 @@ bool SaveManager::readSaveFile(const std::string& path, GameSaveState& out) {
         else if (key == "dash_key")          stream >> out.dashKey;
         else if (key == "shield_key")        stream >> out.shieldKey;
         // Неизвестные ключи — пропускаем
+    }
+
+    if (hasLegacyStars && !hasNewStars) {
+        const int d = std::clamp(out.difficulty, 0, DIFFICULTY_COUNT - 1);
+        for (int l = 0; l < LEVEL_COUNT; l++) out.bestStars[d][l] = legacyStars[l];
     }
     return true;
 }
@@ -308,8 +339,7 @@ int SaveManager::createNamedSave(const std::string& name) {
     fillControlsFromConfig(state);
 
     // Подтягиваем звёзды из Config
-    for (int i = 0; i < 3; i++)
-        state.bestStars[i] = Config::getLevelStars(i);
+    fillBestStarsFromConfig(state);
     state.difficulty = Config::getCurrentDifficulty();
 
     // Создаём запись
@@ -338,8 +368,7 @@ bool SaveManager::overwriteNamedSave(int entryIndex) {
     }
 
     fillControlsFromConfig(state);
-    for (int i = 0; i < 3; i++)
-        state.bestStars[i] = Config::getLevelStars(i);
+    fillBestStarsFromConfig(state);
     state.difficulty = Config::getCurrentDifficulty();
 
     writeSaveFile(entries[entryIndex].filename, state, entries[entryIndex].name);
@@ -467,8 +496,9 @@ void SaveManager::applyControlsToConfig(const GameSaveState& state) {
 }
 
 void SaveManager::applyProgressToConfig(const GameSaveState& state) {
-    for (int i = 0; i < 3; i++)
-        Config::setLevelStars(i, state.bestStars[i]);
+    for (int d = 0; d < DIFFICULTY_COUNT; d++)
+        for (int l = 0; l < LEVEL_COUNT; l++)
+            Config::setLevelStars(d, l, state.bestStars[d][l]);
     Config::setCurrentDifficulty(state.difficulty);
     Config::setSelectedLevel(state.currentLevel);
 }

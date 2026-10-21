@@ -58,7 +58,7 @@ struct GameSaveState {
     int   livesLeft     = 0;
 
     // --- Лучший результат ---
-    int bestStars[3]    = {0, 0, 0};  // максимум звёзд по уровням
+    int bestStars[DIFFICULTY_COUNT][LEVEL_COUNT] = {};  // максимум звёзд: [сложность][уровень]
 
     // --- Управление (копируется из Config::Controls) ---
     bool  attackIsMouse = true;  // true = attackValue это кнопка мыши, false = скан-код клавиши

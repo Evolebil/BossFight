@@ -23,7 +23,7 @@ float Config::scaleY       = 1.0f;
 bool  Config::loadFromSave = false;
 
 int Config::currentDifficulty = 2;
-int Config::levelStars[3]     = {0, 0, 0};
+int Config::levelStars[DIFFICULTY_COUNT][LEVEL_COUNT] = {};
 int Config::selectedLevel     = 0;
 
 TTF_Font* Config::font      = nullptr;
@@ -122,16 +122,45 @@ void Config::setMusicVolume(float val) { musicVolume = std::clamp(val, 0.0f, 1.0
 void Config::setSensitivity(float val) { sensitivity = std::clamp(val, 0.5f, 2.0f); }
 
 void Config::setCurrentDifficulty(int diff) {
-    currentDifficulty = std::clamp(diff, 0, 5);
+    currentDifficulty = std::clamp(diff, 0, DIFFICULTY_COUNT - 1);
+    saveProgress();  // выбранная сложность переживает перезапуск
+}
+
+int Config::getLevelStars(int difficulty, int level) {
+    if (difficulty < 0 || difficulty >= DIFFICULTY_COUNT || level < 0 || level >= LEVEL_COUNT)
+        return 0;
+    return levelStars[difficulty][level];
 }
 
 void Config::setLevelStars(int level, int stars) {
-    if (level >= 0 && level < 3)
-        levelStars[level] = std::clamp(stars, 0, 3);
+    setLevelStars(currentDifficulty, level, stars);
+}
+
+void Config::setLevelStars(int difficulty, int level, int stars) {
+    if (difficulty < 0 || difficulty >= DIFFICULTY_COUNT || level < 0 || level >= LEVEL_COUNT)
+        return;
+    levelStars[difficulty][level] = std::clamp(stars, 0, 3);
+    // Раньше saveProgress() не вызывался нигде — звёзды пропадали при
+    // перезапуске, если не загрузить сохранение
+    saveProgress();
 }
 
 void Config::resetProgress() {
-    for (int i = 0; i < 3; i++) levelStars[i] = 0;
+    for (auto& row : levelStars)
+        for (int& stars : row) stars = 0;
+    saveProgress();
+}
+
+SDL_Color Config::getDifficultyColor(int difficulty) {
+    static constexpr SDL_Color RAINBOW[DIFFICULTY_COUNT] = {
+        {255,  70,  70, 255},  // Нуб — красный
+        {255, 150,  40, 255},  // Легко — оранжевый
+        {255, 220,  40, 255},  // Нормально — жёлтый
+        { 80, 210,  90, 255},  // Сложно — зелёный
+        { 70, 150, 255, 255},  // Мастер — синий
+        {175,  90, 255, 255},  // ХАРДКОР — фиолетовый
+    };
+    return RAINBOW[std::clamp(difficulty, 0, DIFFICULTY_COUNT - 1)];
 }
 
 const Config::Difficulty* Config::getDifficulties() { return difficulties; }
@@ -159,8 +188,8 @@ void Config::updateScale(SDL_Window* window) {
 
 bool Config::saveProgress() {
     SaveData data;
-    for (int i = 0; i < 3; ++i)
-        data.levelStars[i] = levelStars[i];
+    std::copy(&levelStars[0][0], &levelStars[0][0] + DIFFICULTY_COUNT * LEVEL_COUNT,
+              &data.levelStars[0][0]);
     data.selectedLevel = selectedLevel;
     data.currentDifficulty = currentDifficulty;
 
@@ -175,13 +204,14 @@ bool Config::loadProgress() {
     if (!ifs.is_open()) return false;
     SaveData data;
     ifs.read(reinterpret_cast<char*>(&data), sizeof(SaveData));
-    if (!ifs) return false;
-    for (int i = 0; i < 3; ++i)
-        levelStars[i] = data.levelStars[i];
+    if (!ifs) return false;  // старый/битый save.bin другого размера — начинаем с нуля
+    for (int d = 0; d < DIFFICULTY_COUNT; ++d)
+        for (int l = 0; l < LEVEL_COUNT; ++l)
+            levelStars[d][l] = std::clamp(data.levelStars[d][l], 0, 3);
     selectedLevel = data.selectedLevel;
     currentDifficulty = data.currentDifficulty;
     // валидация
     selectedLevel = std::clamp(selectedLevel, 0, 2);
-    currentDifficulty = std::clamp(currentDifficulty, 0, 5);
+    currentDifficulty = std::clamp(currentDifficulty, 0, DIFFICULTY_COUNT - 1);
     return true;
 }

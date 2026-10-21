@@ -218,7 +218,7 @@ void GameScene::handleInput(SDL_Event& event, int mx, int my,
     }
 
     // ПОБЕДА — убрали условие PLAYING (оно блокировало кнопку)
-    if (resultState == ResultState::VICTORY && starsRevealed >= earnedStars) {
+    if (resultState == ResultState::VICTORY && starsRevealed >= 3) {
         if (updateButton(nextBtn, mx, my, clicked, soundMgr))
             nextScene = SceneType::LEVEL_SELECT;
     }
@@ -244,7 +244,7 @@ void GameScene::update(float deltaTime) {
         SaveManager::get().tickAutosave(deltaTime, buildSaveState());
     }
 
-    if (resultState == ResultState::VICTORY && starsRevealed < earnedStars) {
+    if (resultState == ResultState::VICTORY && starsRevealed < 3) {
         starRevealTimer += deltaTime;
         if (starRevealTimer >= STAR_REVEAL_DELAY) {
             starRevealTimer = 0.0f;
@@ -538,9 +538,13 @@ void GameScene::respawnPlayer() {
 // ============================================================
 
 void GameScene::calculateAndSaveStars() {
-    earnedStars = 1;
-    if (!playerTookDamage)                earnedStars++;
-    if (levelTimer <= TIME_LIMIT_SECONDS) earnedStars++;
+    // Каждая звезда — своё условие, в порядке подписей на экране победы.
+    // Раньше горели первые N звёзд по количеству, и «без урона» могло
+    // зажечь звезду «3 минуты».
+    starEarned[0] = true;
+    starEarned[1] = (levelTimer <= TIME_LIMIT_SECONDS);
+    starEarned[2] = !playerTookDamage;
+    earnedStars = (int)starEarned[0] + (int)starEarned[1] + (int)starEarned[2];
 
     int prev = Config::getLevelStars(currentLevel);
     if (earnedStars > prev)
@@ -610,16 +614,16 @@ void GameScene::renderVictoryScreen(SDL_Renderer* renderer) {
     for (int i = 0; i < 3; i++) {
         int cx = startX + i * (VICTORY_STAR_SIZE * 2 + VICTORY_STAR_GAP);
         drawStar(renderer, cx, VICTORY_STAR_Y, VICTORY_STAR_SIZE,
-                 (i < starsRevealed) && (i < earnedStars));
-        SDL_Color c = (i < earnedStars)
-                          ? SDL_Color{255, 215, 0, 255}
+                 (i < starsRevealed) && starEarned[i]);
+        SDL_Color c = starEarned[i]
+                          ? Config::getDifficultyColor(Config::getCurrentDifficulty())
                           : SDL_Color{120, 120, 120, 255};
         drawText(renderer, Config::getFont(), labels[i],
                  cx - VICTORY_STAR_SIZE,
                  VICTORY_STAR_Y + VICTORY_STAR_SIZE + VICTORY_STAR_LABEL_DY, c);
     }
 
-    if (starsRevealed >= earnedStars)
+    if (starsRevealed >= 3)
         drawButton(renderer, Config::getFont(), nextBtn);
 }
 
@@ -648,17 +652,17 @@ void GameScene::renderDefeatScreen(SDL_Renderer* renderer) {
 // ============================================================
 
 void GameScene::drawStar(SDL_Renderer* renderer, int cx, int cy, int size, bool filled) {
-    // Рамка звезды
-    SDL_SetRenderDrawColor(renderer, 180, 150, 0, 255);
+    // Цвет звёзд — цвет текущей сложности (радуга), у каждой сложности свои звёзды
+    const SDL_Color c = Config::getDifficultyColor(Config::getCurrentDifficulty());
+
+    // Рамка звезды — тот же цвет, приглушённый
+    SDL_SetRenderDrawColor(renderer, c.r * 7 / 10, c.g * 7 / 10, c.b * 7 / 10, 255);
     SDL_Rect outline = {cx - size, cy - size, size * 2, size * 2};
     SDL_RenderDrawRect(renderer, &outline);
 
-    // Заливка (золото если заработана, тёмная если нет)
-    SDL_SetRenderDrawColor(renderer,
-                           filled ? 255 : 55,
-                           filled ? 215 : 55,
-                           filled ?   0 : 55,
-                           255);
+    // Заливка (цвет сложности если заработана, тёмная если нет)
+    if (filled) SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, 255);
+    else        SDL_SetRenderDrawColor(renderer, 55, 55, 55, 255);
     SDL_Rect inner = {
         cx - size + STAR_BORDER,
         cy - size + STAR_BORDER,
@@ -841,8 +845,9 @@ GameSaveState GameScene::buildSaveState() const {
     s.difficulty   = Config::getCurrentDifficulty();
 
     // Лучшие звёзды
-    for (int i = 0; i < 3; i++)
-        s.bestStars[i] = Config::getLevelStars(i);
+    for (int d = 0; d < DIFFICULTY_COUNT; d++)
+        for (int l = 0; l < LEVEL_COUNT; l++)
+            s.bestStars[d][l] = Config::getLevelStars(d, l);
 
     // Управление
     SaveManager::fillControlsFromConfig(s);

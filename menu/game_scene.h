@@ -171,6 +171,7 @@ private:
 
     ResultState resultState     = ResultState::PLAYING;
     int         earnedStars     = 0;
+    bool        starEarned[3]   = {};  // по условиям: [0] убить, [1] 3 минуты, [2] без урона
     float       starRevealTimer = 0.0f;
     int         starsRevealed   = 0;
 

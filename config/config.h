@@ -18,8 +18,13 @@ struct InputBinding {
     int          mouseButton = 1;
 };
 
+constexpr int LEVEL_COUNT      = 3;
+constexpr int DIFFICULTY_COUNT = 6;
+
+// save.bin. Звёзды хранятся отдельно для каждой сложности:
+// прохождение на «Легко» не открывает уровень на «Мастере».
 struct SaveData {
-    int levelStars[3];
+    int levelStars[DIFFICULTY_COUNT][LEVEL_COUNT];
     int selectedLevel;
     int currentDifficulty;
 };
@@ -39,7 +44,7 @@ private:
     static float scaleY;
 
     static int currentDifficulty;
-    static int levelStars[3];
+    static int levelStars[DIFFICULTY_COUNT][LEVEL_COUNT];
 
     static TTF_Font* font;
     static TTF_Font* titleFont;
@@ -71,11 +76,17 @@ public:
     static float getScaleY()      { return scaleY; }
 
     static int getCurrentDifficulty()      { return currentDifficulty; }
-    static int getLevelStars(int level)    { return levelStars[level]; }
+    // Звёзды уровня на ТЕКУЩЕЙ сложности
+    static int getLevelStars(int level)    { return getLevelStars(currentDifficulty, level); }
+    static int getLevelStars(int difficulty, int level);
 
     static void setCurrentDifficulty(int diff);
-    static void setLevelStars(int level, int stars);
+    static void setLevelStars(int level, int stars);                  // на текущей сложности
+    static void setLevelStars(int difficulty, int level, int stars);
     static void resetProgress();
+
+    // Цвет звёзд сложности — радуга от «Нуб» (красный) до «ХАРДКОР» (фиолетовый)
+    static SDL_Color getDifficultyColor(int difficulty);
 
 
 
@@ -92,7 +103,7 @@ public:
     };
 
     static const Difficulty* getDifficulties();
-    static int getDifficultyCount() { return 6; }
+    static int getDifficultyCount() { return DIFFICULTY_COUNT; }
 
     // Управление — добавлены дэш, щит, магия и быстрые клавиши рестарта/сейва/лоада
     struct Controls {

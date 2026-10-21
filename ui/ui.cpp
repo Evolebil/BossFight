@@ -162,13 +162,10 @@ void drawSlider(SDL_Renderer* renderer, TTF_Font* font, Slider& slider,
     drawText(renderer, font, valText, slider.track.x + slider.track.w + 20, slider.track.y - 10);
 }
 
-void drawStars(SDL_Renderer* renderer, int x, int y, int stars) {
+void drawStars(SDL_Renderer* renderer, int x, int y, int stars, SDL_Color color) {
     for (int i = 0; i < 3; i++) {
-        SDL_SetRenderDrawColor(renderer,
-                               i < stars ? 255 : 100,
-                               i < stars ? 215 : 100,
-                               i < stars ?   0 : 100,
-                               255);
+        if (i < stars) SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, 255);
+        else           SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
         SDL_Rect starRect = {x + i * 30, y, 25, 25};
         SDL_RenderFillRect(renderer, &starRect);
     }

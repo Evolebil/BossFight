@@ -161,7 +161,8 @@ void LevelSelectScene::render(SDL_Renderer* renderer) {
         drawStars(renderer,
                   levelBtns[i].rect.x + 35,
                   levelBtns[i].rect.y + 110,
-                  Config::getLevelStars(static_cast<int>(i)));
+                  Config::getLevelStars(static_cast<int>(i)),
+                  Config::getDifficultyColor(Config::getCurrentDifficulty()));
 
         drawButton(renderer, Config::getFont(), infoBtns[i]);
 

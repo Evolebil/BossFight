@@ -76,6 +76,7 @@ void drawButton(SDL_Renderer* renderer, TTF_Font* font, Button& btn,
 void drawSlider(SDL_Renderer* renderer, TTF_Font* font, Slider& slider,
                 SoundManager* soundMgr = nullptr);
 
-void drawStars(SDL_Renderer* renderer, int x, int y, int stars);
+// color — цвет заработанных звёзд (у каждой сложности свой, см. Config::getDifficultyColor)
+void drawStars(SDL_Renderer* renderer, int x, int y, int stars, SDL_Color color);
 
 [[nodiscard]] std::string getKeyName(SDL_Scancode scancode);
