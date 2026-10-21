@@ -7,6 +7,9 @@
 #include "archer_minion.h"
 #include "../utils/camera.h"
 #include "../utils/texture_manager.h"
+#include "../levels/ilevel.h"
+
+extern ILevel* g_currentLevel;
 #include "../levels/level1_assets.h" // TILE_SIZE
 #include <cmath>
 
@@ -78,6 +81,12 @@ void ArcherMinion::update(float deltaTime, float playerX, float playerY) {
         if (!a.active) continue;
         a.x += a.velX * deltaTime;
         a.y += a.velY * deltaTime;
+
+        // Стрела ломается о стены, пол и лестницу, а не пролетает сквозь них
+        if (g_currentLevel && g_currentLevel->blocksProjectile(a.x, a.y)) {
+            a.active = false;
+            continue;
+        }
 
         const float dx = a.x - x;
         const float dy = a.y - y;

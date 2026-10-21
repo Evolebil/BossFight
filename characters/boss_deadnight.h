@@ -71,11 +71,16 @@ private:
     static constexpr float FIREBALL_COOLDOWN      = 2.0f;
     static constexpr float FIREBALL_EXPLODE_LIFETIME = 0.3f;
 
-    // Explosion_bomb.png 256×256 → 64×64 кадр → 4×4 = 16 кадров, one-shot
-    static constexpr int   EXPLODE_FRAME_SIZE = 64;
-    static constexpr int   EXPLODE_FRAMES_X = 4;
-    static constexpr int   EXPLODE_FRAMES_Y = 4;
-    static constexpr float EXPLODE_FRAME_DUR = FIREBALL_EXPLODE_LIFETIME / (EXPLODE_FRAMES_X * EXPLODE_FRAMES_Y);
+    // Explosion_bomb.png 256×256 → 64×64 кадр → сетка 4×4, one-shot.
+    // Кадры 0, 14, 15 пустые — берём только 1..13, иначе взрыв "мигал" пустотой.
+    static constexpr int   EXPLODE_FRAME_SIZE  = 64;
+    static constexpr int   EXPLODE_FRAMES_X    = 4;
+    static constexpr int   EXPLODE_FIRST_FRAME = 1;
+    static constexpr int   EXPLODE_FRAME_COUNT = 13;
+    static constexpr float EXPLODE_FRAME_DUR   = FIREBALL_EXPLODE_LIFETIME / EXPLODE_FRAME_COUNT;
+    // Видимое пламя занимает ~50 из 64 px кадра — растягиваем так, чтобы
+    // нарисованный взрыв совпал с зоной урона (диаметр 2×FIREBALL_EXPLODE_RADIUS)
+    static constexpr int   EXPLODE_DRAW_SIZE   = static_cast<int>(FIREBALL_EXPLODE_RADIUS * 2.0f * 64.0f / 50.0f);
 
     // ============================================================
     // КОНСТАНТЫ — ЦИКЛ ФАЗЫ
@@ -91,20 +96,28 @@ private:
     // ============================================================
     static constexpr int FRAME_SIZE = 100;
 
-    // attacking.png 600×300 → 6×3 = 18 кадров. Длительность всей анимации
-    // = DASH_DURATION (рывок должен визуально совпадать с реальным рывком)
+    // Тело в кадре ~45×63 px (x 34..79, ступни на y=84). Раньше кадр 100×100
+    // сжимался в хитбокс 80×100 и спрайт был сплюснут. Теперь кадр рисуется
+    // пропорционально в масштабе 1.6 — тело ≈ 72×100, как хитбокс.
+    static constexpr float SPRITE_SCALE  = 1.6f;
+    static constexpr float BODY_CENTER_X = 56.5f; // центр тела по X в кадре (смотрит вправо)
+    static constexpr float FEET_Y        = 84.0f; // ступни в кадре
+
+    // attacking.png 600×300 → сетка 6×3, но заполнены только первые 13 кадров
+    // (в 3-м ряду один) — пустые кадры давали "исчезновение" босса в рывке.
+    // Длительность всей анимации = DASH_DURATION (рывок визуально совпадает с реальным).
     static constexpr int   ATTACKING_FRAMES_X = 6;
-    static constexpr int   ATTACKING_FRAMES_Y = 3;
-    static constexpr int   ATTACKING_TOTAL_FRAMES = ATTACKING_FRAMES_X * ATTACKING_FRAMES_Y;
+    static constexpr int   ATTACKING_TOTAL_FRAMES = 13;
     static constexpr float ATTACKING_FRAME_DUR = DASH_DURATION / ATTACKING_TOTAL_FRAMES;
 
-    // death.png 1000×200 → 10×2 = 20 кадров, one-shot
+    // death.png 1000×200 → сетка 10×2, заполнены 18 кадров (последние 2 пустые —
+    // босс пропадал в конце смерти)
     static constexpr int   DEATH_FRAMES_X = 10;
-    static constexpr int   DEATH_FRAMES_Y = 2;
+    static constexpr int   DEATH_TOTAL_FRAMES = 18;
     static constexpr float DEATH_FRAME_DUR = 0.08f; // TODO: подобрать
 
-    // idle.png (полёт наверху) 500×100 → 5×1 = 5 кадров, loop
-    static constexpr int   IDLE_FLY_FRAMES_X = 5;
+    // idle.png (полёт наверху) 500×100 → 5 ячеек, но 5-я пустая — босс мигал раз в цикл
+    static constexpr int   IDLE_FLY_FRAMES_X = 4;
     static constexpr int   IDLE_FLY_FRAMES_Y = 1;
     static constexpr float IDLE_FLY_FRAME_DUR = 0.1f; // TODO: подобрать
 
@@ -212,6 +225,7 @@ private:
     void updateArena(float deltaTime, float playerX, float playerY);
     void updateDashCycle(float deltaTime, float playerX, float playerY);
     void updateDescending(float deltaTime);
+    bool snapToStairs();
     void updateAscending(float deltaTime);
 
     void spawnFireball(float playerX, float playerY);

@@ -38,6 +38,9 @@ private:
     // АНИМАЦИИ — размер кадра 50×50, совпадает с хитбоксом
     // ============================================================
     static constexpr int FRAME_SIZE = 50;
+    static constexpr float SPRITE_SCALE  = 2.5f;  // тело ~10×20 → ~25×50, по высоте хитбокса
+    static constexpr float BODY_CENTER_X = 24.0f; // центр тела по X в кадре
+    static constexpr float FEET_Y        = 39.0f; // ступни в кадре
 
     // summonAppear.png 150×100 → 3×2 = 6 кадров, one-shot
     static constexpr int APPEAR_FRAMES_X = 3;

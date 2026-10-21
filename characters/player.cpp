@@ -371,6 +371,12 @@ void Player::update(float deltaTime) {
         proj.x += proj.velX * deltaTime;
         proj.y += proj.velY * deltaTime;
 
+        // Магия гаснет о стены, пол и лестницу
+        if (g_currentLevel && g_currentLevel->blocksProjectile(proj.x, proj.y)) {
+            proj.active = false;
+            continue;
+        }
+
         static constexpr float PROJ_MAX_DIST = 2000.0f;
         float distX = proj.x - x;
         float distY = proj.y - y;

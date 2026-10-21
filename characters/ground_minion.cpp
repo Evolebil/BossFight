@@ -109,10 +109,14 @@ void GroundMinion::render(SDL_Renderer* renderer) {
         src = deathAnim.getCurrentFrame();
     }
 
+    // Тело в кадре 50×50 занимает лишь ~10×20 px — без масштаба миньон был
+    // крошечным внутри своего хитбокса. Рисуем кадр в SPRITE_SCALE, ступни — по низу хитбокса.
+    const float drawSize = FRAME_SIZE * SPRITE_SCALE;
+    const float anchorX  = (facingRight ? BODY_CENTER_X : FRAME_SIZE - BODY_CENTER_X) * SPRITE_SCALE;
     SDL_Rect dst = {
-        (int)(x - width / 2) - cx,
-        (int)(y - height / 2) - cy,
-        (int)width, (int)height
+        (int)(x - anchorX) - cx,
+        (int)(y + height / 2 - FEET_Y * SPRITE_SCALE) - cy,
+        (int)drawSize, (int)drawSize
     };
 
     if (tex) {
@@ -120,7 +124,10 @@ void GroundMinion::render(SDL_Renderer* renderer) {
         SDL_RenderCopyEx(renderer, tex, &src, &dst, 0, nullptr, flip);
     } else {
         SDL_SetRenderDrawColor(renderer, 150, 30, 200, 255); // фиолетовый — заглушка, если спрайт не найден
-        SDL_RenderFillRect(renderer, &dst);
+        SDL_Rect body = getHitbox();
+        body.x -= cx;
+        body.y -= cy;
+        SDL_RenderFillRect(renderer, &body);
     }
 
     // Полоска HP над головой — не показываем во время появления/исчезновения

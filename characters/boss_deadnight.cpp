@@ -46,13 +46,14 @@ void BossDeadNight::loadAnimations() {
     texProjectile = TextureManager::getTexture("assets/boss_3/projectile.png");
     texExplosion  = TextureManager::getTexture("assets/bomb/Explosion_bomb.png");
 
-    for (int row = 0; row < ATTACKING_FRAMES_Y; row++)
-        for (int col = 0; col < ATTACKING_FRAMES_X; col++)
-            attackingAnim.addFrame(col * FRAME_SIZE, row * FRAME_SIZE, FRAME_SIZE, FRAME_SIZE, ATTACKING_FRAME_DUR);
+    // Листы заполнены не до конца — идём по номеру кадра, а не по всей сетке
+    for (int i = 0; i < ATTACKING_TOTAL_FRAMES; i++)
+        attackingAnim.addFrame((i % ATTACKING_FRAMES_X) * FRAME_SIZE, (i / ATTACKING_FRAMES_X) * FRAME_SIZE,
+                               FRAME_SIZE, FRAME_SIZE, ATTACKING_FRAME_DUR);
 
-    for (int row = 0; row < DEATH_FRAMES_Y; row++)
-        for (int col = 0; col < DEATH_FRAMES_X; col++)
-            deathAnim.addFrame(col * FRAME_SIZE, row * FRAME_SIZE, FRAME_SIZE, FRAME_SIZE, DEATH_FRAME_DUR);
+    for (int i = 0; i < DEATH_TOTAL_FRAMES; i++)
+        deathAnim.addFrame((i % DEATH_FRAMES_X) * FRAME_SIZE, (i / DEATH_FRAMES_X) * FRAME_SIZE,
+                           FRAME_SIZE, FRAME_SIZE, DEATH_FRAME_DUR);
 
     for (int row = 0; row < IDLE_FLY_FRAMES_Y; row++)
         for (int col = 0; col < IDLE_FLY_FRAMES_X; col++)
@@ -68,10 +69,9 @@ void BossDeadNight::loadAnimations() {
 }
 
 void BossDeadNight::initExplodeAnim(Animation& anim) {
-    for (int row = 0; row < EXPLODE_FRAMES_Y; row++)
-        for (int col = 0; col < EXPLODE_FRAMES_X; col++)
-            anim.addFrame(col * EXPLODE_FRAME_SIZE, row * EXPLODE_FRAME_SIZE,
-                          EXPLODE_FRAME_SIZE, EXPLODE_FRAME_SIZE, EXPLODE_FRAME_DUR);
+    for (int i = EXPLODE_FIRST_FRAME; i < EXPLODE_FIRST_FRAME + EXPLODE_FRAME_COUNT; i++)
+        anim.addFrame((i % EXPLODE_FRAMES_X) * EXPLODE_FRAME_SIZE, (i / EXPLODE_FRAMES_X) * EXPLODE_FRAME_SIZE,
+                      EXPLODE_FRAME_SIZE, EXPLODE_FRAME_SIZE, EXPLODE_FRAME_DUR);
 }
 
 // ============================================================
@@ -144,11 +144,11 @@ void BossDeadNight::update(float deltaTime, float playerX, float playerY, bool /
         idleFlyAnim.update(deltaTime);
         break;
     case DeadNightState::DASHING:
+    case DeadNightState::MELEE_ATTACK: // своей анимации удара нет — взмах из attacking.png
         updateArena(deltaTime, playerX, playerY);
         attackingAnim.update(deltaTime);
         break;
     case DeadNightState::ARENA_IDLE:
-    case DeadNightState::MELEE_ATTACK:
     case DeadNightState::RETREATING:
         updateArena(deltaTime, playerX, playerY);
         idleGroundAnim.update(deltaTime);
@@ -191,8 +191,22 @@ void BossDeadNight::updateFlyingTop(float deltaTime, float playerX, float player
 // СПУСК / ПОДЪЁМ
 // ============================================================
 
+// Лестница — наклонная поверхность (getStairGroundY), обычные тайловые коллизии
+// её не видят. Как у игрока: если ступни ниже гипотенузы — ставим на неё.
+bool BossDeadNight::snapToStairs() {
+    float stairY = 0.0f;
+    if (!g_currentLevel || !g_currentLevel->getStairGroundY(x, stairY)) return false;
+    if (y + height / 2.0f < stairY) return false;
+
+    y          = stairY - height / 2.0f;
+    velocityY  = 0.0f;
+    isGrounded = true;
+    return true;
+}
+
 void BossDeadNight::updateDescending(float deltaTime) {
     applyGravityAndCollisions(deltaTime);
+    snapToStairs();
     if (isGrounded) {
         dashesDoneInCycle = 0;
         forceState(DeadNightState::ARENA_IDLE);
@@ -246,6 +260,7 @@ void BossDeadNight::updateArena(float deltaTime, float playerX, float playerY) {
     }
 
     applyGravityAndCollisions(deltaTime);
+    snapToStairs();  // рывки и отход по лестнице идут вдоль её уклона
 }
 
 void BossDeadNight::updateDashCycle(float deltaTime, float playerX, float playerY) {
@@ -267,6 +282,7 @@ void BossDeadNight::updateDashCycle(float deltaTime, float playerX, float player
         if (distX <= HITBOX_W) {
             meleeHitDealt = false;
             forceState(DeadNightState::MELEE_ATTACK);
+            attackingAnim.reset();
             dashTimer = 0.4f;
         } else {
             dashDirX = (playerX > x) ? 1.0f : -1.0f;
@@ -353,7 +369,7 @@ void BossDeadNight::updateFireballs(float deltaTime) {
             fb.x += fb.velX * deltaTime;
             fb.y += fb.velY * deltaTime;
 
-            if (g_currentLevel->isSolid((int)fb.x, (int)fb.y)) {
+            if (g_currentLevel->blocksProjectile(fb.x, fb.y)) {
                 fb.exploded     = true;
                 fb.explodeTimer = FIREBALL_EXPLODE_LIFETIME;
                 fb.explodeAnim.reset();
@@ -489,11 +505,11 @@ void BossDeadNight::render(SDL_Renderer* renderer) {
         // Файрбол-каст перекрывает обычный полёт, пока анимация не доиграна
         tex = texSkill1;
         src = skill1Anim.getCurrentFrame();
-    } else if (currentState == DeadNightState::DASHING) {
+    } else if (currentState == DeadNightState::DASHING ||
+               currentState == DeadNightState::MELEE_ATTACK) {
         tex = texAttacking;
         src = attackingAnim.getCurrentFrame();
     } else if (currentState == DeadNightState::ARENA_IDLE ||
-               currentState == DeadNightState::MELEE_ATTACK ||
                currentState == DeadNightState::RETREATING) {
         tex = texIdleGround;
         src = idleGroundAnim.getCurrentFrame();
@@ -503,7 +519,16 @@ void BossDeadNight::render(SDL_Renderer* renderer) {
         src = idleFlyAnim.getCurrentFrame();
     }
 
+    // Кадр рисуем пропорционально: ступни — по низу хитбокса, центр тела — по x.
+    // При отражении точка привязки зеркалится внутри кадра.
+    const float drawSize = FRAME_SIZE * SPRITE_SCALE;
+    const float anchorX  = (facingRight ? BODY_CENTER_X : FRAME_SIZE - BODY_CENTER_X) * SPRITE_SCALE;
     SDL_Rect dst = {
+        (int)(x - anchorX) - cx,
+        (int)(y + height / 2 - FEET_Y * SPRITE_SCALE) - cy,
+        (int)drawSize, (int)drawSize
+    };
+    SDL_Rect body = {
         (int)(x - width / 2) - cx,
         (int)(y - height / 2) - cy,
         (int)width, (int)height
@@ -514,12 +539,12 @@ void BossDeadNight::render(SDL_Renderer* renderer) {
         SDL_RenderCopyEx(renderer, tex, &src, &dst, 0, nullptr, flip);
     } else {
         SDL_SetRenderDrawColor(renderer, 200, 30, 30, 255);
-        SDL_RenderFillRect(renderer, &dst);
+        SDL_RenderFillRect(renderer, &body);
     }
 
     if (!isVulnerable()) {
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 150);
-        SDL_RenderDrawRect(renderer, &dst);
+        SDL_RenderDrawRect(renderer, &body);
     }
 
     if (showHitboxes) renderHitboxes(renderer, cx, cy);
@@ -550,9 +575,9 @@ void BossDeadNight::renderFireballs(SDL_Renderer* renderer, int camX, int camY) 
         } else {
             SDL_Rect src = fb.explodeAnim.getCurrentFrame();
             SDL_Rect dst = {
-                (int)(fb.x - EXPLODE_FRAME_SIZE / 2) - camX,
-                (int)(fb.y - EXPLODE_FRAME_SIZE / 2) - camY,
-                EXPLODE_FRAME_SIZE, EXPLODE_FRAME_SIZE
+                (int)(fb.x - EXPLODE_DRAW_SIZE / 2) - camX,
+                (int)(fb.y - EXPLODE_DRAW_SIZE / 2) - camY,
+                EXPLODE_DRAW_SIZE, EXPLODE_DRAW_SIZE
             };
             if (texExplosion) {
                 SDL_RenderCopy(renderer, texExplosion, &src, &dst);
@@ -581,6 +606,15 @@ void BossDeadNight::renderHitboxes(SDL_Renderer* renderer, int camX, int camY) {
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
         SDL_Rect meleeBox = {hx - camX, hy - camY, (int)MELEE_HIT_W, (int)MELEE_HIT_H};
         SDL_RenderDrawRect(renderer, &meleeBox);
+    }
+
+    // Зона урона взрывов (квадрат, описанный вокруг круга радиуса) — для сверки с картинкой
+    SDL_SetRenderDrawColor(renderer, 255, 140, 0, 255);
+    for (const auto& fb : fireballs) {
+        if (!fb.active || !fb.exploded) continue;
+        const int r = (int)FIREBALL_EXPLODE_RADIUS;
+        SDL_Rect zone = {(int)fb.x - r - camX, (int)fb.y - r - camY, r * 2, r * 2};
+        SDL_RenderDrawRect(renderer, &zone);
     }
 
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);

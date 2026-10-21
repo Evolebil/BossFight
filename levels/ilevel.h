@@ -38,6 +38,14 @@ public:
     // к ней как к обычному полу, без переключения гравитации.
     virtual bool getStairGroundY(float /*pixelX*/, float& /*outGroundY*/) { return false; }
 
+    // Снаряд упёрся в стену/пол или в лестницу. Лестница — сплошной треугольник:
+    // всё, что ниже гипотенузы, считается телом лестницы.
+    bool blocksProjectile(float pixelX, float pixelY) {
+        if (isSolid(static_cast<int>(pixelX), static_cast<int>(pixelY))) return true;
+        float stairY = 0.0f;
+        return getStairGroundY(pixelX, stairY) && pixelY >= stairY;
+    }
+
     // --- Спавны ---
     virtual std::pair<float, float> getPlayerSpawn() = 0;
     virtual std::pair<float, float> getBossSpawn() = 0;
