@@ -30,7 +30,7 @@ struct BossPreview {
 constexpr BossPreview BOSS_PREVIEWS[3] = {
     {"assets/boss1/Character.png", 100, 100},
     {"assets/Samurai/Idle.png",    128, 128},
-    {"assets/boss_3/idle.png",       0,   0},  // TODO: размер кадра не подтверждён
+    {"assets/boss_3/idle.png",     100, 100},  // кадр 100×100, как в BossDeadNight
 };
 
 const std::vector<std::vector<std::string>>& getBossTips() {
@@ -134,6 +134,12 @@ void LevelSelectScene::handleInput(SDL_Event& event, int mx, int my,
 
     for (size_t i = 0; i < levelBtns.size(); i++) {
         if (updateButton(levelBtns[i], mx, my, clicked, soundMgr)) {
+            if (!isLevelUnlocked(static_cast<int>(i))) {
+                // Закрытый уровень не запускаем — объясняем, что пройти сначала
+                lockedHintLevel = static_cast<int>(i);
+                lockedHintTimer = LOCKED_HINT_TIME;
+                continue;
+            }
             dialogLevel    = static_cast<int>(i);
             showLoadDialog = true;  // всегда показываем панель
         }
@@ -144,7 +150,13 @@ void LevelSelectScene::handleInput(SDL_Event& event, int mx, int my,
         updateButton(btn, mx, my, clicked, soundMgr);
 }
 
-void LevelSelectScene::update(float /*deltaTime*/) {}
+bool LevelSelectScene::isLevelUnlocked(int level) {
+    return level == 0 || Config::getLevelStars(level - 1) > 0;
+}
+
+void LevelSelectScene::update(float deltaTime) {
+    if (lockedHintTimer > 0.0f) lockedHintTimer -= deltaTime;
+}
 
 void LevelSelectScene::render(SDL_Renderer* renderer) {
     drawTowerBackground(renderer, Config::getBrightness());
@@ -158,6 +170,15 @@ void LevelSelectScene::render(SDL_Renderer* renderer) {
 
     for (size_t i = 0; i < levelBtns.size(); i++) {
         drawButton(renderer, Config::getFont(), levelBtns[i]);
+
+        // Закрытый уровень — затемняем кнопку и пишем, почему
+        if (!isLevelUnlocked(static_cast<int>(i))) {
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 170);
+            SDL_RenderFillRect(renderer, &levelBtns[i].rect);
+            drawText(renderer, Config::getFont(), "Закрыт",
+                     levelBtns[i].rect.x + 38, levelBtns[i].rect.y + 8, {200, 200, 200, 255});
+        }
         drawStars(renderer,
                   levelBtns[i].rect.x + 35,
                   levelBtns[i].rect.y + 110,
@@ -220,6 +241,13 @@ void LevelSelectScene::render(SDL_Renderer* renderer) {
             }
         }
     }
+    if (lockedHintTimer > 0.0f && lockedHintLevel > 0) {
+        const std::string hint = "Сначала пройдите уровень " + std::to_string(lockedHintLevel) +
+                                 " на сложности «" +
+                                 Config::getDifficulties()[Config::getCurrentDifficulty()].name + "»";
+        drawText(renderer, Config::getFont(), hint, 0, 120, {255, 200, 120, 255}, true);
+    }
+
     // В конце render(), после drawButton для уровней:
     if (showLoadDialog) {
         drawUIOverlay(renderer, 160);

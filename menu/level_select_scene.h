@@ -20,6 +20,12 @@ private:
     Button            loadBtn;
     Button            newGameBtn;
     Button            cancelBtn;
+
+    // Блокировка уровней: уровень открыт, если предыдущий пройден на ТЕКУЩЕЙ сложности
+    [[nodiscard]] static bool isLevelUnlocked(int level);
+    int   lockedHintLevel = -1;    // по какому закрытому уровню кликнули
+    float lockedHintTimer = 0.0f;  // сколько ещё показывать подсказку
+    static constexpr float LOCKED_HINT_TIME = 2.0f;
 public:
     LevelSelectScene();
     void handleInput(SDL_Event& event, int mouseX, int mouseY, bool mouseClicked, bool mouseDown) override;
