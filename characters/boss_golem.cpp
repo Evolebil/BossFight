@@ -1200,6 +1200,13 @@ void BossGolem::renderHitboxes(SDL_Renderer* renderer, int spriteX, int spriteY,
     int endX = facingRight ? (int)(x + HITBOX_LINE_LEN) : (int)(x - HITBOX_LINE_LEN);
     SDL_RenderDrawLine(renderer, (int)x - cx, (int)y - cy, endX - cx, (int)y - cy);
 }
+bool BossGolem::isDeathAnimFinished() const {
+    auto it = animations.find(BossState::DEATH);
+    // Если анимация не найдена — считаем завершённой (безопасный дефолт)
+    if (it == animations.end()) return true;
+    return it->second.isFinished();
+}
+
 void BossGolem::forcePhase2() {
     // Переводим босса сразу во вторую фазу без анимации смерти/возрождения
     phase           = BossPhase::PHASE_2;

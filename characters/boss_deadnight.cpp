@@ -8,7 +8,12 @@
 #include "../levels/ilevel.h"
 #include "../config/config.h"
 #include "../levels/level3.h"
+#include "../utils/sound_manager.h"
 extern ILevel* g_currentLevel;
+
+static void playDeadNightSound(const char* name) {
+    if (auto* snd = getSoundManager()) snd->playSound(name);
+}
 
 BossDeadNight::BossDeadNight(float spawnX, float spawnY, float attackSpeedMult)
     : Boss(spawnX, spawnY, HITBOX_W, HITBOX_H, BASE_HP, attackSpeedMult)
@@ -85,6 +90,14 @@ void BossDeadNight::forceState(DeadNightState newState) {
     previousState        = currentState;
     currentState         = newState;
     lastStateChangeTime  = stateTimer;
+
+    switch (newState) {
+    case DeadNightState::DASHING:      playDeadNightSound("deadnight_dash");   break;
+    case DeadNightState::MELEE_ATTACK: playDeadNightSound("samurai_sword");    break;
+    case DeadNightState::ASCENDING:    playDeadNightSound("deadnight_ascend"); break;
+    case DeadNightState::DEATH:        playDeadNightSound("deadnight_death");  break;
+    default: break;
+    }
 }
 
 bool BossDeadNight::canChangeState() const {
@@ -206,6 +219,14 @@ void BossDeadNight::resetForNextPhaseTop() {
     fireballTimer   = FIREBALL_COOLDOWN;
 }
 
+void BossDeadNight::restorePhase(int phaseIndex) {
+    phase = (DeadNightPhase)std::clamp(phaseIndex, 0, 3);
+    fireballs.clear();
+    resetForNextPhaseTop();
+    forceState(DeadNightState::FLYING_TOP);
+    y = getPhaseTopY();
+}
+
 float BossDeadNight::getPhaseTopY() const {
     return topY - (int)phase * TILE_SIZE;
 }
@@ -301,6 +322,7 @@ void BossDeadNight::updateDashCycle(float deltaTime, float playerX, float player
 
 void BossDeadNight::spawnFireball(float playerX, float playerY) {
     skill1Anim.reset(); // анимация каста запускается заново при каждом броске
+    playDeadNightSound("deadnight_fireball");
 
     Fireball fb;
     fb.x = x;
@@ -335,6 +357,7 @@ void BossDeadNight::updateFireballs(float deltaTime) {
                 fb.exploded     = true;
                 fb.explodeTimer = FIREBALL_EXPLODE_LIFETIME;
                 fb.explodeAnim.reset();
+                playDeadNightSound("deadnight_fireball_explode");
             }
         } else {
             fb.explodeAnim.update(deltaTime);
@@ -369,6 +392,7 @@ float BossDeadNight::checkPlayerDamage(SDL_Rect playerBox, float /*deltaTime*/) 
                 fb.explodeTimer = FIREBALL_EXPLODE_LIFETIME;
                 fb.explodeAnim.reset();
                 total += FIREBALL_DAMAGE;
+                playDeadNightSound("deadnight_fireball_explode");
             }
         } else if (!fb.damageDealt) {
             const float px = playerBox.x + playerBox.w / 2.0f;

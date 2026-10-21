@@ -19,6 +19,11 @@
  */
 #include "boss_samurai.h"
 #include "../levels/ilevel.h"
+#include "../utils/sound_manager.h"
+
+static void playSamuraiSound(const char* name) {
+    if (auto* snd = getSoundManager()) snd->playSound(name);
+}
 
 extern ILevel* g_currentLevel;
 
@@ -214,6 +219,15 @@ void BossSamurai::updateMovement(float deltaTime, float playerX, float playerY) 
         return;
     }
 
+    // Атака — тоже стоим на месте. Иначе setState(WALK) ниже обрывал удар,
+    // а прыжок мог начаться посреди замаха
+    if (currentState == SamuraiState::SWORD_ATTACK ||
+        currentState == SamuraiState::POWER_ATTACK ||
+        currentState == SamuraiState::THROW_BOMBS) {
+        velocityX = 0.0f;
+        return;
+    }
+
     // ── ОГЛУШЕНИЕ ────────────────────────────────────────────
     if (currentState == SamuraiState::STUNNED) {
         velocityX  = 0.0f;
@@ -269,7 +283,11 @@ void BossSamurai::updateMovement(float deltaTime, float playerX, float playerY) 
     }
 
     // ── ГОРИЗОНТАЛЬНОЕ ДВИЖЕНИЕ (по distX, не dist) ──────────
-    if (distX > PREFERRED_DISTANCE + DISTANCE_THRESHOLD) {
+    // Дистанцию держим только стоя на опоре. В воздухе летим к игроку —
+    // так прыжок доводит самурая до платформы игрока, а не уносит назад.
+    if (!isGrounded) {
+        velocityX = (distX > DISTANCE_THRESHOLD) ? ((dx > 0) ? MOVE_SPEED : -MOVE_SPEED) : 0.0f;
+    } else if (distX > PREFERRED_DISTANCE + DISTANCE_THRESHOLD) {
         velocityX = (dx > 0) ? MOVE_SPEED : -MOVE_SPEED;
         if (isGrounded && currentState != SamuraiState::WALK) {
             setState(SamuraiState::WALK);
@@ -304,15 +322,29 @@ void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
     if (teleportTimer > 0.0f) teleportTimer -= deltaTime;
     if (bombTimer     > 0.0f) bombTimer     -= deltaTime;
 
-    // Не прерывать текущую атаку или спец-состояние
-    if (currentState == SamuraiState::THROW_BOMBS   ||
-        currentState == SamuraiState::SWORD_ATTACK  ||
-        currentState == SamuraiState::POWER_ATTACK  ||
-        currentState == SamuraiState::TELEPORT      ||
-        currentState == SamuraiState::STANCE        ||
+    // Выход из доигранных атак. Раньше ранний выход ниже не пускал сюда,
+    // и самурай застревал в последнем кадре атаки, пока ходьба его не "сбивала".
+    if (currentState == SamuraiState::SWORD_ATTACK) {
+        updateMeleeFallback(deltaTime, playerX, playerY);  // серия ударов / отскок
+        return;
+    }
+    if (currentState == SamuraiState::THROW_BOMBS ||
+        currentState == SamuraiState::POWER_ATTACK) {
+        auto it = animations.find(currentState);
+        if (it == animations.end() || it->second.isFinished())
+            forceState(SamuraiState::IDLE);
+        return;
+    }
+
+    // Не прерывать спец-состояние
+    if (currentState == SamuraiState::STANCE        ||
         currentState == SamuraiState::STUNNED       ||
         currentState == SamuraiState::DEATH         ||
         isBreakingAway) return;
+
+    // Атакуем только стоя на земле или платформе — не в прыжке и не в падении.
+    // После телепорта в воздух запланированная атака ждёт приземления.
+    if (!isGrounded) return;
 
     // Не выбирать атаку пока проваливаемся через платформу
     if (platformDropTimer > 0.0f) return;
@@ -509,6 +541,7 @@ bool BossSamurai::checkParry() {
     stanceActive   = false;
     stanceTimer    = 0.0f;
     stanceCooldown = STANCE_COOLDOWN;
+    playSamuraiSound("samurai_parry");
 
     auto it = animations.find(SamuraiState::STANCE);
     if (it != animations.end()) it->second.playReverse();
@@ -532,6 +565,10 @@ void BossSamurai::updateBombs(float deltaTime) {
     // ИСПРАВЛЕНО: эта функция не существовала в оригинале.
     // Без неё бомбы летели вечно и никогда не взрывались.
 
+    // Веер из BOMB_COUNT бомб взрывается в один кадр — один звук на кадр,
+    // иначе пять наложенных взрывов звучат слишком громко
+    bool anyExploded = false;
+
     for (auto& bomb : bombs) {
         if (!bomb.active) continue;
 
@@ -548,6 +585,7 @@ void BossSamurai::updateBombs(float deltaTime) {
             if (bomb.fuseTimer <= 0.0f) {
                 bomb.exploded = true;
                 bomb.explodeAnim.reset(); // запускаем анимацию взрыва
+                anyExploded = true;
             }
         } else {
             // ── Взрыв проигрывается ──────────────────────────
@@ -558,6 +596,7 @@ void BossSamurai::updateBombs(float deltaTime) {
                 bomb.active = false;
         }
     }
+    if (anyExploded) playSamuraiSound("bomb_explode");
 
     // Удаляем неактивные бомбы из вектора
     bombs.erase(
@@ -628,7 +667,11 @@ void BossSamurai::updateMeleeFallback(float deltaTime, float /*playerX*/, float 
 
         swordComboCount++;
 
-        if (swordComboCount >= SWORD_COMBO_MAX) {
+        if (!isGrounded) {
+            // Потеряли опору посреди серии — следующий удар в воздухе не начинаем
+            swordComboCount = 0;
+            forceState(SamuraiState::IDLE);
+        } else if (swordComboCount >= SWORD_COMBO_MAX) {
             // Вся серия нанесена → СРАЗУ переходим в отскок
             isBreakingAway = true;
             breakAwayTimer = BREAK_AWAY_DURATION;
@@ -865,6 +908,7 @@ float BossSamurai::checkPlayerDamage(SDL_Rect playerBox, float /*deltaTime*/) {
             if (rectsOverlap(playerBox, bombHitbox)) {
                 bomb.exploded = true;
                 bomb.explodeAnim.reset();
+                playSamuraiSound("bomb_explode");
             }
         } else if (!bomb.damageDealt) {
             // Взрыв — круглая проверка расстояния, урон один раз
@@ -905,6 +949,17 @@ void BossSamurai::forceState(SamuraiState newState) {
     // Сбрасываем анимацию нового состояния
     auto it = animations.find(newState);
     if (it != animations.end()) it->second.reset();
+
+    // Все атаки и смерть входят сюда ровно один раз — удобная точка для звука
+    switch (newState) {
+    case SamuraiState::SWORD_ATTACK: playSamuraiSound("samurai_sword");  break;
+    case SamuraiState::POWER_ATTACK: playSamuraiSound("samurai_power");  break;
+    case SamuraiState::THROW_BOMBS:  playSamuraiSound("bomb_throw");     break;
+    case SamuraiState::TELEPORT:     playSamuraiSound("boss_teleport");  break;
+    case SamuraiState::STANCE:       playSamuraiSound("samurai_stance"); break;
+    case SamuraiState::DEATH:        playSamuraiSound("samurai_death");  break;
+    default: break;
+    }
 }
 
 bool BossSamurai::canChangeState() const {

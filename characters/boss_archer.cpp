@@ -8,6 +8,11 @@
 #include "boss_archer.h"
 #include "../levels/ilevel.h"
 #include "../config/config.h"
+#include "../utils/sound_manager.h"
+
+static void playArcherSound(const char* name) {
+    if (auto* snd = getSoundManager()) snd->playSound(name);
+}
 
 extern ILevel* g_currentLevel;
 
@@ -233,6 +238,7 @@ void BossArcher::updateFormation(Formation& f, float deltaTime, float playerX, f
 
             for (int i = 0; i < Formation::CLONE_COUNT; i++)
                 spawnArrow(f.cloneX[i], f.cloneY[i], velX, velY);
+            playArcherSound("archer_bow");  // один звук на весь залп, не на каждую стрелу
 
             f.isTelegraphing = false;
             f.cycleTimer      = 0.0f;
@@ -404,12 +410,15 @@ void BossArcher::teleportNearPlayer(float playerX, float playerY) {
         const int row = static_cast<int>((targetY - oy) / BFS_TILE_SIZE);
 
         if (isWalkable(col, row) && hasSupport(col, row)) {
+            // Ставим ногами ровно на опору: если утопить ноги в платформу глубже
+            // окна приземления, лучник провалится сквозь неё
             x = ox + col * BFS_TILE_SIZE + BFS_TILE_SIZE / 2.0f;
-            y = oy + row * BFS_TILE_SIZE + BFS_TILE_SIZE / 2.0f;
+            y = oy + (row + 1) * BFS_TILE_SIZE - HITBOX_H / 2.0f;
             teleportCooldown = TELEPORT_COOLDOWN;
             facingRight      = (playerX > x);
             path.clear();
             pathIndex = 0;
+            playArcherSound("archer_teleport");
             return;
         }
     }
@@ -666,6 +675,14 @@ void BossArcher::forceState(ArcherState newState) {
     lastStateChangeTime = stateTimer;
     auto it = animations.find(newState);
     if (it != animations.end()) it->second.reset();
+
+    switch (newState) {
+    case ArcherState::ATTACK_1:
+    case ArcherState::ATTACK_2:
+    case ArcherState::ATTACK_3: playArcherSound("archer_sword"); break;
+    case ArcherState::DEATH:    playArcherSound("archer_death"); break;
+    default: break;
+    }
 }
 
 bool BossArcher::canChangeState() const {
@@ -677,13 +694,16 @@ void BossArcher::getCurrentMapOffset(int& ox, int& oy) const {
     if (g_currentLevel) g_currentLevel->getMapOffset(ox, oy);
 }
 
+// Узел BFS — клетка, в которой стоят ноги (низ тела). Опора — клетка ПОД ней.
+// Раньше проверялась сама клетка: на платформе это работало (ноги входят
+// в тайл платформы), а сплошной пол узлом не считался вовсе — игрок на полу
+// был недостижим, и лучник оставался на платформе над ним.
 bool BossArcher::hasSupport(int col, int row) const {
     if (!g_currentLevel) return false;
     int ox, oy; getCurrentMapOffset(ox, oy);
-    return g_currentLevel->isSolid(ox + col*BFS_TILE_SIZE + BFS_TILE_SIZE/2,
-                                   oy + (row+1)*BFS_TILE_SIZE - 1) ||
-           g_currentLevel->isPlatform(ox + col*BFS_TILE_SIZE + BFS_TILE_SIZE/2,
-                                      oy + (row+1)*BFS_TILE_SIZE - 1);
+    const int px = ox + col*BFS_TILE_SIZE + BFS_TILE_SIZE/2;
+    const int py = oy + (row+1)*BFS_TILE_SIZE + BFS_TILE_SIZE/2;
+    return g_currentLevel->isSolid(px, py) || g_currentLevel->isPlatform(px, py);
 }
 
 bool BossArcher::isWalkable(int col, int row) const {
@@ -752,16 +772,18 @@ void BossArcher::recalcPath(float playerX, float playerY) {
     const int mapRows = g_currentLevel->getMapHeight() / BFS_TILE_SIZE;
     if (mapCols <= 0 || mapRows <= 0) return;
 
+    // -1: ноги стоят ровно на верхней границе опоры — берём клетку над ней
     int startCol = static_cast<int>((x  - ox) / BFS_TILE_SIZE);
-    int startRow = static_cast<int>((y + HITBOX_H/2 - oy) / BFS_TILE_SIZE);
+    int startRow = static_cast<int>((y + HITBOX_H/2 - 1 - oy) / BFS_TILE_SIZE);
 
     if (!hasSupport(startCol, startRow)) {
         for (int r = startRow + 1; r < mapRows; ++r)
             if (isWalkable(startCol, r) && hasSupport(startCol, r)) { startRow = r; break; }
     }
 
+    // Центр игрока (он ниже ростом, чем лучник) лежит в клетке над его опорой
     int goalCol = static_cast<int>((playerX - ox) / BFS_TILE_SIZE);
-    int goalRow = static_cast<int>((playerY + HITBOX_H/2 - oy) / BFS_TILE_SIZE);
+    int goalRow = static_cast<int>((playerY - oy) / BFS_TILE_SIZE);
 
     if (!hasSupport(goalCol, goalRow)) {
         float bestDist = 1e9f;
@@ -779,11 +801,7 @@ void BossArcher::recalcPath(float playerX, float playerY) {
         goalCol = bestC; goalRow = bestR;
     }
 
-    std::cout << "[BFS] start=(" << startCol << "," << startRow
-              << ") goal=(" << goalCol << "," << goalRow << ")\n";
-
     if (startCol == goalCol && startRow == goalRow) {
-        std::cout << "[BFS] start==goal -> path cleared\n";
         return;
     }
 
@@ -874,10 +892,6 @@ void BossArcher::updateMovement(float dt, float playerX, float playerY) {
     int ox = 0, oy = 0;
     getCurrentMapOffset(ox, oy);
 
-    std::cout << "[Move] path.size=" << path.size()
-              << " pathIndex=" << pathIndex
-              << " bfsTimer=" << bfsTimer << "\n";
-
     if (platformDropTimer > 0.0f) {
         y += 5.5f;
         velocityX = (playerX > x) ? MOVE_SPEED * 0.65f : -MOVE_SPEED * 0.65f;
@@ -917,9 +931,6 @@ void BossArcher::updateMovement(float dt, float playerX, float playerY) {
     facingRight = (targetX > x);
     const float distX = std::abs(x - targetX);
     const float distY = std::abs(y - targetY);
-    std::cout << "[Move] target=(" << target.col << "," << target.row
-              << ") distX=" << distX << " distY=" << distY
-              << " action=" << (int)target.action << "\n";
 
     bool reached = false;
     switch (target.action) {

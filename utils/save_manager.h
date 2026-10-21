@@ -46,7 +46,9 @@ struct GameSaveState {
     // --- Объекты ---
     ObjectState player;
     ObjectState boss;
-    int         bossPhase       = 0;    // 0 = PHASE_1, 1 = PHASE_2
+    // Голем: 0 = PHASE_1, 1 = PHASE_2. Уровень 2: 0 = самурай, 1 = лучник.
+    // Смерть Ночи: номер фазы 0..3.
+    int         bossPhase       = 0;
     float       bossMaxHP       = 0.0f; // максимальное (не текущее!) HP босса
     float       playerMoveSpeed = 0.0f; // горизонтальная скорость игрока (инерция)
 

@@ -30,7 +30,8 @@ static void loadSounds(SoundManager& mgr) {
     mgr.loadSound("attack_golem",  "assets/sound/attak_golem.mp3");
     mgr.loadSound("laser_attack",  "assets/sound/lazer_attak.mp3");
     mgr.loadSound("melee_attack",  "assets/sound/mellee_attak_player.mp3");
-    mgr.loadSound("ranged_attack", "assets/sound/ranged_attack_player.mp3");
+    // Файла ranged_attack_player.mp3 в проекте нет — бросок руки Голема был без звука
+    mgr.loadSound("ranged_attack", "assets/sound/bomb_throw.wav");
     mgr.loadSound("golem_move",    "assets/sound/move_golem.mp3");
     mgr.loadSound("jump",        "assets/sound/jamp.wav");
     mgr.loadSound("land",        "assets/sound/isGrounded_true.wav");
@@ -44,6 +45,30 @@ static void loadSounds(SoundManager& mgr) {
     mgr.loadSound("golem_death",    "assets/sound/the-sound-of-crumbling-rock.wav");
     mgr.loadSound("golem_revive",   "assets/sound/ec75ae3b628d993.mp3");
     mgr.loadSound("golem_dash",     "assets/sound/short-powerful-swing.wav");
+
+    // Самурай
+    mgr.loadSound("samurai_sword",  "assets/sound/samurai_sword.wav");
+    mgr.loadSound("samurai_power",  "assets/sound/samurai_power.wav");
+    mgr.loadSound("samurai_parry",  "assets/sound/samurai_parry.wav");
+    mgr.loadSound("samurai_stance", "assets/sound/samurai_stance.wav");
+    mgr.loadSound("samurai_death",  "assets/sound/samurai_death.wav");
+    mgr.loadSound("bomb_throw",     "assets/sound/bomb_throw.wav");
+    mgr.loadSound("bomb_explode",   "assets/sound/bomb_explode.wav");
+    mgr.loadSound("boss_teleport",  "assets/sound/boss_teleport.wav");
+
+    // Лучник
+    mgr.loadSound("archer_sword",    "assets/sound/archer_sword.wav");
+    mgr.loadSound("archer_bow",      "assets/sound/archer_bow.wav");
+    mgr.loadSound("archer_teleport", "assets/sound/archer_teleport.wav");
+    mgr.loadSound("archer_death",    "assets/sound/archer_death.wav");
+
+    // Смерть Ночи и её миньоны
+    mgr.loadSound("deadnight_fireball",         "assets/sound/deadnight_fireball.wav");
+    mgr.loadSound("deadnight_fireball_explode", "assets/sound/deadnight_fireball_explode.wav");
+    mgr.loadSound("deadnight_dash",             "assets/sound/deadnight_dash.wav");
+    mgr.loadSound("deadnight_ascend",           "assets/sound/deadnight_ascend.wav");
+    mgr.loadSound("deadnight_death",            "assets/sound/deadnight_death.wav");
+    mgr.loadSound("minion_death",               "assets/sound/minion_death.wav");
 }
 
 // main.cpp
@@ -53,7 +78,7 @@ static void loadMusicTracks(SoundManager& mgr) {
 
     mgr.loadMusic("level1_music",        "assets/musik/level1_music_face1.mp3"); // фаза 1
     mgr.loadMusic("level1_music_phase2", "assets/musik/level1_music_face2.mp3"); // фаза 2
-    // level2_music — добавить сюда, когда появится файл
+    mgr.loadMusic("level2_music",        "assets/musik/level2_music.mp3");       // ayitsmatt — The Law of the Samurai
 }
 
 // ============================================================

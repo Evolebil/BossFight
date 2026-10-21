@@ -6,6 +6,7 @@
  */
 #include "archer_minion.h"
 #include "../utils/camera.h"
+#include "../utils/texture_manager.h"
 #include "../levels/level1_assets.h" // TILE_SIZE
 #include <cmath>
 
@@ -16,6 +17,18 @@ ArcherMinion::ArcherMinion(float spawnX, float spawnY, int phase)
     // Точка спавна — на 1 клетку выше платформы (см. Level3::getMinionSpawn),
     // значит платформа ровно на пол-тайла ниже центра точки спавна
     platformTopY = spawnY + TILE_SIZE / 2.0f;
+    loadAnimations();
+}
+
+void ArcherMinion::loadAnimations() {
+    texIdle   = TextureManager::getTexture("assets/kobold/idle.png");
+    texAttack = TextureManager::getTexture("assets/kobold/attack.png");
+    texArrow  = TextureManager::getTexture("assets/Samurai_Archer/Arrow.png");
+
+    for (int i = 0; i < IDLE_FRAMES; i++)
+        idleAnim.addFrame(i * FRAME_W, 0, FRAME_W, FRAME_H, IDLE_FRAME_DUR);
+    for (int i = 0; i < ATTACK_FRAMES; i++)
+        attackAnim.addFrame(i * FRAME_W, 0, FRAME_W, FRAME_H, ATTACK_FRAME_DUR);
 }
 void ArcherMinion::update(float deltaTime, float playerX, float playerY) {
     // Очередь стрел текущего залпа — стреляем ПОСЛЕДОВАТЕЛЬНО, не одновременно
@@ -43,7 +56,21 @@ void ArcherMinion::update(float deltaTime, float playerX, float playerY) {
             arrowsQueued      = arrowsPerVolley();
             arrowStaggerTimer = 0.0f;
             volleyTimer       = VOLLEY_COOLDOWN;
+            // Один взмах на весь залп: перезапуск на каждую стрелу (раз в 0.15 с)
+            // обрывал бы анимацию на середине
+            attacking = true;
+            attackAnim.reset();
         }
+    }
+
+    // Смотрит на игрока; во время взмаха разворот заблокирован, чтобы он не дёргался
+    if (!attacking) facingRight = (playerX > x);
+
+    if (attacking) {
+        attackAnim.update(deltaTime);
+        if (attackAnim.isFinished()) attacking = false;
+    } else {
+        idleAnim.update(deltaTime);
     }
 
     // Полёт стрел + очистка вышедших за разумную дистанцию
@@ -101,20 +128,44 @@ void ArcherMinion::render(SDL_Renderer* renderer) {
     const int cx = g_camera ? (int)g_camera->getOffsetX() : 0;
     const int cy = g_camera ? (int)g_camera->getOffsetY() : 0;
 
-    SDL_SetRenderDrawColor(renderer, 30, 200, 60, 255); // зелёный — заглушка
-    SDL_Rect rect = {
-        (int)(x - width / 2) - cx, (int)(y - height / 2) - cy,
-        (int)width, (int)height
-    };
-    SDL_RenderFillRect(renderer, &rect);
+    SDL_Texture* tex = attacking ? texAttack : texIdle;
+    if (tex) {
+        const SDL_Rect src = attacking ? attackAnim.getCurrentFrame() : idleAnim.getCurrentFrame();
+        // Кадр шире тела и тело в нём не по центру: при отражении точка
+        // привязки (центр тела) зеркалится внутри кадра
+        const int anchorX = facingRight ? BODY_CENTER_X : FRAME_W - BODY_CENTER_X;
+        const SDL_Rect dst = {
+            (int)x - anchorX - cx,
+            (int)(y + height / 2) - FEET_Y - cy,
+            FRAME_W, FRAME_H
+        };
+        const SDL_RendererFlip flip = facingRight ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL;
+        SDL_RenderCopyEx(renderer, tex, &src, &dst, 0, nullptr, flip);
+    } else {
+        SDL_SetRenderDrawColor(renderer, 30, 200, 60, 255); // зелёный — заглушка, если спрайт не найден
+        SDL_Rect rect = {
+            (int)(x - width / 2) - cx, (int)(y - height / 2) - cy,
+            (int)width, (int)height
+        };
+        SDL_RenderFillRect(renderer, &rect);
+    }
 
     SDL_SetRenderDrawColor(renderer, 200, 200, 60, 255);
     for (const auto& a : arrows) {
         if (!a.active) continue;
-        SDL_Rect box = {
-            (int)(a.x - ARROW_HITBOX_W / 2) - cx, (int)(a.y - ARROW_HITBOX_H / 2) - cy,
-            ARROW_HITBOX_W, ARROW_HITBOX_H
-        };
-        SDL_RenderFillRect(renderer, &box);
+        if (texArrow) {
+            const double angleDeg = std::atan2(a.velY, a.velX) * 180.0 / M_PI;
+            SDL_Rect dst = {
+                (int)(a.x - ARROW_SPRITE_SIZE / 2) - cx, (int)(a.y - ARROW_SPRITE_SIZE / 2) - cy,
+                ARROW_SPRITE_SIZE, ARROW_SPRITE_SIZE
+            };
+            SDL_RenderCopyEx(renderer, texArrow, nullptr, &dst, angleDeg, nullptr, SDL_FLIP_NONE);
+        } else {
+            SDL_Rect box = {
+                (int)(a.x - ARROW_HITBOX_W / 2) - cx, (int)(a.y - ARROW_HITBOX_H / 2) - cy,
+                ARROW_HITBOX_W, ARROW_HITBOX_H
+            };
+            SDL_RenderFillRect(renderer, &box);
+        }
     }
 }

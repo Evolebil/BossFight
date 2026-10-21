@@ -7,6 +7,7 @@
 #include "ground_minion.h"
 #include "../levels/ilevel.h"
 #include "../utils/camera.h"
+#include "../utils/sound_manager.h"
 
 extern ILevel* g_currentLevel;
 
@@ -42,6 +43,10 @@ void GroundMinion::startDying() {
     dying = true;
     velocityX = 0.0f;
     deathAnim.reset();
+
+    // Звук только за настоящее убийство — уход в дверь не должен звучать как успех
+    if (isDead() && !doorReached)
+        if (auto* snd = getSoundManager()) snd->playSound("minion_death");
 }
 
 void GroundMinion::update(float deltaTime) {

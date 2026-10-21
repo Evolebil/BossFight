@@ -105,8 +105,8 @@ private:
     // ============================================================
 
     static constexpr float MOVE_SPEED          = 200.0f;  ///< Скорость ходьбы (px/s)
-    static constexpr float PREFERRED_DISTANCE  = 120.0f;  ///< Комфортная дистанция до игрока (px)
-    static constexpr float DISTANCE_THRESHOLD  = 30.0f;   ///< Мёртвая зона — меньше этого не двигаемся (px)
+    static constexpr float PREFERRED_DISTANCE  = 55.0f; ///< Комфортная дистанция до игрока (px)
+    static constexpr float DISTANCE_THRESHOLD  = 20.0f;   ///< Мёртвая зона — меньше этого не двигаемся (px)
     static constexpr float JUMP_VELOCITY       = -580.0f; ///< Начальная скорость прыжка (px/s вверх)
     static constexpr float JUMP_COOLDOWN_MAX   = 1.5f;    ///< Кулдаун прыжка (сек)
     // ── ПРОВАЛ ЧЕРЕЗ ПЛАТФОРМУ ───────────────────────────────
@@ -162,6 +162,15 @@ private:
     static constexpr int   SWORD_COMBO_MAX    = 3;       ///< Ударов подряд в серии
     static constexpr float SWORD_BREAK_SPEED  = 400.0f;  ///< Скорость отскока после серии (px/s)
     static constexpr float BREAK_AWAY_DURATION = 0.5f;  ///< Длительность отскока (сек)
+
+    // Дальность меча от центра самурая: полширины тела + длина хитбокса меча.
+    static constexpr float SWORD_REACH = HITBOX_W / 2.0f + SWORD_HIT_W;   // 125
+
+    // Он должен останавливаться ближе, чем достаёт меч, и внутри ближней зоны атак.
+    static_assert(PREFERRED_DISTANCE + DISTANCE_THRESHOLD < DIST_CLOSE,
+                  "Остановка самурая должна быть внутри ближней зоны");
+    static_assert(DIST_CLOSE < SWORD_REACH,
+                  "Ближняя зона не должна выходить за дальность меча");
 
     // ============================================================
     // КОНСТАНТЫ — ДЫМКА

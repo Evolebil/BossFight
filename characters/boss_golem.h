@@ -296,6 +296,7 @@ public:
     [[nodiscard]] float     getDefense() const { return defense; }
     [[nodiscard]] BossState getState()   const { return currentState; }
     [[nodiscard]] BossPhase getPhase()   const { return phase; }
+    [[nodiscard]] bool isDeathAnimFinished() const;
     [[nodiscard]] SDL_Rect getHitbox() const override {
         return { (int)(x - width/2), (int)(y - height/2), (int)width, (int)height };
     }

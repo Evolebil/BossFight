@@ -182,6 +182,9 @@ public:
 
     [[nodiscard]] float checkPlayerDamage(SDL_Rect playerBox, float deltaTime);
 
+    /// Загрузка сохранения: бой продолжается с начала сохранённой фазы (босс наверху)
+    void restorePhase(int phaseIndex);
+
     void registerMinionKilled();
     void registerMinionReachedDoor();
 
@@ -195,6 +198,9 @@ public:
     }
     [[nodiscard]] int  getPhaseNumber() const { return (int)phase + 1; }
     [[nodiscard]] bool getSurvivalPassed() const { return survivalPassed; }
+    [[nodiscard]] bool isDeathAnimFinished() const {
+        return currentState == DeadNightState::DEATH && deathAnim.isFinished();
+    }
     [[nodiscard]] float getSurvivalTimeLeft() const { return std::max(0.0f, SURVIVAL_TIME - survivalTimer); }
 
 private:

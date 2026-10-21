@@ -86,13 +86,23 @@ void GameScene::initPositions() {
             if (saved.player.hp > 0.0f) player->setHP(saved.player.hp);
             player->setVelocityX(saved.playerMoveSpeed);
 
+            // Самурай уже убит — сразу создаём лучника, иначе загрузка вернула бы
+            // самурая с HP лучника
+            if (dynamic_cast<BossSamurai*>(boss.get()) && saved.bossPhase == 1) {
+                boss = std::make_unique<BossArcher>(bx, by, diff.projectileSpeed);
+                g_bossCharacter = boss.get();
+                samuraiDefeated = true;
+            }
+
             // setMaxHP — до setHP босса, иначе клэмп в setHP отработает по дефолтному maxHP
             if (boss && saved.bossMaxHP > 0.0f) boss->setMaxHP(saved.bossMaxHP);
+            if (boss && saved.boss.hp > 0.0f)   boss->setHP(saved.boss.hp);
 
             if (auto* golem = dynamic_cast<BossGolem*>(boss.get())) {
-                if (saved.boss.hp > 0.0f) golem->setHP(saved.boss.hp);
                 if (saved.bossPhase == 1) golem->forcePhase2();
             }
+            if (auto* deadnight = dynamic_cast<BossDeadNight*>(boss.get()))
+                deadnight->restorePhase(saved.bossPhase);
         }
     }
 
@@ -296,8 +306,10 @@ void GameScene::update(float deltaTime) {
             }
         }
 
-        // Лучники и наземные миньоны уровня 3 — только пока жив BossDeadNight
-        if (deadnight) {
+        // Лучники и наземные миньоны уровня 3 — только пока жив BossDeadNight.
+        // Пока играет анимация смерти босса, они замирают: иначе игрок мог бы
+        // погибнуть уже после победы.
+        if (deadnight && deadnight->isAlive()) {
             for (auto& archerMinion : archers) {
                 archerMinion->setPhase(deadnight->getPhaseNumber());
                 archerMinion->update(deltaTime, player->getX(), player->getY());
@@ -397,8 +409,9 @@ void GameScene::update(float deltaTime) {
         bool finalDead = false;
 
         if (auto* golem = dynamic_cast<BossGolem*>(boss.get())) {
-            // Голем — победа только во второй фазе
-            finalDead = (golem->getPhase() == BossPhase::PHASE_2);
+            // Голем — победа только во второй фазе и после анимации смерти:
+            // экран победы останавливает update, и анимация замерла бы на 1-м кадре
+            finalDead = golem->getPhase() == BossPhase::PHASE_2 && golem->isDeathAnimFinished();
 
         } else if (auto* samurai = dynamic_cast<BossSamurai*>(boss.get())) {
             // Самурай — после смерти спавним лучника, победы НЕТ
@@ -407,7 +420,9 @@ void GameScene::update(float deltaTime) {
                 auto [bx, by]   = level->getBossSpawn();
                 const Config::Difficulty& diff =
                     Config::getDifficulties()[Config::getCurrentDifficulty()];
-                boss = std::make_unique<BossArcher>(bx, by, diff.projectileSpeed);
+                auto archer = std::make_unique<BossArcher>(bx, by, diff.projectileSpeed);
+                archer->showHitboxes = player && player->showHitboxes;
+                boss = std::move(archer);
                 g_bossCharacter = boss.get();  // ← ОБЯЗАТЕЛЬНО, иначе указатель на убитого самурая = краш
             }
 
@@ -415,10 +430,9 @@ void GameScene::update(float deltaTime) {
             // Лучник — настоящая победа
             finalDead = archer->isDeathAnimFinished();
 
-        } else if (auto* deadnight2 = dynamic_cast<BossDeadNight*>(boss.get())) {
-            // Смерть Ночи — финальный босс, победа сразу по смерти
-            // TODO: заменить на !isDeathAnimFinished когда будет анимация смерти + взрывы
-            finalDead = true;
+        } else if (auto* deadnight = dynamic_cast<BossDeadNight*>(boss.get())) {
+            // Смерть Ночи — финальный босс, победа после анимации смерти
+            finalDead = deadnight->isDeathAnimFinished();
         }
         if (finalDead) {
             bossDefeated = true;
@@ -466,6 +480,10 @@ void GameScene::updateGroundMinions(float deltaTime) {
             groundMinions.push_back(std::make_unique<GroundMinion>(
                 spawnX, spawnY, doorX, deadnight->getPhaseNumber()));
         }
+    } else {
+        // Пока спавн выключен, таймер держим полным — иначе остаток с прошлой
+        // фазы выпустил бы первого миньона новой фазы мгновенно
+        minionSpawnTimer = MINION_SPAWN_INTERVAL;
     }
 
     for (auto& m : groundMinions) {
@@ -497,11 +515,11 @@ void GameScene::renderArchers(SDL_Renderer* renderer) {
 void GameScene::respawnPlayer() {
     auto [px, py] = getPlayerSpawnPos();
     const Config::Difficulty& diff = Config::getDifficulties()[Config::getCurrentDifficulty()];
+    // Флаг хитбоксов берём у старого игрока — он есть на любом уровне, в отличие от босса
+    const bool hitboxesOn = player && player->showHitboxes;
     player = std::make_unique<Player>(px, py, diff.playerHP);
     g_playerCharacter = player.get();  // ← добавить, иначе после первой смерти указатель битый
-    // Сохраняем флаг хитбоксов при респавне
-    if (auto* golem = dynamic_cast<BossGolem*>(boss.get()))
-        player->showHitboxes = golem->showHitboxes;
+    player->showHitboxes = hitboxesOn;
     playerTookDamage = true;
 }
 
@@ -799,6 +817,10 @@ GameSaveState GameScene::buildSaveState() const {
         // Сохраняем фазу — только 1 или 2, переходные состояния округляем до ближайшей
         BossPhase phase = golem->getPhase();
         s.bossPhase = (phase == BossPhase::PHASE_2) ? 1 : 0;
+    } else if (dynamic_cast<BossArcher*>(boss.get())) {
+        s.bossPhase = 1;
+    } else if (auto* deadnight = dynamic_cast<BossDeadNight*>(boss.get())) {
+        s.bossPhase = deadnight->getPhaseNumber() - 1;
     }
 
 

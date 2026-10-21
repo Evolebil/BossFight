@@ -66,6 +66,16 @@ void CreditsScene::render(SDL_Renderer* renderer) {
              {150, 150, 150, 255}, true);
     drawText(renderer, Config::getFont(), "SDL2 - Графическая библиотека", 0, 490,
              {150, 150, 150, 255}, true);
+
+    // Авторы сторонних звуков и музыки — указание требуется их лицензиями
+    drawText(renderer, Config::getFont(), "Звуки и музыка:", 0, 540,
+             {255, 230, 150, 255}, true);
+    drawText(renderer, Config::getFont(), "Sound Effects by Coffee 'Valen' Bat", 0, 575,
+             {150, 150, 150, 255}, true);
+    drawText(renderer, Config::getFont(), "Музыка уровня 2: ayitsmatt - The Law of the Samurai", 0, 605,
+             {150, 150, 150, 255}, true);
+    drawText(renderer, Config::getFont(), "Звуки: 400 Sounds Pack", 0, 635,
+             {150, 150, 150, 255}, true);
     drawButton(renderer, Config::getFont(), backBtn);
 }
 

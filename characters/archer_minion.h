@@ -8,6 +8,7 @@
  */
 #pragma once
 #include "character.h"
+#include "../utils/animation.h"
 
 struct MinionArrow {
     float x = 0.0f, y = 0.0f;
@@ -29,6 +30,30 @@ private:
 
     static constexpr int ARROW_HITBOX_W = 20;
     static constexpr int ARROW_HITBOX_H = 8;
+    static constexpr int ARROW_SPRITE_SIZE = 64; // Arrow.png лучника-босса, 64×64
+
+    // ============================================================
+    // СПРАЙТ — кобольд (assets/kobold), кадр 148×96, масштаб 1:1.
+    // Тело в кадре ~50×62 — совпадает с хитбоксом 50×60.
+    // ============================================================
+    static constexpr int FRAME_W = 148;
+    static constexpr int FRAME_H = 96;
+    static constexpr int BODY_CENTER_X = 52; // центр тела по X внутри кадра (смотрит вправо)
+    static constexpr int FEET_Y        = 92; // низ ступней внутри кадра
+
+    static constexpr int   IDLE_FRAMES     = 6;   // idle.png 888×96
+    static constexpr float IDLE_FRAME_DUR  = 0.12f;
+    static constexpr int   ATTACK_FRAMES   = 5;   // attack.png 740×96, взмах = выстрел
+    static constexpr float ATTACK_FRAME_DUR = 0.08f;
+
+    SDL_Texture* texIdle   = nullptr;
+    SDL_Texture* texAttack = nullptr;
+    SDL_Texture* texArrow  = nullptr;
+    Animation idleAnim{true};
+    Animation attackAnim{false};
+    bool attacking = false; // играет attack.png — запускается в начале залпа
+
+    void loadAnimations();
 
     int   phaseIndex        = 0; // 0..3 → 1..4 стрелы
     float volleyTimer       = VOLLEY_COOLDOWN;
