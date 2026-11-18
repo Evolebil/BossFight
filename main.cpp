@@ -5,6 +5,7 @@
  * @date 2026-02-20
  */
 #include <SDL2/SDL.h>
+#include <filesystem>
 #include "config/config.h"
 #include "ui/ui.h"
 #include "utils/scene_manager.h"
@@ -87,6 +88,15 @@ static void loadMusicTracks(SoundManager& mgr) {
 // ============================================================
 
 int main(int /*argc*/, char* /*argv*/[]) {
+    // Пути к assets/ и сохранениям относительные — переходим в папку с exe.
+    // Иначе при запуске двойным кликом, ярлыком или из другой папки игра
+    // не находила ресурсы и вылетала.
+    if (char* basePath = SDL_GetBasePath()) {
+        std::error_code ec;
+        std::filesystem::current_path(std::filesystem::path(reinterpret_cast<const char8_t*>(basePath)), ec);
+        SDL_free(basePath);
+    }
+
 #ifndef _WIN32
     // На некоторых Linux-системах SDL по умолчанию пытается выбрать pulse/pipewire
     // драйвер и молча остаётся без звука, даже если аудиосистема в порядке.
