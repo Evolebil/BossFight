@@ -2,9 +2,8 @@
 build/
 cmake-build-*/
 
-# Исполняемые файлы
-BossFight
-*.exe
+# Исполняемые файлы (кроме готовой сборки в bin/)
+/BossFight
 
 # Объектные файлы
 *.o
@@ -24,5 +23,8 @@ build-win/
 .qtcreator/
 .cursor/
 
-# Готовая сборка и сохранения: bin/ собирается CMake (exe, копия assets/, .dll)
-bin/
+# bin/ — готовая сборка (exe, .dll, assets/) лежит в репо; сохранения игрока — нет
+bin/save.bin
+bin/autosave.txt
+bin/save*_*.txt
+bin/saves_index.txt
