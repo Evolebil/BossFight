@@ -19,7 +19,7 @@ bool SoundManager::init() {
         return false;
     }
     
-    Mix_AllocateChannels(16);
+    Mix_AllocateChannels(32);
     
     int flags = Mix_Init(MIX_INIT_MP3);
     if (flags & MIX_INIT_MP3) {
@@ -64,10 +64,15 @@ void SoundManager::playSound(const std::string& name) {
     if (it != sounds.end()) {
         Mix_VolumeChunk(it->second, (int)(MIX_MAX_VOLUME * soundVolume));
         int channel = Mix_PlayChannel(-1, it->second, 0);
-        
+
+        // Все каналы заняты (в бою звуки идут пачками) — раньше звук просто
+        // терялся, а в консоль каждый кадр летела ошибка. Глушим самый старый.
         if (channel == -1) {
-            std::cout << "✗ Ошибка воспроизведения '" << name << "': " << Mix_GetError() << std::endl;
-        } else {
+            const int oldest = Mix_GroupOldest(-1);
+            if (oldest != -1) {
+                Mix_HaltChannel(oldest);
+                Mix_PlayChannel(oldest, it->second, 0);
+            }
         }
     } else {
         std::cout << "✗ Звук '" << name << "' не найден" << std::endl;

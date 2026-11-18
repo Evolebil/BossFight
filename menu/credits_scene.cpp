@@ -37,12 +37,17 @@ void CreditsScene::render(SDL_Renderer* renderer) {
     // Фон
     drawForestBackground(renderer, Config::getBrightness());
     drawUIOverlay(renderer, 100);
-    
+
+    // Подложка под текст — без неё серые строки сливались с горами
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer, 10, 15, 30, 170);
+    const SDL_Rect panel = {(Config::getWindowWidth() - 760) / 2, 85, 760, 590};
+    SDL_RenderFillRect(renderer, &panel);
+
     // Заголовок
     drawText(renderer, Config::getFont(), "Разработчики", 0, 100, 
              {255, 230, 150, 255}, true, Config::getTitleFont());
     
-    // Текст
     // Текст
     drawText(renderer, Config::getFont(), "Игра создана:", 0, 160,
              {255, 255, 255, 255}, true);

@@ -20,3 +20,9 @@ BossFight
 *~
 *.swp
 *.tmp
+build-win/
+.qtcreator/
+.cursor/
+
+# Готовая сборка и сохранения: bin/ собирается CMake (exe, копия assets/, .dll)
+bin/

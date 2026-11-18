@@ -19,7 +19,8 @@ GameScene::GameScene()
     saveBtn    (0, BTN_SAVE_Y,        BTN_W, BTN_H, "Сохранить"),
     exitBtn    (0, BTN_EXIT_PAUSE_Y,  BTN_W, BTN_H, "Выйти в меню"),
     nextBtn    (0, BTN_NEXT_Y,        BTN_W, BTN_H, "В меню уровней"),
-    retryBtn   (0, BTN_RETRY_Y,       BTN_W, BTN_H, "Заново")
+    retryBtn   (0, BTN_RETRY_Y,       BTN_W, BTN_H, "Заново"),
+    exitResultBtn(0, BTN_EXIT_RESULT_Y, BTN_W, BTN_H, "Выйти в меню")
 {
     soundMgr = getSoundManager();
 
@@ -29,6 +30,7 @@ GameScene::GameScene()
     exitBtn    .centerX(W);
     nextBtn    .centerX(W);
     retryBtn   .centerX(W);
+    exitResultBtn.centerX(W);
 
     currentLevel = Config::getSelectedLevel();
     loadFromSave = Config::getLoadFromSave();
@@ -227,7 +229,7 @@ void GameScene::handleInput(SDL_Event& event, int mx, int my,
     if (resultState == ResultState::DEFEAT) {
         if (updateButton(retryBtn, mx, my, clicked, soundMgr))
             nextScene = SceneType::RESTART_GAME;
-        if (updateButton(exitBtn,  mx, my, clicked, soundMgr))
+        if (updateButton(exitResultBtn, mx, my, clicked, soundMgr))
             nextScene = SceneType::LEVEL_SELECT;
     }
 }
@@ -644,7 +646,7 @@ void GameScene::renderDefeatScreen(SDL_Renderer* renderer) {
              0, DEFEAT_TIME_Y, {200, 200, 200, 255}, true);
 
     drawButton(renderer, Config::getFont(), retryBtn);
-    drawButton(renderer, Config::getFont(), exitBtn);
+    drawButton(renderer, Config::getFont(), exitResultBtn);
 }
 
 // ============================================================
@@ -734,18 +736,18 @@ void GameScene::drawHealthBars(SDL_Renderer* renderer) {
                  HUD_MANA_VAL_X, HUD_MANA_VAL_Y, {150, 200, 255, 255});
     }
 
-    // Подсказки внизу экрана
-    {
-        bool hbOn  = (player && player->showHitboxes);
-        SDL_Color c = hbOn
-                          ? SDL_Color{100, 255, 100, 255}
-                          : SDL_Color{150, 150, 150, 180};
-        drawText(renderer, Config::getFont(),
-                 hbOn ? "[H] Хитбоксы: ВКЛ" : "[H] Хитбоксы: ВЫКЛ",
-                 0, Config::getWindowHeight() - HUD_HINT_HB_Y, c, true);
+    // Подсказки внизу экрана — только первые секунды боя (потом они висели
+    // поверх пола и шипов) и пока включены хитбоксы
+    const bool hbOn = (player && player->showHitboxes);
+    if (hbOn) {
+        drawText(renderer, Config::getFont(), "[H] Хитбоксы: ВКЛ",
+                 0, Config::getWindowHeight() - HUD_HINT_HB_Y, {100, 255, 100, 255}, true);
+    } else if (levelTimer < HUD_HINT_SHOW_TIME) {
+        drawText(renderer, Config::getFont(), "[H] Хитбоксы: ВЫКЛ",
+                 0, Config::getWindowHeight() - HUD_HINT_HB_Y, {150, 150, 150, 180}, true);
+        drawText(renderer, Config::getFont(), "ESC - пауза",
+                 0, Config::getWindowHeight() - HUD_HINT_ESC_Y, {150, 150, 150, 180}, true);
     }
-    drawText(renderer, Config::getFont(), "ESC - пауза",
-             0, Config::getWindowHeight() - HUD_HINT_ESC_Y, {150, 150, 150, 180}, true);
 
     // Таймер по центру
     if (resultState == ResultState::PLAYING) {
@@ -778,8 +780,11 @@ void GameScene::drawHealthBars(SDL_Renderer* renderer) {
             const float mpct   = required > 0 ? (float)killed / (float)required : 0.0f;
             const int purpleY  = HUD_BAR_Y + HUD_BAR_H + HUD_MINION_BAR_GAP_Y;
 
-            drawText(renderer, Config::getFont(), "Миньоны",
-                     W - HUD_BOSS_X_OFF, purpleY - 20, {200, 200, 200, 255});
+            // Счётчик — в подписи: справа от полосы он уходил за край экрана
+            char buf[32];
+            std::snprintf(buf, sizeof(buf), "Миньоны %d/%d", killed, required);
+            drawText(renderer, Config::getFont(), buf,
+                     W - HUD_BOSS_X_OFF, purpleY - HUD_LABEL_TO_BAR, {220, 180, 255, 255});
 
             SDL_SetRenderDrawColor(renderer, 40, 40, 40, 220);
             SDL_Rect pbg = {W - HUD_BOSS_X_OFF, purpleY, HUD_BAR_W, HUD_BAR_H};
@@ -790,10 +795,6 @@ void GameScene::drawHealthBars(SDL_Renderer* renderer) {
             SDL_SetRenderDrawColor(renderer, 180, 180, 180, 255);
             SDL_RenderDrawRect(renderer, &pbg);
 
-            char buf[16];
-            std::snprintf(buf, sizeof(buf), "%d/%d", killed, required);
-            drawText(renderer, Config::getFont(), buf,
-                     W - HUD_BOSS_X_OFF + HUD_BAR_W + 10, purpleY, {220, 180, 255, 255});
         }
     }
 }

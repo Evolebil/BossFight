@@ -72,7 +72,6 @@ void Character::renderDebugBounds(SDL_Renderer* renderer, float spriteW, float s
 
     // Направление взгляда (СИНЯЯ СТРЕЛКА)
     SDL_SetRenderDrawColor(renderer, 0, 100, 255, 255);
-    int arrowLen = static_cast<int>(spriteW / 4.0f);
     int arrowX = facingRight ? right : left;
     SDL_RenderDrawLine(renderer, static_cast<int>(x), static_cast<int>(y),
                        arrowX, static_cast<int>(y));

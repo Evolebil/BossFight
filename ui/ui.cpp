@@ -9,6 +9,8 @@
 #include "../config/common.h"
 #include "../utils/sound_manager.h"
 
+#include <unordered_map>
+
 // ============================================================
 // BUTTON
 // ============================================================
@@ -78,24 +80,53 @@ bool updateButton(Button& btn, int mx, int my, bool clicked, SoundManager* snd) 
 // ФУНКЦИИ ОТРИСОВКИ
 // ============================================================
 
+// Кэш текстур текста: раньше каждая надпись каждый кадр заново растеризовалась
+// шрифтом и загружалась в видеопамять — главный источник лагов в меню и HUD
+namespace {
+struct CachedText { SDL_Texture* texture; int w, h; };
+std::unordered_map<std::string, CachedText> g_textCache;
+constexpr size_t TEXT_CACHE_LIMIT = 512;  // счётчики (таймер, HP) плодят новые строки
+
+const CachedText* getTextTexture(SDL_Renderer* renderer, TTF_Font* font,
+                                 const std::string& text, SDL_Color color) {
+    std::string key;
+    key.reserve(text.size() + 24);
+    key.append(reinterpret_cast<const char*>(&font), sizeof(font));
+    key.append(reinterpret_cast<const char*>(&color), sizeof(color));
+    key += text;
+
+    auto it = g_textCache.find(key);
+    if (it != g_textCache.end()) return &it->second;
+
+    if (g_textCache.size() >= TEXT_CACHE_LIMIT) clearTextCache();
+
+    SDL_Surface* surface = TTF_RenderUTF8_Blended(font, text.c_str(), color);
+    if (!surface) return nullptr;
+    SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+    CachedText entry{texture, surface->w, surface->h};
+    SDL_FreeSurface(surface);
+    if (!texture) return nullptr;
+    return &g_textCache.emplace(std::move(key), entry).first->second;
+}
+}  // namespace
+
+void clearTextCache() {
+    for (auto& [key, entry] : g_textCache) SDL_DestroyTexture(entry.texture);
+    g_textCache.clear();
+}
+
 void drawText(SDL_Renderer* renderer, TTF_Font* defaultFont,
               const std::string& text, int x, int y,
               SDL_Color color, bool centered, TTF_Font* customFont) {
     TTF_Font* useFont = customFont ? customFont : defaultFont;
-    if (!useFont) return;
+    if (!useFont || text.empty()) return;
 
-    SDL_Surface* surface = TTF_RenderUTF8_Blended(useFont, text.c_str(), color);
-    if (!surface) return;
+    const CachedText* cached = getTextTexture(renderer, useFont, text, color);
+    if (!cached) return;
 
-    SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
-    if (texture) {
-        SDL_Rect dst = {x, y, surface->w, surface->h};
-        if (centered) dst.x = (Config::getWindowWidth() - surface->w) / 2;
-        SDL_RenderCopy(renderer, texture, nullptr, &dst);
-        SDL_DestroyTexture(texture);
-    }
-
-    SDL_FreeSurface(surface);
+    SDL_Rect dst = {x, y, cached->w, cached->h};
+    if (centered) dst.x = (Config::getWindowWidth() - cached->w) / 2;
+    SDL_RenderCopy(renderer, cached->texture, nullptr, &dst);
 }
 
 void drawUIOverlay(SDL_Renderer* renderer, int alpha) {
@@ -120,21 +151,16 @@ void drawButton(SDL_Renderer* renderer, TTF_Font* font, Button& btn,
     SDL_RenderDrawRect(renderer, &btn.rect);
 
     // Текст по центру кнопки
-    if (!font) return;
-    SDL_Surface* surface = TTF_RenderUTF8_Blended(font, btn.text.c_str(), {255, 255, 255, 255});
-    if (!surface) return;
+    if (!font || btn.text.empty()) return;
+    const CachedText* cached = getTextTexture(renderer, font, btn.text, {255, 255, 255, 255});
+    if (!cached) return;
 
-    SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
-    if (texture) {
-        SDL_Rect textRect = {
-            btn.rect.x + (btn.rect.w - surface->w) / 2,
-            btn.rect.y + (btn.rect.h - surface->h) / 2,
-            surface->w, surface->h
-        };
-        SDL_RenderCopy(renderer, texture, nullptr, &textRect);
-        SDL_DestroyTexture(texture);
-    }
-    SDL_FreeSurface(surface);
+    SDL_Rect textRect = {
+        btn.rect.x + (btn.rect.w - cached->w) / 2,
+        btn.rect.y + (btn.rect.h - cached->h) / 2,
+        cached->w, cached->h
+    };
+    SDL_RenderCopy(renderer, cached->texture, nullptr, &textRect);
 }
 
 void drawSlider(SDL_Renderer* renderer, TTF_Font* font, Slider& slider,

@@ -43,6 +43,9 @@ void drawTriangleFilled(SDL_Renderer* renderer, int x1, int y1, int x2, int y2, 
  */
 void drawForestBackground(SDL_Renderer* renderer, float brightness);
 
+/// Освобождает закэшированную текстуру леса (перед SDL_DestroyRenderer)
+void clearBackgroundCache();
+
 /**
  * @brief Фон экрана выбора уровня — башня на градиентном небе.
  * @param brightness Не используется этой функцией — параметр оставлен

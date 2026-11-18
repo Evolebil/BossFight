@@ -13,6 +13,7 @@
 #include "utils/sound_manager.h"
 #include "config/common.h"
 #include "utils/save_manager.h"
+#include "backgrounds/forest_bg.h"
 
 // Глобальный SoundManager — передаётся в сцены через getSoundManager()
 SoundManager* g_soundMgr = nullptr;
@@ -204,6 +205,12 @@ int main(int /*argc*/, char* /*argv*/[]) {
                 Config::toggleFullscreen(window);
             }
 
+            // Direct3D на Windows теряет содержимое текстур-целей при смене
+            // режима экрана — кэш фона меню нужно перерисовать
+            if (event.type == SDL_RENDER_TARGETS_RESET || event.type == SDL_RENDER_DEVICE_RESET) {
+                clearBackgroundCache();
+            }
+
             if (event.type == SDL_MOUSEMOTION) {
                 mouseX = event.motion.x;
                 mouseY = event.motion.y;
@@ -236,6 +243,8 @@ int main(int /*argc*/, char* /*argv*/[]) {
 
     // === ОЧИСТКА ===
     TextureManager::cleanup();
+    clearTextCache();
+    clearBackgroundCache();
     // Звук — явно и до SDL_Quit: раньше unique_ptr освобождал чанки и закрывал
     // аудио уже после SDL_Quit, при выходе из main
     g_soundMgr = nullptr;

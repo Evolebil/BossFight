@@ -81,11 +81,13 @@ private:
     static constexpr int HUD_MAX_LIVES    = 10;  // больше 10 жизней не рисуем
 
     static constexpr int HUD_BOSS_X_OFF   = 220; // отступ HP босса от правого края
-    static constexpr int HUD_MINION_BAR_GAP_Y = 15; // отступ фиолетовой полосы от HP босса
+    static constexpr int HUD_MINION_BAR_GAP_Y = 32; // отступ фиолетовой полосы от HP босса (место под подпись)
+    static constexpr int HUD_LABEL_TO_BAR     = HUD_BAR_Y - HUD_LABEL_Y; // подпись над полосой, как у «Босс»
 
     // Подсказки (отступ снизу экрана)
     static constexpr int HUD_HINT_HB_Y    = 30;
     static constexpr int HUD_HINT_ESC_Y   = 55;
+    static constexpr float HUD_HINT_SHOW_TIME = 8.0f; // сек от начала боя
 
     static constexpr float MINION_SPAWN_INTERVAL = 2.0f;
 
@@ -147,6 +149,7 @@ private:
     Button exitBtn;
     Button nextBtn;
     Button retryBtn;
+    Button exitResultBtn;  // свой «Выйти» для поражения: exitBtn паузы стоит на 360 и перекрывал «Заново»
 
     // Персонажи — unique_ptr: не нужен ручной delete
     std::unique_ptr<Player>    player;

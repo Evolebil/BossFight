@@ -139,7 +139,7 @@ constexpr SDL_Color GROUND_COLOR = {80, 120, 60, 255};
 
 } // namespace
 
-void drawForestBackground(SDL_Renderer* renderer, float brightness) {
+static void renderForestBackground(SDL_Renderer* renderer, float brightness) {
     const int W = Config::getWindowWidth();
     const int H = Config::getWindowHeight();
 
@@ -337,4 +337,54 @@ void drawTowerBackground(SDL_Renderer* renderer, float /*brightness*/) {
     SDL_RenderFillRect(renderer, &ground);
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderDrawLine(renderer, 0, GROUND_Y, W, GROUND_Y);
+}
+// Лес — тысячи линий; раньше он перерисовывался каждый кадр во всех меню
+// (~5 мс даже на быстрой видеокарте). Теперь рисуется один раз в текстуру
+// и перерисовывается, только когда меняется яркость или разрешение.
+namespace {
+SDL_Texture* g_forestCache   = nullptr;
+float        g_forestBright  = -1.0f;
+int          g_forestW = 0, g_forestH = 0;
+}
+
+void drawForestBackground(SDL_Renderer* renderer, float brightness) {
+    const int W = Config::getWindowWidth();
+    const int H = Config::getWindowHeight();
+
+    if (!SDL_RenderTargetSupported(renderer)) {
+        renderForestBackground(renderer, brightness);
+        return;
+    }
+
+    if (g_forestCache && (g_forestW != W || g_forestH != H)) clearBackgroundCache();
+    if (!g_forestCache) {
+        g_forestCache = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+                                          SDL_TEXTUREACCESS_TARGET, W, H);
+        if (!g_forestCache) {
+            renderForestBackground(renderer, brightness);
+            return;
+        }
+        g_forestW = W;
+        g_forestH = H;
+        g_forestBright = -1.0f;
+    }
+
+    if (g_forestBright != brightness) {
+        SDL_Texture* prevTarget = SDL_GetRenderTarget(renderer);
+        SDL_SetRenderTarget(renderer, g_forestCache);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderClear(renderer);
+        renderForestBackground(renderer, brightness);
+        SDL_SetRenderTarget(renderer, prevTarget);
+        g_forestBright = brightness;
+    }
+
+    SDL_Rect dst = {0, 0, W, H};
+    SDL_RenderCopy(renderer, g_forestCache, nullptr, &dst);
+}
+
+void clearBackgroundCache() {
+    if (g_forestCache) SDL_DestroyTexture(g_forestCache);
+    g_forestCache  = nullptr;
+    g_forestBright = -1.0f;
 }

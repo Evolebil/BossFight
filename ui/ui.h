@@ -68,6 +68,9 @@ void drawText(SDL_Renderer* renderer, TTF_Font* defaultFont,
               bool centered = false,
               TTF_Font* customFont = nullptr);
 
+// Освобождает закэшированные текстуры надписей (перед SDL_DestroyRenderer)
+void clearTextCache();
+
 void drawUIOverlay(SDL_Renderer* renderer, int alpha);
 
 void drawButton(SDL_Renderer* renderer, TTF_Font* font, Button& btn,

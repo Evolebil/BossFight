@@ -362,7 +362,6 @@ void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
 
     // ── ВЫЧИСЛЕНИЕ ДИСТАНЦИЙ ──────────────────────────────
     const float dx     = playerX - x;
-    const float dy     = playerY - y;
 
     // ПОЛНАЯ дистанция — используется ТОЛЬКО для движения в updateMovement()
     // const float dist   = std::sqrt(dx*dx + dy*dy);
@@ -436,7 +435,6 @@ void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
 
 void BossSamurai::teleportBehindPlayer() {
     const float direction = lastPlayerFacingRight ? 1.0f : -1.0f;
-    const float oldX = x;
 
     // Вычисляем целевую позицию (перед игроком)
     float targetX = lastPlayerX + direction * TELEPORT_OFFSET;
