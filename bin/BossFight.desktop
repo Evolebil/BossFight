@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Boss Fight
+Comment=2D-платформер boss rush
+Exec=sh -c 'cd "$(dirname "$1")" && exec ./BossFight' sh %k
+Terminal=false
+Categories=Game;

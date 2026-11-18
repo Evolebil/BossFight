@@ -139,6 +139,7 @@ private:
     static constexpr float BOMB_SPREAD_ANGLE = 20.0f;  ///< Угол между бомбами в веере (градусы)
     static constexpr float BOMB_COOLDOWN     = 3.0f;   ///< Кулдаун броска бомб (сек)
     static constexpr float DAMAGE_BOMB       = 25.0f;  ///< Урон взрыва бомбы
+    static constexpr float BOMB_RANGE        = Bomb::SPEED * Bomb::FUSE_TIME;  ///< Дальше бомбы не долетают (px)
 
     // ============================================================
     // КОНСТАНТЫ — СТОЙКА И СТАН
@@ -405,7 +406,7 @@ public:
      * @brief Мгновенно переместиться за спину игрока.
      *        Направление: противоположная сторона от текущего взгляда самурая.
      */
-    void teleportBehindPlayer();
+    bool teleportBehindPlayer();  ///< false — места рядом с игроком нет
 
     /**
      * @brief Выпустить веер из BOMB_COUNT бомб вперёд-вниз.

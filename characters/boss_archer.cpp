@@ -324,7 +324,7 @@ void BossArcher::updateAI(float dt, float playerX, float playerY) {
                               currentState == ArcherState::ATTACK_3);
     if (isAttacking) {
         auto it = animations.find(currentState);
-        if (it != animations.end() && it->second.isFinished())
+        if (it == animations.end() || it->second.isFinished())
             setState(ArcherState::IDLE);
         return;
     }
@@ -335,8 +335,10 @@ void BossArcher::updateAI(float dt, float playerX, float playerY) {
     // Пока флаг активен — не входим в остальную AI-логику ниже,
     // иначе distX-проверка будет каждый кадр сбрасывать анимацию заново.
     if (playingPreTeleportHurt) {
+        // Нет анимации (не загрузился спрайт) — не ждём её вечно: раньше
+        // лучник так застревал и до конца боя только ходил за игроком
         auto it = animations.find(ArcherState::HURT);
-        if (it != animations.end() && it->second.isFinished()) {
+        if (it == animations.end() || it->second.isFinished()) {
             playingPreTeleportHurt = false;
             teleportNearPlayer(playerX, playerY);
             setState(ArcherState::IDLE);

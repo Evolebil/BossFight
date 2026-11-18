@@ -379,19 +379,19 @@ void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
     if (distX >= DIST_FAR) {
 
         if (teleportTimer <= 0.0f) {
-            // Телепорт готов — телепортируемся за спину игрока
-            teleportBehindPlayer();
+            // Телепорт готов — телепортируемся к игроку
             // После телепорта выбираем: 70% силовой удар, 30% бомбы
-            queuedAttack = (r < 70)
-                               ? SamuraiState::POWER_ATTACK
-                               : SamuraiState::THROW_BOMBS;
-        } else if (bombTimer <= 0.0f) {
-            // Телепорт на кулдауне, но бомбы готовы
+            if (teleportBehindPlayer())
+                queuedAttack = (r < 70)
+                                   ? SamuraiState::POWER_ATTACK
+                                   : SamuraiState::THROW_BOMBS;
+        } else if (bombTimer <= 0.0f && distX <= BOMB_RANGE) {
+            // Телепорт на кулдауне, но бомбы готовы и долетят
             throwBombsFan();
-        } else {
-            // Все спец-атаки на кулдауне — бьём мечом (фоллбэк)
-            updateMeleeFallback(deltaTime, playerX, playerY);
         }
+        // Иначе просто идём к игроку (updateMovement). Раньше здесь был
+        // удар мечом — самурай махал им по воздуху через всю карту, а
+        // отскок после серии уносил его обратно, и он не мог дойти до игрока
 
         // ── СРЕДНЯЯ ДИСТАНЦИЯ (80px ≤ distX < 500px) ──────────
         // Выбор: бомбы ИЛИ телепорт+меч ИЛИ меч
@@ -402,10 +402,10 @@ void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
             throwBombsFan();
         } else if (r < 75 && teleportTimer <= 0.0f) {
             // 20% шанс (75-55): телепорт + меч
-            teleportBehindPlayer();
-            queuedAttack = SamuraiState::SWORD_ATTACK;
-        } else if (swordTimer <= 0.0f) {
-            // 25% шанс: просто меч
+            if (teleportBehindPlayer())
+                queuedAttack = SamuraiState::SWORD_ATTACK;
+        } else if (swordTimer <= 0.0f && distX <= SWORD_REACH) {
+            // 25% шанс: просто меч — только если достаём, иначе подходим
             updateMeleeFallback(deltaTime, playerX, playerY);
         }
 
@@ -433,15 +433,17 @@ void BossSamurai::updateAI(float deltaTime, float playerX, float playerY) {
     }
 }
 
-void BossSamurai::teleportBehindPlayer() {
-    const float direction = lastPlayerFacingRight ? 1.0f : -1.0f;
-
-    // Вычисляем целевую позицию (перед игроком)
-    float targetX = lastPlayerX + direction * TELEPORT_OFFSET;
-    targetX += direction * TELEPORT_BACKOFF;
+bool BossSamurai::teleportBehindPlayer() {
+    // Целевая позиция — перед игроком (по направлению его взгляда)
+    const float offset = TELEPORT_OFFSET + TELEPORT_BACKOFF;
+    float direction = lastPlayerFacingRight ? 1.0f : -1.0f;
+    float targetX = lastPlayerX + direction * offset;
     const float targetY = lastPlayerY;
 
     // ── Проверяем что позиция внутри карты ───────────────────
+    // Игрок у стены смотрит в неё — тогда встаём с другой стороны.
+    // Раньше телепорт в такой ситуации просто отменялся, и самурай
+    // кидал бомбы через всю карту вместо того, чтобы подойти
     if (g_currentLevel) {
         int offsetX, offsetY;
         g_currentLevel->getMapOffset(offsetX, offsetY);
@@ -449,14 +451,12 @@ void BossSamurai::teleportBehindPlayer() {
         const float maxX = static_cast<float>(offsetX + g_currentLevel->getMapWidth()) - TELEPORT_MARGIN;
 
         if (targetX < minX || targetX > maxX) {
-            // Телепорт выйдет за карту — отменяем, выбираем другую атаку
+            direction = -direction;
+            targetX   = lastPlayerX + direction * offset;
+        }
+        if (targetX < minX || targetX > maxX) {
             teleportTimer = TELEPORT_COOLDOWN;  // всё равно ставим кулдаун
-            if (bombTimer <= 0.0f) {
-                throwBombsFan();
-            } else {
-                forceState(SamuraiState::IDLE);
-            }
-            return;
+            return false;
         }
     }
 
@@ -472,6 +472,7 @@ void BossSamurai::teleportBehindPlayer() {
     if (it != animations.end()) it->second.reset();
 
     forceState(SamuraiState::TELEPORT);
+    return true;
 }
 
 // ============================================================

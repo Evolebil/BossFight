@@ -23,7 +23,8 @@
 Готовая сборка лежит в папке `bin/` — собирать ничего не нужно.
 
 - **Windows:** скачай репозиторий (Code → Download ZIP), распакуй и запусти `bin/BossFight.exe`. Все `.dll` уже рядом.
-- **Linux:** нужны библиотеки SDL2 (`sdl2 sdl2_image sdl2_ttf sdl2_mixer`), затем `cd bin && ./BossFight`.
+- **Linux:** нужны библиотеки SDL2 (`sdl2 sdl2_image sdl2_ttf sdl2_mixer`). Запуск — `bin/BossFight.desktop` (двойной клик) или `cd bin && ./BossFight`.
+  KDE Dolphin не может запустить сам `BossFight`, если путь к папке длинный и с кириллицей (ошибка systemd «Invalid unit name»), — для этого и лежит ярлык `.desktop`.
 
 Папку `bin/` можно переносить целиком — игре нужны только файлы внутри неё.
 
